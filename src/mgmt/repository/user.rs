@@ -47,4 +47,16 @@ impl UserRepository {
             .await
             .map_err(Into::into)
     }
+
+    pub async fn exists(&self, id: Uuid) -> Result<bool> {
+        use diesel::dsl::exists;
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::select(exists(
+            users::table.filter(users::id.eq(id))
+        ))
+        .get_result(conn)
+        .await
+        .map_err(Into::into)
+    }
 }

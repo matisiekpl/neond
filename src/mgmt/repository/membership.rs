@@ -75,4 +75,21 @@ impl MembershipRepository {
         .map_err(|_| AppError::Internal("Failed to delete membership".into()))?;
         Ok(())
     }
+
+    pub async fn exists(&self, user_id: Uuid, org_id: Uuid) -> Result<bool> {
+        use diesel::dsl::exists;
+        let conn = &mut self
+            .pool
+            .get()
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::select(exists(
+            memberships::table
+                .filter(memberships::user_id.eq(user_id))
+                .filter(memberships::organization_id.eq(org_id))
+        ))
+        .get_result(conn)
+        .await
+        .map_err(Into::into)
+    }
 }

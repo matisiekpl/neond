@@ -66,4 +66,16 @@ impl OrganizationRepository {
             .map_err(|_| AppError::Internal("Failed to delete organization".into()))?;
         Ok(())
     }
+
+    pub async fn exists(&self, id: Uuid) -> Result<bool> {
+        use diesel::dsl::exists;
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::select(exists(
+            organizations::table.filter(organizations::id.eq(id))
+        ))
+        .get_result(conn)
+        .await
+        .map_err(Into::into)
+    }
 }
