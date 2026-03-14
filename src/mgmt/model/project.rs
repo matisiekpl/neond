@@ -6,4 +6,5 @@ use uuid::Uuid;
 pub struct Project {
     pub id: Uuid,
     pub organization_id: Uuid,
+    pub name: String,
 }

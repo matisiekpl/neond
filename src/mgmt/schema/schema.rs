@@ -31,6 +31,7 @@ diesel::table! {
     projects (id) {
         id -> Uuid,
         organization_id -> Uuid,
+        name -> Varchar,
     }
 }
 

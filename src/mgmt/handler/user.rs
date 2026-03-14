@@ -10,7 +10,7 @@ pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<LoginUserRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let res = state.user_service.login(req).await?;
+    let res = state.services.user().login(req).await?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -18,6 +18,6 @@ pub async fn register(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RegisterUserRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let res = state.user_service.register(req).await?;
+    let res = state.services.user().register(req).await?;
     Ok((StatusCode::CREATED, Json(res)))
 }

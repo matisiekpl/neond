@@ -1,13 +1,13 @@
-pub mod user_handler;
+pub mod user;
 
-use std::sync::Arc;
 use axum::{http::StatusCode, response::IntoResponse};
+use std::sync::Arc;
 
 use crate::mgmt::dto::error::AppError;
-use crate::mgmt::service::user_service::UserService;
+use crate::mgmt::service::Services;
 
 pub struct AppState {
-    pub user_service: UserService,
+    pub services: Services,
 }
 
 impl IntoResponse for AppError {

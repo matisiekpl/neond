@@ -5,15 +5,20 @@ edition = "2024"
 
 [dependencies]
 diesel = { version = "2.3.0", features = ["postgres", "uuid"] }
-diesel-async = { version = "0.7.4", features = ["postgres", "bb8"] }
+diesel-async = { version = "0.7.4", features = ["postgres", "bb8", "migrations"] }
 diesel_migrations = "2.2.0"
 uuid = { version = "1", features = ["v4", "serde"] }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 bcrypt = "0.19.0"
-jsonwebtoken = "10.3.0"
+jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
 dotenvy = "0.15"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 diesel-derive-enum = { version = "2", features = ["postgres"] }
+rustls = "0.23.8"
+rustls-platform-verifier = "0.5.0"
+tokio-postgres = "0.7"
+tokio-postgres-rustls = "0.13.0"
+futures-util = "0.3"

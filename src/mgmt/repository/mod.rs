@@ -1,3 +1,9 @@
 pub mod db;
 pub mod error;
-pub mod user_repository;
+pub mod membership;
+pub mod organization;
+pub mod project;
+pub mod repositories;
+pub mod user;
+
+pub use repositories::Repositories;

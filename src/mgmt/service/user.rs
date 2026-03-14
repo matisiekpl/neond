@@ -9,7 +9,7 @@ use crate::mgmt::dto::login_user_request::LoginUserRequest;
 use crate::mgmt::dto::login_user_response::LoginUserResponse;
 use crate::mgmt::dto::register_user_request::RegisterUserRequest;
 use crate::mgmt::dto::register_user_response::RegisterUserResponse;
-use crate::mgmt::repository::user_repository::UserRepository;
+use crate::mgmt::repository::user::UserRepository;
 
 #[derive(Serialize, Deserialize)]
 struct Claims {

@@ -16,6 +16,7 @@ struct NewUser<'a> {
     password_hash: &'a str,
 }
 
+#[derive(Clone)]
 pub struct UserRepository {
     pool: DbPool,
 }
