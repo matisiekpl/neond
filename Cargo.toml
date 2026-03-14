@@ -23,3 +23,7 @@ tokio-postgres = "0.7"
 tokio-postgres-rustls = "0.13.0"
 futures-util = "0.3"
 reqwest = { version = "0.11", features = ["json"] }
+pageserver_client = { path = "neon/pageserver/client" }
+pprof_util = "=0.7.0"
+jemalloc_pprof = "=0.7.0"
+mappings = "=0.7.0"
