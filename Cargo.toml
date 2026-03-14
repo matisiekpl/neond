@@ -1,0 +1,14 @@
+[package]
+name = "neond"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+diesel = { version = "2.2.0", features = ["postgres", "uuid"] }
+diesel-async = { version = "0.5", features = ["postgres", "bb8"] }
+uuid = { version = "1", features = ["v4"] }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+bcrypt = "0.15"
+jsonwebtoken = "9"

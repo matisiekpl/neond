@@ -1,0 +1,19 @@
+./storage_broker -l  127.0.0.1:50051
+
+./pageserver -D .neon/pageserver_1
+
+./storage_controller -l 127.0.0.1:1234 --database-url "postgresql://neondb_owner:npg_lJCj04edKair@ep-divine-butterfly-alja3qky-pooler.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require" --dev    --timeline-safekeeper-count 1 --control-plane-url https://5083-149-156-124-2.ngrok-free.app
+
+./safekeeper -D .neon/safekeepers/sk1 \
+--id 1 \
+--broker-endpoint http://127.0.0.1:50051 \
+--listen-pg 127.0.0.1:5454 \
+--listen-http 127.0.0.1:7676 \
+--availability-zone sk-1
+
+./compute_ctl \
+--pgdata .neon/compute_1 \
+--pgbin ./../pg_install/v17/bin/postgres \
+--compute-id "manual-compute" \
+--connstr "postgresql://no_user@localhost:55432/postgres" \
+--config compute_1_config.json

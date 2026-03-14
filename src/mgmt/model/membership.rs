@@ -1,0 +1,9 @@
+use diesel::prelude::*;
+use uuid::Uuid;
+
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::schema::memberships)]
+pub struct Membership {
+    pub user_id: Uuid,
+    pub organization_id: Uuid,
+}
