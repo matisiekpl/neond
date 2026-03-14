@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod organization;
+pub mod project;
 pub mod user;
 
 use axum::{http::StatusCode, response::IntoResponse};

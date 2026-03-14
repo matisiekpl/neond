@@ -7,20 +7,24 @@ use crate::mgmt::dto::organization_response::OrganizationResponse;
 use crate::mgmt::dto::update_organization_request::UpdateOrganizationRequest;
 use crate::mgmt::repository::membership::MembershipRepository;
 use crate::mgmt::repository::organization::OrganizationRepository;
+use crate::mgmt::service::membership::MembershipService;
 
 pub struct OrganizationService {
     org_repo: Arc<OrganizationRepository>,
     membership_repo: Arc<MembershipRepository>,
+    membership_service: Arc<MembershipService>,
 }
 
 impl OrganizationService {
     pub fn new(
         org_repo: Arc<OrganizationRepository>,
         membership_repo: Arc<MembershipRepository>,
+        membership_service: Arc<MembershipService>,
     ) -> Self {
         Self {
             org_repo,
             membership_repo,
+            membership_service,
         }
     }
 
@@ -44,7 +48,7 @@ impl OrganizationService {
     }
 
     pub async fn get(&self, user_id: Uuid, id: Uuid) -> Result<OrganizationResponse> {
-        self.verify_membership(user_id, id).await?;
+        self.membership_service.verify_membership(user_id, id).await?;
 
         let org = self
             .org_repo
@@ -81,7 +85,7 @@ impl OrganizationService {
             .await?
             .ok_or(AppError::NotFound)?;
 
-        self.verify_membership(user_id, id).await?;
+        self.membership_service.verify_membership(user_id, id).await?;
 
         Self::validate_organization_name(&req.name)?;
 
@@ -102,7 +106,7 @@ impl OrganizationService {
             .await?
             .ok_or(AppError::NotFound)?;
 
-        self.verify_membership(user_id, id).await?;
+        self.membership_service.verify_membership(user_id, id).await?;
 
         self.org_repo.delete(id).await
     }
@@ -114,7 +118,7 @@ impl OrganizationService {
             .await?
             .ok_or(AppError::NotFound)?;
 
-        self.verify_membership(user_id, org_id).await?;
+        self.membership_service.verify_membership(user_id, org_id).await?;
 
         let already_member = self
             .membership_repo
@@ -139,7 +143,7 @@ impl OrganizationService {
             .await?
             .ok_or(AppError::NotFound)?;
 
-        self.verify_membership(user_id, org_id).await?;
+        self.membership_service.verify_membership(user_id, org_id).await?;
 
         let is_member = self
             .membership_repo
@@ -163,7 +167,7 @@ impl OrganizationService {
     }
 
     pub async fn list_members(&self, user_id: Uuid, org_id: Uuid) -> Result<Vec<Uuid>> {
-        self.verify_membership(user_id, org_id).await?;
+        self.membership_service.verify_membership(user_id, org_id).await?;
 
         let memberships = self
             .membership_repo
@@ -171,19 +175,6 @@ impl OrganizationService {
             .await?;
 
         Ok(memberships.into_iter().map(|m| m.user_id).collect())
-    }
-
-    async fn verify_membership(&self, user_id: Uuid, org_id: Uuid) -> Result<()> {
-        let is_member = self
-            .membership_repo
-            .exists(user_id, org_id)
-            .await?;
-
-        if !is_member {
-            return Err(AppError::Unauthorized);
-        }
-
-        Ok(())
     }
 
     fn validate_organization_name(name: &str) -> Result<()> {
