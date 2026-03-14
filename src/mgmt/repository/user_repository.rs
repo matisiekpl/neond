@@ -2,10 +2,10 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
-use crate::error::{AppError, Result};
+use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::repository::db::DbPool;
 use crate::mgmt::model::user::User;
-use crate::schema::users;
+use crate::mgmt::schema::schema::users;
 
 #[derive(Insertable)]
 #[diesel(table_name = users)]

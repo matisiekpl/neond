@@ -4,11 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-diesel = { version = "2.2.0", features = ["postgres", "uuid"] }
-diesel-async = { version = "0.5", features = ["postgres", "bb8"] }
-uuid = { version = "1", features = ["v4"] }
+diesel = { version = "2.3.0", features = ["postgres", "uuid"] }
+diesel-async = { version = "0.7.4", features = ["postgres", "bb8"] }
+diesel_migrations = "2.2.0"
+uuid = { version = "1", features = ["v4", "serde"] }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
-bcrypt = "0.15"
-jsonwebtoken = "9"
+bcrypt = "0.19.0"
+jsonwebtoken = "10.3.0"
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+diesel-derive-enum = { version = "2", features = ["postgres"] }

@@ -3,7 +3,7 @@ pub mod user_handler;
 use std::sync::Arc;
 use axum::{http::StatusCode, response::IntoResponse};
 
-use crate::error::AppError;
+use crate::mgmt::dto::error::AppError;
 use crate::mgmt::service::user_service::UserService;
 
 pub struct AppState {

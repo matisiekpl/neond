@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 
-use crate::error::AppError;
+use crate::mgmt::dto::error::AppError;
 use crate::mgmt::dto::login_user_request::LoginUserRequest;
 use crate::mgmt::dto::register_user_request::RegisterUserRequest;
 use crate::mgmt::handler::AppState;

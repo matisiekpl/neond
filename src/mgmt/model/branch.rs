@@ -2,7 +2,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 #[derive(Queryable, Selectable)]
-#[diesel(table_name = crate::schema::branches)]
+#[diesel(table_name = crate::mgmt::schema::schema::branches)]
 pub struct Branch {
     pub id: Uuid,
     pub name: String,

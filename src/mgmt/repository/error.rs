@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::mgmt::dto::error::AppError;
 
 impl From<diesel::result::Error> for AppError {
     fn from(e: diesel::result::Error) -> Self {

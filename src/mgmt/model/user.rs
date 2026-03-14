@@ -2,7 +2,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 #[derive(Queryable, Selectable)]
-#[diesel(table_name = crate::schema::users)]
+#[diesel(table_name = crate::mgmt::schema::schema::users)]
 pub struct User {
     pub id: Uuid,
     pub name: String,

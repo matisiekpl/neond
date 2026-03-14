@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use bcrypt::{hash, verify, DEFAULT_COST};
-use jsonwebtoken::{encode, EncodingKey, Header};
+use bcrypt::{DEFAULT_COST, hash, verify};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::error::{AppError, Result};
+use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::login_user_request::LoginUserRequest;
 use crate::mgmt::dto::login_user_response::LoginUserResponse;
 use crate::mgmt::dto::register_user_request::RegisterUserRequest;
@@ -24,11 +24,15 @@ pub struct UserService {
 
 impl UserService {
     pub fn new(user_repo: Arc<UserRepository>, jwt_secret: String) -> Self {
-        Self { user_repo, jwt_secret }
+        Self {
+            user_repo,
+            jwt_secret,
+        }
     }
 
     pub async fn login(&self, req: LoginUserRequest) -> Result<LoginUserResponse> {
-        let user = self.user_repo
+        let user = self
+            .user_repo
             .find_by_email(&req.email)
             .await?
             .ok_or(AppError::Unauthorized)?;
@@ -59,7 +63,8 @@ impl UserService {
             .map_err(|e| AppError::Internal(e.to_string()))?
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
-        let user = self.user_repo
+        let user = self
+            .user_repo
             .create(Uuid::new_v4(), &req.name, &req.email, &password_hash)
             .await?;
 
@@ -71,7 +76,8 @@ impl UserService {
         let exp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| AppError::Internal(e.to_string()))?
-            .as_secs() as usize + 86400; // 24h
+            .as_secs() as usize
+            + 86400; // 24h
 
         let claims = Claims { sub: user_id, exp };
         encode(
