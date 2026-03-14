@@ -18,7 +18,7 @@ pub async fn serve(port: u16, state: AppState) {
         .route("/organizations/{org_id}/projects", post(project::create).get(project::list))
         .route("/organizations/{org_id}/projects/{project_id}", get(project::get).put(project::update).delete(project::delete))
         .with_state(state);
-
+    
     let listener = TcpListener::bind(("0.0.0.0", port))
         .await
         .expect("Failed to bind port");
