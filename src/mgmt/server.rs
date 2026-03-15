@@ -8,9 +8,8 @@ use tokio::net::TcpListener;
 
 use crate::mgmt::handler::AppState;
 use crate::mgmt::handler::{organization, project, user};
-use crate::mgmt::schema::schema::branches::id;
 
-pub async fn serve(port: u16, state: AppState) {
+pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     let state = Arc::new(state);
 
     let app = Router::new()
@@ -46,11 +45,9 @@ pub async fn serve(port: u16, state: AppState) {
         )
         .with_state(state);
 
-    let listener = TcpListener::bind(("0.0.0.0", port))
-        .await
-        .expect("Failed to bind port");
-
+    let listener = TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("Listening on 0.0.0.0:{}", port);
 
-    axum::serve(listener, app).await.expect("Server error");
+    axum::serve(listener, app).await?;
+    Ok(())
 }

@@ -2,3 +2,5 @@
 neond.iml
 .idea/
 .env
+
+neon_daemon_data/

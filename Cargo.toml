@@ -31,3 +31,9 @@ mappings = "=0.7.0"
 reqwest = "=0.12.4"
 fs2 = "0.4.3"
 tracing-panic = "0.1.2"
+anyhow = "1.0.102"
+tar = "0.4.44"
+
+[build-dependencies]
+tar = "0.4"
+flate2 = "1.0"

@@ -10,7 +10,7 @@ const PAGESERVER_HTTP_PORT: u16 = 9898;
 
 const MINIMUM_FREE_SPACE_GB: u64 = 3;
 
-pub fn check(daemon_directory: std::path::PathBuf) -> Result<(), PreflightError> {
+pub fn check(daemon_directory: &std::path::PathBuf) -> Result<(), PreflightError> {
     if !network::is_port_open(STORAGE_BROKER_PORT) {
         return Err(PreflightError::PortAlreadyReserved(STORAGE_BROKER_PORT));
     }
@@ -50,6 +50,7 @@ pub fn check(daemon_directory: std::path::PathBuf) -> Result<(), PreflightError>
     Ok(())
 }
 
+#[derive(Debug)]
 pub enum PreflightError {
     PortAlreadyReserved(u16),
     NotEnoughSpace,
@@ -73,3 +74,5 @@ impl std::fmt::Display for PreflightError {
         }
     }
 }
+
+impl std::error::Error for PreflightError {}

@@ -7,7 +7,7 @@ use std::env::current_dir;
 use tracing_panic::panic_hook;
 use tracing_subscriber::EnvFilter;
 
-pub async fn run() {
+pub async fn run() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -32,7 +32,8 @@ pub async fn run() {
         .expect("Failed to get current directory")
         .join("neon_daemon_data");
 
-    crate::preflight::check(daemon_directory).unwrap_or_else(|e| panic!("{}", e));
+    crate::preflight::check(&daemon_directory)?;
+    crate::unpacker::Unpacker::new(daemon_directory)?.unpack()?;
 
     run_migrations(&database_url)
         .await
@@ -43,5 +44,6 @@ pub async fn run() {
     let services = Services::new(&repositories, jwt_secret);
     let state = AppState { services };
 
-    serve(port, state).await;
+    serve(port, state).await?;
+    Ok(())
 }
