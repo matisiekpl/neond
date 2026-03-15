@@ -4,6 +4,7 @@ use crate::mgmt::repository::db::{init_pool, run_migrations};
 use crate::mgmt::server::serve;
 use crate::mgmt::service::Services;
 use std::env::current_dir;
+use std::process;
 use tracing_panic::panic_hook;
 use tracing_subscriber::EnvFilter;
 
@@ -37,6 +38,10 @@ pub async fn run() -> Result<(), anyhow::Error> {
     let mut daemon = crate::daemon::Daemon::new(daemon_directory.clone());
 
     daemon.start()?;
+    ctrlc::set_handler(move || {
+        daemon.stop().unwrap();
+        process::exit(0);
+    })?;
 
     run_migrations(&database_url)
         .await

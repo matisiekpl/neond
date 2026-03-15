@@ -33,6 +33,8 @@ fs2 = "0.4.3"
 tracing-panic = "0.1.2"
 anyhow = "1.0.102"
 tar = "0.4.44"
+libc = "0.2.183"
+ctrlc = "3.5.2"
 
 [build-dependencies]
 tar = "0.4"
