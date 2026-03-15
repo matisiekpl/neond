@@ -40,6 +40,7 @@ diesel::table! {
         id -> Uuid,
         name -> Varchar,
         parent_branch_id -> Nullable<Uuid>,
+        timeline_id -> Uuid,
     }
 }
 

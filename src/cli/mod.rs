@@ -3,6 +3,8 @@ use crate::mgmt::repository::Repositories;
 use crate::mgmt::repository::db::{init_pool, run_migrations};
 use crate::mgmt::server::serve;
 use crate::mgmt::service::Services;
+use std::env::current_dir;
+use tracing_panic::panic_hook;
 use tracing_subscriber::EnvFilter;
 
 pub async fn run() {
@@ -11,6 +13,7 @@ pub async fn run() {
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
+    std::panic::set_hook(Box::new(panic_hook));
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
@@ -24,6 +27,12 @@ pub async fn run() {
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
     let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set in .env");
+
+    let daemon_directory = current_dir()
+        .expect("Failed to get current directory")
+        .join("neon_daemon_data");
+
+    crate::preflight::check(daemon_directory).unwrap_or_else(|e| panic!("{}", e));
 
     run_migrations(&database_url)
         .await

@@ -22,8 +22,12 @@ rustls-platform-verifier = "0.5.0"
 tokio-postgres = "0.7"
 tokio-postgres-rustls = "0.13.0"
 futures-util = "0.3"
-reqwest = { version = "0.11", features = ["json"] }
-pageserver_client = { path = "neon/pageserver/client" }
+neon_pageserver_client = { path = "neon/pageserver/client", package = "pageserver_client" }
+neon_pageserver_api = { path = "neon/libs/pageserver_api", package = "pageserver_api" }
+neon_utils = { path = "neon/libs/utils", package = "utils" }
 pprof_util = "=0.7.0"
 jemalloc_pprof = "=0.7.0"
 mappings = "=0.7.0"
+reqwest = "=0.12.4"
+fs2 = "0.4.3"
+tracing-panic = "0.1.2"
