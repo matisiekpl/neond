@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 pub struct Unpacker {
-    daemon_directory: PathBuf,
     safekeeper_path: PathBuf,
     pageserver_path: PathBuf,
     compute_ctl_path: PathBuf,
@@ -23,7 +22,6 @@ impl Unpacker {
         let binaries_directory = daemon_directory.join("binaries");
         std::fs::create_dir_all(&binaries_directory)?;
         Ok(Unpacker {
-            daemon_directory,
             compute_ctl_path: binaries_directory.join("compute_ctl"),
             storage_broker_path: binaries_directory.join("storage_broker"),
             storage_controller_path: binaries_directory.join("storage_controller"),
@@ -34,6 +32,11 @@ impl Unpacker {
     }
 
     pub fn unpack(self) -> Result<(), anyhow::Error> {
+        if cfg!(debug_assertions) {
+            tracing::info!("Debug mode enabled, skipping unpacking");
+            return Ok(());
+        }
+
         self.unpack_neon_binaries()?;
         self.unpack_pg_install()?;
         Ok(())

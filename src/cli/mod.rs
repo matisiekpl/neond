@@ -32,8 +32,11 @@ pub async fn run() -> Result<(), anyhow::Error> {
         .expect("Failed to get current directory")
         .join("neon_daemon_data");
 
-    crate::preflight::check(&daemon_directory)?;
-    crate::unpacker::Unpacker::new(daemon_directory)?.unpack()?;
+    crate::preflight::check(daemon_directory.clone())?;
+    crate::unpacker::Unpacker::new(daemon_directory.clone())?.unpack()?;
+    let mut daemon = crate::daemon::Daemon::new(daemon_directory.clone());
+
+    daemon.start()?;
 
     run_migrations(&database_url)
         .await
