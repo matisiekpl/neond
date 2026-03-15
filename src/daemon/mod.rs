@@ -3,7 +3,8 @@ mod stdout;
 
 use crate::daemon::stdout::wait_for_output;
 use anyhow::anyhow;
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{PathBuf};
 use std::process::{Child, Command, Stdio};
 
 pub struct Daemon {
@@ -35,24 +36,16 @@ impl Daemon {
     fn start_storage_broker(&mut self) -> Result<(), anyhow::Error> {
         let storage_broker_path = self.daemon_directory.join("binaries/storage_broker");
 
-        let mut cmd = Command::new(storage_broker_path);
-        death::configure_death_signal(&mut cmd);
-        let mut child = cmd
-            .env_clear()
-            .args(["-l", "127.0.0.1:50051"])
-            .stdout(Stdio::piped())
-            .spawn()?;
+        let child = Self::start_process(
+            storage_broker_path,
+            ["-l", "127.0.0.1:50051"],
+            "listening",
+            self.verbose,
+        )?;
         let pid = child.id();
-
-        let stdout = child.stdout.take().ok_or(anyhow!("stdout was piped"))?;
-        wait_for_output(stdout, "listening", self.verbose)?;
-
         self.storage_broker_process = Some(child);
 
-        tracing::info!(
-            "Storage broker started started on port 50051 on PID: {}",
-            pid,
-        );
+        tracing::info!("Storage broker started on port 50051 on PID: {}", pid,);
         Ok(())
     }
 
@@ -60,6 +53,22 @@ impl Daemon {
         Self::stop_process(&mut self.storage_broker_process)?;
         tracing::info!("Storage broker stopped");
         Ok(())
+    }
+
+    fn start_process(
+        binary: PathBuf,
+        args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+        needle: &str,
+        verbose: bool,
+    ) -> Result<Child, anyhow::Error> {
+        let mut cmd = Command::new(binary);
+        death::configure_death_signal(&mut cmd);
+        let mut child = cmd.env_clear().args(args).stdout(Stdio::piped()).spawn()?;
+
+        let stdout = child.stdout.take().ok_or(anyhow!("stdout was piped"))?;
+        wait_for_output(stdout, needle, verbose)?;
+
+        Ok(child)
     }
 
     fn stop_process(child: &mut Option<Child>) -> Result<(), anyhow::Error> {
