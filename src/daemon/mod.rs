@@ -1,4 +1,5 @@
 mod death;
+mod pageserver;
 mod postgres;
 mod stdout;
 mod tracer;
@@ -65,11 +66,13 @@ impl Daemon {
         self.start_storage_broker()?;
         self.start_storage_controller()?;
         self.start_safekeeper()?;
+        self.start_pageserver()?;
         Ok(())
     }
 
     pub fn stop(&mut self) -> Result<(), anyhow::Error> {
         tracing::info!("Stopping daemon...");
+        self.stop_pageserver()?;
         self.stop_safekeeper()?;
         self.tracer.stop();
         self.stop_storage_broker()?;
@@ -152,7 +155,7 @@ impl Daemon {
                 "--listen-http",
                 "127.0.0.1:7676",
                 "--availability-zone",
-                "primary",
+                "neond-1",
             ],
             "starting safekeeper WAL service on",
             self.verbose,
@@ -168,6 +171,31 @@ impl Daemon {
     fn stop_safekeeper(&mut self) -> Result<(), anyhow::Error> {
         Self::stop_process(&mut self.safekeeper_process)?;
         tracing::info!("Safekeeper stopped");
+        Ok(())
+    }
+
+    fn start_pageserver(&mut self) -> Result<(), anyhow::Error> {
+        std::fs::create_dir_all(&self.pageserver_working_directory)?;
+        pageserver::write_pageserver_init_files(&self.daemon_directory)?;
+        let child = Self::start_process(self.daemon_directory.join("binaries/pageserver"),
+            [
+                "-D",
+                self.pageserver_working_directory.to_str().unwrap(),
+            ],
+            "Starting pageserver http handler on 127.0.0.1:9898",
+            self.verbose,
+        )?;
+
+        let pid = child.id();
+        tracing::info!("Pageserver started on PID: {}", pid);
+        self.pageserver_process = Some(child);
+
+        Ok(())
+    }
+
+    fn stop_pageserver(&mut self) -> Result<(), anyhow::Error> {
+        Self::stop_process(&mut self.pageserver_process)?;
+        tracing::info!("Pageserver stopped");
         Ok(())
     }
 
