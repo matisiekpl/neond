@@ -17,6 +17,12 @@ pub struct Daemon {
     storage_controller_postgres: postgres::Postgres,
     management_postgres: postgres::Postgres,
     tracer: tracer::Tracer,
+
+    pageserver_working_directory: PathBuf,
+    safekeeper_working_directory: PathBuf,
+
+    pageserver_process: Option<Child>,
+    safekeeper_process: Option<Child>,
 }
 
 impl Daemon {
@@ -41,6 +47,12 @@ impl Daemon {
                 "mateuszek".to_string(),
             ),
             tracer: tracer::Tracer::new(),
+
+            pageserver_working_directory: daemon_directory.join("pageserver"),
+            safekeeper_working_directory: daemon_directory.join("safekeeper"),
+
+            pageserver_process: None,
+            safekeeper_process: None,
         }
     }
 
@@ -52,11 +64,13 @@ impl Daemon {
         self.tracer.start();
         self.start_storage_broker()?;
         self.start_storage_controller()?;
+        self.start_safekeeper()?;
         Ok(())
     }
 
     pub fn stop(&mut self) -> Result<(), anyhow::Error> {
         tracing::info!("Stopping daemon...");
+        self.stop_safekeeper()?;
         self.tracer.stop();
         self.stop_storage_broker()?;
         self.stop_storage_controller()?;
@@ -121,6 +135,42 @@ impl Daemon {
         Ok(())
     }
 
+    fn start_safekeeper(&mut self) -> Result<(), anyhow::Error> {
+        std::fs::create_dir_all(&self.safekeeper_working_directory)?;
+
+        let child = Self::start_process(
+            self.daemon_directory.join("binaries/safekeeper"),
+            [
+                "-D",
+                self.safekeeper_working_directory.to_str().unwrap(),
+                "--id",
+                "1",
+                "--broker-endpoint",
+                "http://127.0.0.1:50051",
+                "--listen-pg",
+                "127.0.0.1:5454",
+                "--listen-http",
+                "127.0.0.1:7676",
+                "--availability-zone",
+                "primary",
+            ],
+            "starting safekeeper WAL service on",
+            self.verbose,
+        )?;
+
+        let pid = child.id();
+        tracing::info!("Safekeeper started on PID: {}", pid);
+
+        self.safekeeper_process = Some(child);
+        Ok(())
+    }
+
+    fn stop_safekeeper(&mut self) -> Result<(), anyhow::Error> {
+        Self::stop_process(&mut self.safekeeper_process)?;
+        tracing::info!("Safekeeper stopped");
+        Ok(())
+    }
+
     fn start_process(
         binary: PathBuf,
         args: impl IntoIterator<Item = impl AsRef<OsStr>>,
@@ -141,7 +191,8 @@ impl Daemon {
         if let Some(mut child) = child.take() {
             #[cfg(unix)]
             unsafe {
-                libc::killpg(child.id() as i32, libc::SIGTERM);
+                tracing::debug!("Sending SIGINT to process: {}", child.id());
+                libc::killpg(child.id() as i32, libc::SIGINT);
                 std::thread::sleep(std::time::Duration::from_secs(5));
             }
             child.kill().ok();
