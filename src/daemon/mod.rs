@@ -13,6 +13,7 @@ pub struct Daemon {
     storage_broker_process: Option<Child>,
     verbose: bool,
     storage_controller_postgres: postgres::Postgres,
+    management_postgres: postgres::Postgres,
 }
 
 impl Daemon {
@@ -26,14 +27,23 @@ impl Daemon {
                 daemon_directory.clone(),
                 "storage_controller_pg_data",
                 5431,
+                "mateuszek".to_string(),
             ),
-
+            management_postgres: postgres::Postgres::new(
+                "management_db",
+                daemon_directory.clone(),
+                "management_pg_data",
+                5430,
+                "mateuszek".to_string(),
+            ),
         }
     }
 
     pub fn start(&mut self) -> Result<(), anyhow::Error> {
         self.storage_controller_postgres.init()?;
+        self.management_postgres.init()?;
         self.storage_controller_postgres.start()?;
+        self.management_postgres.start()?;
         self.start_storage_broker()?;
         Ok(())
     }
@@ -41,6 +51,7 @@ impl Daemon {
     pub fn stop(&mut self) -> Result<(), anyhow::Error> {
         tracing::info!("Stopping daemon...");
         self.storage_controller_postgres.stop()?;
+        self.management_postgres.stop()?;
         self.stop_storage_broker()?;
         Ok(())
     }
@@ -94,6 +105,10 @@ impl Daemon {
             child.wait().ok();
         }
         Ok(())
+    }
+
+    pub fn get_management_postgres_uri(&self) -> String {
+        self.management_postgres.get_connection_uri()
     }
 }
 

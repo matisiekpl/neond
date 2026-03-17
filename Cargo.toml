@@ -35,6 +35,7 @@ anyhow = "1.0.102"
 tar = "0.4.44"
 libc = "0.2.183"
 ctrlc = "3.5.2"
+tempfile = "3.27.0"
 
 [build-dependencies]
 tar = "0.4"

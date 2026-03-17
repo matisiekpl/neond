@@ -1,8 +1,10 @@
+use crate::daemon::death;
 use crate::daemon::stdout::wait_for_output;
 use anyhow::anyhow;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
-use crate::daemon::death;
+use tempfile::NamedTempFile;
 
 pub struct Postgres {
     name: &'static str,
@@ -13,6 +15,7 @@ pub struct Postgres {
     port: u16,
     process: Option<std::process::Child>,
     verbose: bool,
+    password: String,
 }
 
 impl Postgres {
@@ -21,6 +24,7 @@ impl Postgres {
         daemon_directory: PathBuf,
         data_directory_suffix: &'static str,
         port: u16,
+        password: String,
     ) -> Self {
         Postgres {
             name,
@@ -33,6 +37,7 @@ impl Postgres {
             port,
             process: None,
             verbose: cfg!(debug_assertions),
+            password,
         }
     }
 
@@ -42,6 +47,10 @@ impl Postgres {
             return Ok(());
         }
 
+        let mut pwfile = NamedTempFile::new()?;
+        write!(pwfile, "{}", self.password)?;
+        pwfile.flush()?;
+
         let exit_status = std::process::Command::new(self.initdb_binary_path.clone())
             .env(
                 "DYLD_LIBRARY_PATH",
@@ -49,7 +58,11 @@ impl Postgres {
             )
             .env("LD_LIBRARY_PATH", self.postgres_lib_path.to_str().unwrap())
             .arg("-U")
-            .arg("neon")
+            .arg("neond")
+            .arg("--pwfile")
+            .arg(pwfile.path())
+            .arg("--auth-local=scram-sha-256")
+            .arg("--auth-host=scram-sha-256")
             .arg("-D")
             .arg(self.data_directory.to_str().unwrap())
             .stdout(Stdio::piped())
@@ -99,6 +112,13 @@ impl Postgres {
         child.wait()?;
         tracing::info!("Postgres {} stopped", self.name);
         Ok(())
+    }
+
+    pub fn get_connection_uri(&self) -> String {
+        format!(
+            "postgresql://neond:{}@localhost:{}/postgres",
+            self.password, self.port
+        )
     }
 }
 

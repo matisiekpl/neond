@@ -26,7 +26,6 @@ pub async fn run() -> Result<(), anyhow::Error> {
         .parse()
         .expect("PORT must be a valid number");
 
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
     let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set in .env");
 
     let daemon_directory = current_dir()
@@ -38,6 +37,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
     let mut daemon = crate::daemon::Daemon::new(daemon_directory.clone());
 
     daemon.start()?;
+    let database_url = daemon.get_management_postgres_uri();
     ctrlc::set_handler(move || {
         daemon.stop().unwrap();
         process::exit(0);
