@@ -1,6 +1,8 @@
 use crate::daemon::death;
 use crate::daemon::stdout::wait_for_output;
 use anyhow::anyhow;
+use nix::sys::signal::{Signal::SIGINT, kill};
+use nix::unistd::Pid;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -108,9 +110,11 @@ impl Postgres {
         }
         let mut child = self.process.take().unwrap();
         tracing::info!("Stopping {} postgres...", self.name);
-        child.kill()?;
+        let pid = Pid::from_raw(child.id() as i32);
+        kill(pid, SIGINT)?;
         child.wait()?;
         tracing::info!("Postgres {} stopped", self.name);
+
         Ok(())
     }
 

@@ -1,6 +1,7 @@
 mod death;
 mod postgres;
 mod stdout;
+mod tracer;
 
 use crate::daemon::stdout::wait_for_output;
 use anyhow::anyhow;
@@ -11,9 +12,11 @@ use std::process::{Child, Command, Stdio};
 pub struct Daemon {
     daemon_directory: PathBuf,
     storage_broker_process: Option<Child>,
+    storage_controller_process: Option<Child>,
     verbose: bool,
     storage_controller_postgres: postgres::Postgres,
     management_postgres: postgres::Postgres,
+    tracer: tracer::Tracer,
 }
 
 impl Daemon {
@@ -21,6 +24,7 @@ impl Daemon {
         Daemon {
             daemon_directory: daemon_directory.clone(),
             storage_broker_process: None,
+            storage_controller_process: None,
             verbose: cfg!(debug_assertions),
             storage_controller_postgres: postgres::Postgres::new(
                 "storage_controller_db",
@@ -36,6 +40,7 @@ impl Daemon {
                 5430,
                 "mateuszek".to_string(),
             ),
+            tracer: tracer::Tracer::new(),
         }
     }
 
@@ -44,15 +49,19 @@ impl Daemon {
         self.management_postgres.init()?;
         self.storage_controller_postgres.start()?;
         self.management_postgres.start()?;
+        self.tracer.start();
         self.start_storage_broker()?;
+        self.start_storage_controller()?;
         Ok(())
     }
 
     pub fn stop(&mut self) -> Result<(), anyhow::Error> {
         tracing::info!("Stopping daemon...");
+        self.tracer.stop();
+        self.stop_storage_broker()?;
+        self.stop_storage_controller()?;
         self.storage_controller_postgres.stop()?;
         self.management_postgres.stop()?;
-        self.stop_storage_broker()?;
         Ok(())
     }
 
@@ -75,6 +84,40 @@ impl Daemon {
     fn stop_storage_broker(&mut self) -> Result<(), anyhow::Error> {
         Self::stop_process(&mut self.storage_broker_process)?;
         tracing::info!("Storage broker stopped");
+        Ok(())
+    }
+
+    fn start_storage_controller(&mut self) -> Result<(), anyhow::Error> {
+        let storage_controller_path = self.daemon_directory.join("binaries/storage_controller");
+        let child = Self::start_process(
+            storage_controller_path,
+            [
+                "-l",
+                "127.0.0.1:1234",
+                "--database-url",
+                self.storage_controller_postgres
+                    .get_connection_uri()
+                    .as_str(),
+                "--dev",
+                "--timeline-safekeeper-count",
+                "1",
+                "--control-plane-url",
+                "http://127.0.0.1:1235",
+            ],
+            "Serving HTTP on 127.0.0.1:1234",
+            self.verbose,
+        )?;
+
+        let pid = child.id();
+        self.storage_controller_process = Some(child);
+        tracing::info!("Storage controller started on port 1234 on PID: {}", pid);
+        Ok(())
+    }
+
+    fn stop_storage_controller(&mut self) -> Result<(), anyhow::Error> {
+        Self::stop_process(&mut self.storage_controller_process)?;
+        tracing::info!("Storage controller stopped");
+
         Ok(())
     }
 

@@ -39,6 +39,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
     daemon.start()?;
     let database_url = daemon.get_management_postgres_uri();
     ctrlc::set_handler(move || {
+
         daemon.stop().unwrap();
         process::exit(0);
     })?;

@@ -8,6 +8,7 @@ const PAGESERVER_PG_PORT: u16 = 64000;
 const PAGESERVER_HTTP_PORT: u16 = 9898;
 const STORAGE_CONTROLLER_DB_PORT: u16 = 5431;
 const DAEMON_MGMT_DB_PORT: u16 = 5430;
+const TRACER_PORT: u16 = 1235;
 
 const MINIMUM_FREE_SPACE_GB: u64 = 3;
 
@@ -37,6 +38,9 @@ pub fn check(daemon_directory: std::path::PathBuf) -> Result<(), PreflightError>
     }
     if !network::is_port_open(DAEMON_MGMT_DB_PORT) {
         return Err(PreflightError::PortAlreadyReserved(DAEMON_MGMT_DB_PORT));
+    }
+    if !network::is_port_open(TRACER_PORT) {
+        return Err(PreflightError::PortAlreadyReserved(TRACER_PORT));
     }
 
     if !daemon_directory.exists() {

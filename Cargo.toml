@@ -36,6 +36,7 @@ tar = "0.4.44"
 libc = "0.2.183"
 ctrlc = "3.5.2"
 tempfile = "3.27.0"
+nix = "0.31.2"
 
 [build-dependencies]
 tar = "0.4"

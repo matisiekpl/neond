@@ -3522,6 +3522,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "libc",
  "mappings",
+ "nix 0.31.2",
  "pageserver_api",
  "pageserver_client",
  "pprof_util",
