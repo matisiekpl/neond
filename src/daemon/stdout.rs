@@ -1,8 +1,7 @@
-use std::io::{BufRead, BufReader};
-use std::process::ChildStdout;
+use std::io::{BufRead, BufReader, Read};
 
-pub fn wait_for_output(
-    stdout: ChildStdout,
+pub fn wait_for_output<R: Read>(
+    stdout: R,
     needle: &str,
     verbose: bool,
 ) -> Result<(), anyhow::Error> {

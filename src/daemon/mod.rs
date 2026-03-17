@@ -1,34 +1,46 @@
 mod death;
+mod postgres;
 mod stdout;
 
 use crate::daemon::stdout::wait_for_output;
 use anyhow::anyhow;
 use std::ffi::OsStr;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 
 pub struct Daemon {
     daemon_directory: PathBuf,
     storage_broker_process: Option<Child>,
     verbose: bool,
+    storage_controller_postgres: postgres::Postgres,
 }
 
 impl Daemon {
     pub fn new(daemon_directory: PathBuf) -> Self {
         Daemon {
-            daemon_directory,
+            daemon_directory: daemon_directory.clone(),
             storage_broker_process: None,
             verbose: cfg!(debug_assertions),
+            storage_controller_postgres: postgres::Postgres::new(
+                "storage_controller_db",
+                daemon_directory.clone(),
+                "storage_controller_pg_data",
+                5431,
+            ),
+
         }
     }
 
     pub fn start(&mut self) -> Result<(), anyhow::Error> {
+        self.storage_controller_postgres.init()?;
+        self.storage_controller_postgres.start()?;
         self.start_storage_broker()?;
         Ok(())
     }
 
     pub fn stop(&mut self) -> Result<(), anyhow::Error> {
         tracing::info!("Stopping daemon...");
+        self.storage_controller_postgres.stop()?;
         self.stop_storage_broker()?;
         Ok(())
     }
