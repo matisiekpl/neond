@@ -85,7 +85,7 @@ impl Daemon {
     fn start_storage_broker(&mut self) -> Result<(), anyhow::Error> {
         let storage_broker_path = self.daemon_directory.join("binaries/storage_broker");
 
-        let child = Self::start_process(
+        let child = self.start_process(
             storage_broker_path,
             ["-l", "127.0.0.1:50051"],
             "listening",
@@ -106,7 +106,7 @@ impl Daemon {
 
     fn start_storage_controller(&mut self) -> Result<(), anyhow::Error> {
         let storage_controller_path = self.daemon_directory.join("binaries/storage_controller");
-        let child = Self::start_process(
+        let child = self.start_process(
             storage_controller_path,
             [
                 "-l",
@@ -118,6 +118,7 @@ impl Daemon {
                 "--dev",
                 "--timeline-safekeeper-count",
                 "1",
+                "--timelines-onto-safekeepers",
                 "--control-plane-url",
                 "http://127.0.0.1:1235",
             ],
@@ -141,7 +142,8 @@ impl Daemon {
     fn start_safekeeper(&mut self) -> Result<(), anyhow::Error> {
         std::fs::create_dir_all(&self.safekeeper_working_directory)?;
 
-        let child = Self::start_process(
+        // TODO(matisiekpl): register safekeeper
+        let child = self.start_process(
             self.daemon_directory.join("binaries/safekeeper"),
             [
                 "-D",
@@ -177,7 +179,7 @@ impl Daemon {
     fn start_pageserver(&mut self) -> Result<(), anyhow::Error> {
         std::fs::create_dir_all(&self.pageserver_working_directory)?;
         pageserver::write_pageserver_init_files(&self.daemon_directory)?;
-        let child = Self::start_process(
+        let child = self.start_process(
             self.daemon_directory.join("binaries/pageserver"),
             ["-D", self.pageserver_working_directory.to_str().unwrap()],
             "Starting pageserver http handler on 127.0.0.1:9898",
@@ -198,6 +200,7 @@ impl Daemon {
     }
 
     fn start_process(
+        &self,
         binary: PathBuf,
         args: impl IntoIterator<Item = impl AsRef<OsStr>>,
         needle: &str,
@@ -205,7 +208,12 @@ impl Daemon {
     ) -> Result<Child, anyhow::Error> {
         let mut cmd = Command::new(binary);
         death::configure_death_signal(&mut cmd);
-        let mut child = cmd.env_clear().args(args).stdout(Stdio::piped()).spawn()?;
+        let mut child = cmd
+            .env_clear()
+            .current_dir(&self.daemon_directory)
+            .args(args)
+            .stdout(Stdio::piped())
+            .spawn()?;
 
         let stdout = child.stdout.take().ok_or(anyhow!("stdout was piped"))?;
         wait_for_output(stdout, needle, verbose, verbose)?;
