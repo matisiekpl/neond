@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use crate::mgmt::handler::AppState;
-use crate::mgmt::handler::{organization, project, user};
+use crate::mgmt::handler::{branch, organization, project, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     let state = Arc::new(state);
@@ -42,6 +42,16 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             get(project::get)
                 .put(project::update)
                 .delete(project::delete),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches",
+            post(branch::create).get(branch::list),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}",
+            get(branch::get)
+                .put(branch::update)
+                .delete(branch::delete),
         )
         .with_state(state);
 

@@ -1,3 +1,4 @@
+pub mod branch;
 pub mod services;
 pub mod membership;
 pub mod organization;

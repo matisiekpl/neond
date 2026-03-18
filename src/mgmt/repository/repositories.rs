@@ -1,3 +1,4 @@
+use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::db::get_pool;
 use crate::mgmt::repository::membership::MembershipRepository;
 use crate::mgmt::repository::organization::OrganizationRepository;
@@ -9,6 +10,7 @@ pub struct Repositories {
     project: ProjectRepository,
     organization: OrganizationRepository,
     membership: MembershipRepository,
+    branch: BranchRepository,
 }
 
 impl Repositories {
@@ -19,6 +21,7 @@ impl Repositories {
             project: ProjectRepository::new(pool.clone()),
             organization: OrganizationRepository::new(pool.clone()),
             membership: MembershipRepository::new(pool.clone()),
+            branch: BranchRepository::new(pool.clone()),
         }
     }
 
@@ -36,5 +39,9 @@ impl Repositories {
 
     pub fn membership(&self) -> &MembershipRepository {
         &self.membership
+    }
+
+    pub fn branch(&self) -> &BranchRepository {
+        &self.branch
     }
 }

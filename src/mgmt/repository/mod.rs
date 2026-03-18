@@ -1,3 +1,4 @@
+pub mod branch;
 pub mod db;
 pub mod error;
 pub mod membership;

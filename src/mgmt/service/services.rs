@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::mgmt::repository::Repositories;
+use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::membership::MembershipService;
 use crate::mgmt::service::organization::OrganizationService;
 use crate::mgmt::service::project::ProjectService;
@@ -11,6 +12,7 @@ pub struct Services {
     organization: OrganizationService,
     project: ProjectService,
     membership: MembershipService,
+    branch: BranchService,
 }
 
 impl Services {
@@ -34,6 +36,11 @@ impl Services {
                 Arc::new(membership.clone()),
                 pageserver_client,
             ),
+            branch: BranchService::new(
+                Arc::new(repositories.branch().clone()),
+                Arc::new(repositories.project().clone()),
+                Arc::new(membership.clone()),
+            ),
             membership,
         }
     }
@@ -52,5 +59,9 @@ impl Services {
 
     pub fn membership(&self) -> &MembershipService {
         &self.membership
+    }
+
+    pub fn branch(&self) -> &BranchService {
+        &self.branch
     }
 }

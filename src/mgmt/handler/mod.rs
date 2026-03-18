@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod branch;
 pub mod organization;
 pub mod project;
 pub mod user;
