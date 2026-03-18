@@ -182,6 +182,22 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
+        let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
+
+        let mut status_code = 0;
+        while status_code != 200 {
+            status_code = self
+                .pageserver_client
+                .tenant_delete(TenantShardId::unsharded(tenant_id))
+                .await
+                .map_err(|_| AppError::Internal("Failed to delete tenant".to_string()))?
+                .as_u16();
+            if status_code != 500 && status_code != 503 && status_code != 409 {
+                break;
+            }
+        }
+
         self.project_repo.delete(id).await
     }
 

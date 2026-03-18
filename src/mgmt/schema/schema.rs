@@ -41,6 +41,7 @@ diesel::table! {
         name -> Varchar,
         parent_branch_id -> Nullable<Uuid>,
         timeline_id -> Uuid,
+        project_id -> Uuid,
     }
 }
 
@@ -59,6 +60,7 @@ diesel::joinable!(memberships -> users (user_id));
 diesel::joinable!(memberships -> organizations (organization_id));
 diesel::joinable!(projects -> organizations (organization_id));
 diesel::joinable!(endpoints -> branches (branch_id));
+diesel::joinable!(branches -> projects (project_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     users,

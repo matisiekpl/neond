@@ -54,7 +54,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add authentication
     let pageserver_client = neon_pageserver_client::mgmt_api::Client::new(
         pageserver_http_client,
-        "http://127.0.0.1:9898".to_string(),
+        "http://127.0.0.1:1234".to_string(),
         None,
     );
 

@@ -8,4 +8,5 @@ pub struct Branch {
     pub name: String,
     pub parent_branch_id: Option<Uuid>,
     pub timeline_id: Uuid,
+    pub project_id: Uuid,
 }
