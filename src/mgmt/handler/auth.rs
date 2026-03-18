@@ -29,7 +29,7 @@ where
             let headers = &parts.headers;
 
             let auth_header = headers
-                .get("authorization")
+                .get("Authorization")
                 .and_then(|h| h.to_str().ok())
                 .ok_or(AppError::Unauthorized)?;
 

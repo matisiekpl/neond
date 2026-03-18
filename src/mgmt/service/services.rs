@@ -14,7 +14,11 @@ pub struct Services {
 }
 
 impl Services {
-    pub fn new(repositories: &Repositories, jwt_secret: String) -> Self {
+    pub fn new(
+        repositories: &Repositories,
+        pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        jwt_secret: String,
+    ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
 
         Self {
@@ -28,6 +32,7 @@ impl Services {
                 Arc::new(repositories.project().clone()),
                 Arc::new(repositories.organization().clone()),
                 Arc::new(membership.clone()),
+                pageserver_client,
             ),
             membership,
         }

@@ -1,3 +1,8 @@
+use neon_pageserver_api::controller_api::TenantCreateRequest;
+use neon_utils::id::TenantId;
+use neon_utils::shard::TenantShardId;
+use reqwest::Method;
+use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -13,6 +18,7 @@ pub struct ProjectService {
     project_repo: Arc<ProjectRepository>,
     org_repo: Arc<OrganizationRepository>,
     membership_service: Arc<MembershipService>,
+    pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
 }
 
 impl ProjectService {
@@ -20,15 +26,22 @@ impl ProjectService {
         project_repo: Arc<ProjectRepository>,
         org_repo: Arc<OrganizationRepository>,
         membership_service: Arc<MembershipService>,
+        pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     ) -> Self {
         Self {
             project_repo,
             org_repo,
             membership_service,
+            pageserver_client,
         }
     }
 
-    pub async fn create(&self, user_id: Uuid, org_id: Uuid, req: CreateProjectRequest) -> Result<ProjectResponse> {
+    pub async fn create(
+        &self,
+        user_id: Uuid,
+        org_id: Uuid,
+        req: CreateProjectRequest,
+    ) -> Result<ProjectResponse> {
         Self::validate_project_name(&req.name)?;
 
         let _ = self
@@ -37,13 +50,38 @@ impl ProjectService {
             .await?
             .ok_or(AppError::NotFound)?;
 
-        self.membership_service.verify_membership(user_id, org_id).await?;
+        self.membership_service
+            .verify_membership(user_id, org_id)
+            .await?;
 
-        let project_id = Uuid::new_v4();
+        let tenant_id = TenantId::generate();
+        let project_id = Uuid::from_str(tenant_id.to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid project id".to_string()))?;
         let project = self
             .project_repo
             .create(project_id, org_id, &req.name)
             .await?;
+
+        let tenant_create_request = TenantCreateRequest {
+            new_tenant_id: TenantShardId::unsharded(tenant_id),
+            generation: None,
+            shard_parameters: Default::default(),
+            placement_policy: None,
+            config: Default::default(),
+        };
+
+        // TODO(matisiekpl): refactor this in future
+        let pageserver_http_client = reqwest::Client::new();
+        let response = pageserver_http_client
+            .request(Method::POST, "http://127.0.0.1:1234/v1/tenant")
+            .json(&tenant_create_request)
+            .send()
+            .await
+            .unwrap();
+
+        if response.status().as_u16() != 201 {
+            return Err(AppError::Internal("Failed to create tenant".into()));
+        }
 
         Ok(ProjectResponse {
             id: project.id,
@@ -53,7 +91,9 @@ impl ProjectService {
     }
 
     pub async fn get(&self, user_id: Uuid, org_id: Uuid, id: Uuid) -> Result<ProjectResponse> {
-        self.membership_service.verify_membership(user_id, org_id).await?;
+        self.membership_service
+            .verify_membership(user_id, org_id)
+            .await?;
 
         let project = self
             .project_repo
@@ -79,12 +119,11 @@ impl ProjectService {
             .await?
             .ok_or(AppError::NotFound)?;
 
-        self.membership_service.verify_membership(user_id, org_id).await?;
-
-        let projects = self
-            .project_repo
-            .list_by_org_id(org_id)
+        self.membership_service
+            .verify_membership(user_id, org_id)
             .await?;
+
+        let projects = self.project_repo.list_by_org_id(org_id).await?;
 
         Ok(projects
             .into_iter()
@@ -96,10 +135,18 @@ impl ProjectService {
             .collect())
     }
 
-    pub async fn update(&self, user_id: Uuid, org_id: Uuid, id: Uuid, req: UpdateProjectRequest) -> Result<ProjectResponse> {
+    pub async fn update(
+        &self,
+        user_id: Uuid,
+        org_id: Uuid,
+        id: Uuid,
+        req: UpdateProjectRequest,
+    ) -> Result<ProjectResponse> {
         Self::validate_project_name(&req.name)?;
 
-        self.membership_service.verify_membership(user_id, org_id).await?;
+        self.membership_service
+            .verify_membership(user_id, org_id)
+            .await?;
 
         let project = self
             .project_repo
@@ -111,10 +158,7 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
-        let updated = self
-            .project_repo
-            .update(id, &req.name)
-            .await?;
+        let updated = self.project_repo.update(id, &req.name).await?;
 
         Ok(ProjectResponse {
             id: updated.id,
@@ -124,7 +168,9 @@ impl ProjectService {
     }
 
     pub async fn delete(&self, user_id: Uuid, org_id: Uuid, id: Uuid) -> Result<()> {
-        self.membership_service.verify_membership(user_id, org_id).await?;
+        self.membership_service
+            .verify_membership(user_id, org_id)
+            .await?;
 
         let project = self
             .project_repo
@@ -145,7 +191,9 @@ impl ProjectService {
         }
 
         if name.len() > 255 {
-            return Err(AppError::Internal("Project name is too long (max 255 characters)".into()));
+            return Err(AppError::Internal(
+                "Project name is too long (max 255 characters)".into(),
+            ));
         }
 
         Ok(())

@@ -5,6 +5,7 @@ use crate::mgmt::server::serve;
 use crate::mgmt::service::Services;
 use std::env::current_dir;
 use std::process;
+use std::sync::Arc;
 use tracing_panic::panic_hook;
 use tracing_subscriber::EnvFilter;
 
@@ -39,7 +40,6 @@ pub async fn run() -> Result<(), anyhow::Error> {
     daemon.start()?;
     let database_url = daemon.get_management_postgres_uri();
     ctrlc::set_handler(move || {
-
         daemon.stop().unwrap();
         process::exit(0);
     })?;
@@ -49,8 +49,17 @@ pub async fn run() -> Result<(), anyhow::Error> {
         .expect("Failed to run migrations");
 
     init_pool(&database_url).await;
+
+    let pageserver_http_client = reqwest::Client::new();
+    // TODO(matisiekpl): add authentication
+    let pageserver_client = neon_pageserver_client::mgmt_api::Client::new(
+        pageserver_http_client,
+        "http://127.0.0.1:9898".to_string(),
+        None,
+    );
+
     let repositories = Repositories::new().await;
-    let services = Services::new(&repositories, jwt_secret);
+    let services = Services::new(&repositories, Arc::new(pageserver_client), jwt_secret);
     let state = AppState { services };
 
     serve(port, state).await?;
