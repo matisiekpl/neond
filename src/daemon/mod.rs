@@ -177,11 +177,9 @@ impl Daemon {
     fn start_pageserver(&mut self) -> Result<(), anyhow::Error> {
         std::fs::create_dir_all(&self.pageserver_working_directory)?;
         pageserver::write_pageserver_init_files(&self.daemon_directory)?;
-        let child = Self::start_process(self.daemon_directory.join("binaries/pageserver"),
-            [
-                "-D",
-                self.pageserver_working_directory.to_str().unwrap(),
-            ],
+        let child = Self::start_process(
+            self.daemon_directory.join("binaries/pageserver"),
+            ["-D", self.pageserver_working_directory.to_str().unwrap()],
             "Starting pageserver http handler on 127.0.0.1:9898",
             self.verbose,
         )?;
@@ -210,7 +208,7 @@ impl Daemon {
         let mut child = cmd.env_clear().args(args).stdout(Stdio::piped()).spawn()?;
 
         let stdout = child.stdout.take().ok_or(anyhow!("stdout was piped"))?;
-        wait_for_output(stdout, needle, verbose)?;
+        wait_for_output(stdout, needle, verbose, verbose)?;
 
         Ok(child)
     }

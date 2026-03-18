@@ -97,7 +97,7 @@ impl Postgres {
             .spawn()?;
 
         let stderr = child.stderr.take().ok_or(anyhow!("stderr was piped"))?;
-        wait_for_output(stderr, "connections", self.verbose)?;
+        wait_for_output(stderr, "connections", self.verbose, self.verbose)?;
 
         self.process = Some(child);
         tracing::info!("Postgres {} started on port {}", self.name, self.port);
