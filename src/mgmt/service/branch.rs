@@ -1,3 +1,7 @@
+use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
+use neon_utils::id::{TenantId, TimelineId};
+use neon_utils::shard::TenantShardId;
+use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -13,6 +17,7 @@ pub struct BranchService {
     branch_repo: Arc<BranchRepository>,
     project_repo: Arc<ProjectRepository>,
     membership_service: Arc<MembershipService>,
+    pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
 }
 
 impl BranchService {
@@ -20,11 +25,13 @@ impl BranchService {
         branch_repo: Arc<BranchRepository>,
         project_repo: Arc<ProjectRepository>,
         membership_service: Arc<MembershipService>,
+        pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     ) -> Self {
         Self {
             branch_repo,
             project_repo,
             membership_service,
+            pageserver_client,
         }
     }
 
@@ -51,7 +58,7 @@ impl BranchService {
             return Err(AppError::NotFound);
         }
 
-        if let Some(parent_id) = req.parent_branch_id {
+        let mode = if let Some(parent_id) = req.parent_branch_id {
             let parent = self
                 .branch_repo
                 .find_by_id(parent_id)
@@ -61,13 +68,52 @@ impl BranchService {
             if parent.project_id != project_id {
                 return Err(AppError::NotFound);
             }
-        }
+
+            let ancestor_timeline_id =
+                TimelineId::from_str(parent.timeline_id.as_simple().to_string().as_str())
+                    .map_err(|_| AppError::Internal("Invalid parent timeline id".into()))?;
+
+            TimelineCreateRequestMode::Branch {
+                ancestor_timeline_id,
+                ancestor_start_lsn: None,
+                pg_version: None,
+                read_only: false,
+            }
+        } else {
+            TimelineCreateRequestMode::Bootstrap {
+                existing_initdb_timeline_id: None,
+                pg_version: None,
+            }
+        };
+
+        let new_timeline_id = TimelineId::generate();
+        let timeline_uuid = Uuid::from_str(new_timeline_id.to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+
+        self.pageserver_client
+            .timeline_create(
+                TenantShardId::unsharded(tenant_id),
+                &TimelineCreateRequest {
+                    new_timeline_id,
+                    mode,
+                },
+            )
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to create timeline: {e}")))?;
 
         let id = Uuid::new_v4();
-        let timeline_id = Uuid::new_v4();
         let branch = self
             .branch_repo
-            .create(id, project_id, &req.name, req.parent_branch_id, timeline_id)
+            .create(
+                id,
+                project_id,
+                &req.name,
+                req.parent_branch_id,
+                timeline_uuid,
+            )
             .await?;
 
         Ok(BranchResponse {
@@ -227,6 +273,31 @@ impl BranchService {
 
         if branch.project_id != project_id {
             return Err(AppError::NotFound);
+        }
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+
+        let timeline_id = TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+        let mut status_code = 0;
+        loop {
+            status_code = self
+                .pageserver_client
+                .timeline_delete(TenantShardId::unsharded(tenant_id), timeline_id)
+                .await
+                .map_err(|e| AppError::Internal(format!("Failed to delete timeline: {e}")))?
+                .as_u16();
+            if status_code != 500 && status_code != 503 && status_code != 409 {
+                break;
+            }
+        }
+
+        if status_code != 200 && status_code != 404 {
+            return Err(AppError::Internal(format!(
+                "Unexpected status code from pageserver: {status_code}"
+            )));
         }
 
         self.branch_repo.delete(branch_id).await

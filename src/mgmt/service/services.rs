@@ -34,12 +34,13 @@ impl Services {
                 Arc::new(repositories.project().clone()),
                 Arc::new(repositories.organization().clone()),
                 Arc::new(membership.clone()),
-                pageserver_client,
+                Arc::clone(&pageserver_client),
             ),
             branch: BranchService::new(
                 Arc::new(repositories.branch().clone()),
                 Arc::new(repositories.project().clone()),
                 Arc::new(membership.clone()),
+                pageserver_client,
             ),
             membership,
         }
