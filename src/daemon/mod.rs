@@ -9,6 +9,7 @@ use anyhow::anyhow;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use tracing::info;
 
 pub struct Daemon {
     daemon_directory: PathBuf,
@@ -57,7 +58,7 @@ impl Daemon {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn start(&mut self) -> Result<(), anyhow::Error> {
         self.storage_controller_postgres.init()?;
         self.management_postgres.init()?;
         self.storage_controller_postgres.start()?;
@@ -66,6 +67,7 @@ impl Daemon {
         self.start_storage_broker()?;
         self.start_storage_controller()?;
         self.start_safekeeper()?;
+        self.register_safekeeper().await?;
         self.start_pageserver()?;
         Ok(())
     }
@@ -167,6 +169,35 @@ impl Daemon {
         tracing::info!("Safekeeper started on PID: {}", pid);
 
         self.safekeeper_process = Some(child);
+        Ok(())
+    }
+
+    async fn register_safekeeper(&mut self) -> Result<(), anyhow::Error> {
+        let safekeeper_http_client = reqwest::Client::new();
+        let now = chrono::Utc::now().to_rfc3339();
+        let body = serde_json::json!({
+            "id": 1,
+            "region_id": "neond-1",
+            "host": "127.0.0.1",
+            "port": 5454,
+            "http_port": 7676,
+            "version": 1,
+            "availability_zone_id": "neond-1",
+            "created_at": now,
+            "updated_at": now
+        });
+
+        let response = safekeeper_http_client
+            .post("http://127.0.0.1:1234/control/v1/safekeeper/1")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        info!(
+            "Registered safekeeper with status code: {:?}",
+            response.status().as_u16()
+        );
+
         Ok(())
     }
 

@@ -37,7 +37,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
     crate::unpacker::Unpacker::new(daemon_directory.clone())?.unpack()?;
     let mut daemon = crate::daemon::Daemon::new(daemon_directory.clone());
 
-    daemon.start()?;
+    daemon.start().await?;
     let database_url = daemon.get_management_postgres_uri();
     ctrlc::set_handler(move || {
         daemon.stop().unwrap();
