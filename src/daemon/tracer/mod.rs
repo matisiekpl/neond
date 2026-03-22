@@ -16,11 +16,11 @@ impl Tracer {
 
         tokio::spawn(async move {
             let app = Router::new().route("/{*path}", any(Self::handler));
-            let listener = tokio::net::TcpListener::bind(("0.0.0.0", 1235))
+            let listener = tokio::net::TcpListener::bind(("127.0.0.1", 1235))
                 .await
                 .unwrap();
 
-            tracing::info!("Tracer listening on 0.0.0.0:{}", 1235);
+            tracing::info!("Tracer listening on 127.0.0.1:{}", 1235);
 
             axum::serve(listener, app)
                 .with_graceful_shutdown(async {

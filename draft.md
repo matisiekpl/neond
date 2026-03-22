@@ -106,3 +106,28 @@ Commands:
 --connstr "postgresql://no_user@localhost:55432/postgres" \
 --config compute_1_config.json
 ```
+
+# Architecture Overview
+
+## `ComputeEndpoint` Structure
+
+- Manages a subprocess with Postgres
+- Internally runs `compute_ctl`
+- Generates keys
+- Accepts a `Branch` as an argument
+- Has methods such as `.launch`, `.shutdown`, `.get_status`
+- Generates a random port
+
+## `sni_multiplexer` Component
+
+Has methods such as:
+- `add_mapping`
+- `remove_mapping`
+- `swap_mapping`
+- `break_connection`
+
+## Startup Flow
+
+1. A request comes to the controller, with a branch ID passed as an argument
+2. The service starts a `compute_endpoint` and stores a pointer to it
+3. The service registers a mapping in the multiplexer
