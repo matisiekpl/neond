@@ -1,21 +1,16 @@
 mod death;
 mod pageserver;
 mod postgres;
+mod process;
 mod stdout;
 mod tracer;
 
-use crate::daemon::stdout::wait_for_output;
-use anyhow::anyhow;
-use std::ffi::OsStr;
+use crate::daemon::process::ProcessControl;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
 use tracing::info;
 
 pub struct Daemon {
     daemon_directory: PathBuf,
-    storage_broker_process: Option<Child>,
-    storage_controller_process: Option<Child>,
-    verbose: bool,
     storage_controller_postgres: postgres::Postgres,
     management_postgres: postgres::Postgres,
     tracer: tracer::Tracer,
@@ -23,100 +18,53 @@ pub struct Daemon {
     pageserver_working_directory: PathBuf,
     safekeeper_working_directory: PathBuf,
 
-    pageserver_process: Option<Child>,
-    safekeeper_process: Option<Child>,
+    storage_broker: ProcessControl,
+    storage_controller: ProcessControl,
+    pageserver: ProcessControl,
+    safekeeper: ProcessControl,
 }
 
 impl Daemon {
     pub fn new(daemon_directory: PathBuf) -> Self {
-        Daemon {
-            daemon_directory: daemon_directory.clone(),
-            storage_broker_process: None,
-            storage_controller_process: None,
-            verbose: cfg!(debug_assertions),
-            storage_controller_postgres: postgres::Postgres::new(
-                "storage_controller_db",
-                daemon_directory.clone(),
-                "storage_controller_pg_data",
-                5431,
-                "mateuszek".to_string(),
-            ),
-            management_postgres: postgres::Postgres::new(
-                "management_db",
-                daemon_directory.clone(),
-                "management_pg_data",
-                5430,
-                "mateuszek".to_string(),
-            ),
-            tracer: tracer::Tracer::new(),
+        let verbose = cfg!(debug_assertions);
 
-            pageserver_working_directory: daemon_directory.join("pageserver"),
-            safekeeper_working_directory: daemon_directory.join("safekeeper"),
+        let pageserver_working_directory = daemon_directory.join("pageserver");
+        let safekeeper_working_directory = daemon_directory.join("safekeeper");
 
-            pageserver_process: None,
-            safekeeper_process: None,
-        }
-    }
+        let storage_controller_postgres = postgres::Postgres::new(
+            "storage_controller_db",
+            daemon_directory.clone(),
+            "storage_controller_pg_data",
+            5431,
+            // TODO(matisiekpl): change password
+            "mateuszek".to_string(),
+        );
+        let management_postgres = postgres::Postgres::new(
+            "management_db",
+            daemon_directory.clone(),
+            "management_pg_data",
+            5430,
+            // TODO(matisiekpl): change password
+            "mateuszek".to_string(),
+        );
 
-    pub async fn start(&mut self) -> Result<(), anyhow::Error> {
-        self.storage_controller_postgres.init()?;
-        self.management_postgres.init()?;
-        self.storage_controller_postgres.start()?;
-        self.management_postgres.start()?;
-        self.tracer.start();
-        self.start_storage_broker()?;
-        self.start_storage_controller()?;
-        self.start_safekeeper()?;
-        self.register_safekeeper().await?;
-        self.start_pageserver()?;
-        Ok(())
-    }
-
-    pub fn stop(&mut self) -> Result<(), anyhow::Error> {
-        tracing::info!("Stopping daemon...");
-        self.stop_pageserver()?;
-        self.stop_safekeeper()?;
-        self.tracer.stop();
-        self.stop_storage_broker()?;
-        self.stop_storage_controller()?;
-        self.storage_controller_postgres.stop()?;
-        self.management_postgres.stop()?;
-        Ok(())
-    }
-
-    fn start_storage_broker(&mut self) -> Result<(), anyhow::Error> {
-        let storage_broker_path = self.daemon_directory.join("binaries/storage_broker");
-
-        let child = self.start_process(
-            storage_broker_path,
+        let storage_broker = ProcessControl::new(
+            "Storage broker",
+            daemon_directory.join("binaries/storage_broker"),
             ["-l", "127.0.0.1:50051"],
+            daemon_directory.clone(),
             "listening",
-            self.verbose,
-        )?;
-        let pid = child.id();
-        self.storage_broker_process = Some(child);
+            verbose,
+        );
 
-        tracing::info!("Storage broker started on port 50051 on PID: {}", pid,);
-        Ok(())
-    }
-
-    fn stop_storage_broker(&mut self) -> Result<(), anyhow::Error> {
-        Self::stop_process(&mut self.storage_broker_process)?;
-        tracing::info!("Storage broker stopped");
-        Ok(())
-    }
-
-    fn start_storage_controller(&mut self) -> Result<(), anyhow::Error> {
-        let storage_controller_path = self.daemon_directory.join("binaries/storage_controller");
-        let child = self.start_process(
-            storage_controller_path,
+        let storage_controller = ProcessControl::new(
+            "Storage controller",
+            daemon_directory.join("binaries/storage_controller"),
             [
                 "-l",
                 "127.0.0.1:1234",
                 "--database-url",
-                self.storage_controller_postgres
-                    .get_connection_uri()
-                    .as_str(),
+                storage_controller_postgres.get_connection_uri().as_str(),
                 "--dev",
                 "--timeline-safekeeper-count",
                 "1",
@@ -124,32 +72,21 @@ impl Daemon {
                 "--control-plane-url",
                 "http://127.0.0.1:1235",
             ],
+            daemon_directory.clone(),
             "Serving HTTP on 127.0.0.1:1234",
-            self.verbose,
-        )?;
+            verbose,
+        );
 
-        let pid = child.id();
-        self.storage_controller_process = Some(child);
-        tracing::info!("Storage controller started on port 1234 on PID: {}", pid);
-        Ok(())
-    }
-
-    fn stop_storage_controller(&mut self) -> Result<(), anyhow::Error> {
-        Self::stop_process(&mut self.storage_controller_process)?;
-        tracing::info!("Storage controller stopped");
-
-        Ok(())
-    }
-
-    fn start_safekeeper(&mut self) -> Result<(), anyhow::Error> {
-        std::fs::create_dir_all(&self.safekeeper_working_directory)?;
-
-        // TODO(matisiekpl): register safekeeper
-        let child = self.start_process(
-            self.daemon_directory.join("binaries/safekeeper"),
+        let safekeeper = ProcessControl::new(
+            "Safekeeper",
+            daemon_directory.join("binaries/safekeeper"),
             [
                 "-D",
-                self.safekeeper_working_directory.to_str().unwrap(),
+                safekeeper_working_directory
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+                    .as_str(),
                 "--id",
                 "1",
                 "--broker-endpoint",
@@ -161,14 +98,67 @@ impl Daemon {
                 "--availability-zone",
                 "neond-1",
             ],
+            daemon_directory.clone(),
             "starting safekeeper WAL service on",
-            self.verbose,
-        )?;
+            verbose,
+        );
 
-        let pid = child.id();
-        tracing::info!("Safekeeper started on PID: {}", pid);
+        let pageserver = ProcessControl::new(
+            "Pageserver",
+            daemon_directory.join("binaries/pageserver"),
+            [
+                "-D",
+                pageserver_working_directory
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+                    .as_str(),
+            ],
+            daemon_directory.clone(),
+            "Starting pageserver http handler on 127.0.0.1:9898",
+            verbose,
+        );
 
-        self.safekeeper_process = Some(child);
+        Daemon {
+            daemon_directory: daemon_directory.clone(),
+            storage_controller_postgres,
+            management_postgres,
+            tracer: tracer::Tracer::new(),
+            pageserver_working_directory,
+            safekeeper_working_directory,
+            storage_broker,
+            storage_controller,
+            pageserver,
+            safekeeper,
+        }
+    }
+
+    pub async fn start(&mut self) -> Result<(), anyhow::Error> {
+        self.storage_controller_postgres.init()?;
+        self.management_postgres.init()?;
+        self.storage_controller_postgres.start()?;
+        self.management_postgres.start()?;
+        self.tracer.start();
+        self.storage_broker.start()?;
+        self.storage_controller.start()?;
+        std::fs::create_dir_all(&self.safekeeper_working_directory)?;
+        self.safekeeper.start()?;
+        self.register_safekeeper().await?;
+        std::fs::create_dir_all(&self.pageserver_working_directory)?;
+        pageserver::write_pageserver_init_files(&self.daemon_directory)?;
+        self.pageserver.start()?;
+        Ok(())
+    }
+
+    pub fn stop(&mut self) -> Result<(), anyhow::Error> {
+        tracing::info!("Stopping daemon...");
+        self.pageserver.stop()?;
+        self.safekeeper.stop()?;
+        self.tracer.stop();
+        self.storage_broker.stop()?;
+        self.storage_controller.stop()?;
+        self.storage_controller_postgres.stop()?;
+        self.management_postgres.stop()?;
         Ok(())
     }
 
@@ -198,71 +188,6 @@ impl Daemon {
             response.status().as_u16()
         );
 
-        Ok(())
-    }
-
-    fn stop_safekeeper(&mut self) -> Result<(), anyhow::Error> {
-        Self::stop_process(&mut self.safekeeper_process)?;
-        tracing::info!("Safekeeper stopped");
-        Ok(())
-    }
-
-    fn start_pageserver(&mut self) -> Result<(), anyhow::Error> {
-        std::fs::create_dir_all(&self.pageserver_working_directory)?;
-        pageserver::write_pageserver_init_files(&self.daemon_directory)?;
-        let child = self.start_process(
-            self.daemon_directory.join("binaries/pageserver"),
-            ["-D", self.pageserver_working_directory.to_str().unwrap()],
-            "Starting pageserver http handler on 127.0.0.1:9898",
-            self.verbose,
-        )?;
-
-        let pid = child.id();
-        tracing::info!("Pageserver started on PID: {}", pid);
-        self.pageserver_process = Some(child);
-
-        Ok(())
-    }
-
-    fn stop_pageserver(&mut self) -> Result<(), anyhow::Error> {
-        Self::stop_process(&mut self.pageserver_process)?;
-        tracing::info!("Pageserver stopped");
-        Ok(())
-    }
-
-    fn start_process(
-        &self,
-        binary: PathBuf,
-        args: impl IntoIterator<Item = impl AsRef<OsStr>>,
-        needle: &str,
-        verbose: bool,
-    ) -> Result<Child, anyhow::Error> {
-        let mut cmd = Command::new(binary);
-        death::configure_death_signal(&mut cmd);
-        let mut child = cmd
-            .env_clear()
-            .current_dir(&self.daemon_directory)
-            .args(args)
-            .stdout(Stdio::piped())
-            .spawn()?;
-
-        let stdout = child.stdout.take().ok_or(anyhow!("stdout was piped"))?;
-        wait_for_output(stdout, needle, verbose, verbose)?;
-
-        Ok(child)
-    }
-
-    fn stop_process(child: &mut Option<Child>) -> Result<(), anyhow::Error> {
-        if let Some(mut child) = child.take() {
-            #[cfg(unix)]
-            unsafe {
-                tracing::debug!("Sending SIGINT to process: {}", child.id());
-                libc::killpg(child.id() as i32, libc::SIGINT);
-                std::thread::sleep(std::time::Duration::from_secs(5));
-            }
-            child.kill().ok();
-            child.wait().ok();
-        }
         Ok(())
     }
 
