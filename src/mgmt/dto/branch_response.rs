@@ -1,6 +1,7 @@
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::model::branch::PgVersion;
 
 #[derive(Serialize)]
@@ -11,4 +12,5 @@ pub struct BranchResponse {
     pub parent_branch_id: Option<Uuid>,
     pub timeline_id: Uuid,
     pub pg_version: PgVersion,
+    pub endpoint_status: ComputeEndpointStatus,
 }

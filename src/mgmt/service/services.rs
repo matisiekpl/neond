@@ -15,7 +15,7 @@ pub struct Services {
     project: ProjectService,
     membership: MembershipService,
     branch: BranchService,
-    endpoint: EndpointService,
+    endpoint: Arc<EndpointService>,
 }
 
 impl Services {
@@ -26,7 +26,12 @@ impl Services {
         binaries_directory: PathBuf,
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
-
+        let endpoint = Arc::new(EndpointService::new(
+            Arc::new(repositories.branch().clone()),
+            Arc::new(repositories.project().clone()),
+            Arc::new(membership.clone()),
+            binaries_directory,
+        ));
         Self {
             user: UserService::new(Arc::new(repositories.user().clone()), jwt_secret),
             organization: OrganizationService::new(
@@ -45,13 +50,9 @@ impl Services {
                 Arc::new(repositories.project().clone()),
                 Arc::new(membership.clone()),
                 pageserver_client,
+                Arc::clone(&endpoint),
             ),
-            endpoint: EndpointService::new(
-                Arc::new(repositories.branch().clone()),
-                Arc::new(repositories.project().clone()),
-                Arc::new(membership.clone()),
-                binaries_directory,
-            ),
+            endpoint,
             membership,
         }
     }
@@ -76,7 +77,7 @@ impl Services {
         &self.branch
     }
 
-    pub fn endpoint(&self) -> &EndpointService {
+    pub fn endpoint(&self) -> &Arc<EndpointService> {
         &self.endpoint
     }
 }

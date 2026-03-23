@@ -13,6 +13,7 @@ use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
 use crate::mgmt::model::branch::PgVersion;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
+use crate::mgmt::service::endpoint::EndpointService;
 use crate::mgmt::service::membership::MembershipService;
 
 pub struct BranchService {
@@ -20,6 +21,7 @@ pub struct BranchService {
     project_repo: Arc<ProjectRepository>,
     membership_service: Arc<MembershipService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+    endpoint_service: Arc<EndpointService>,
 }
 
 impl BranchService {
@@ -28,12 +30,14 @@ impl BranchService {
         project_repo: Arc<ProjectRepository>,
         membership_service: Arc<MembershipService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        endpoint_service: Arc<EndpointService>,
     ) -> Self {
         Self {
             branch_repo,
             project_repo,
             membership_service,
             pageserver_client,
+            endpoint_service,
         }
     }
 
@@ -123,6 +127,8 @@ impl BranchService {
             )
             .await?;
 
+        let endpoint_status = self.endpoint_service.get_status_for_branch(branch.id).await;
+
         Ok(BranchResponse {
             id: branch.id,
             project_id: branch.project_id,
@@ -130,6 +136,7 @@ impl BranchService {
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
             pg_version: branch.pg_version,
+            endpoint_status,
         })
     }
 
@@ -164,6 +171,8 @@ impl BranchService {
             return Err(AppError::NotFound);
         }
 
+        let endpoint_status = self.endpoint_service.get_status_for_branch(branch.id).await;
+
         Ok(BranchResponse {
             id: branch.id,
             project_id: branch.project_id,
@@ -171,6 +180,7 @@ impl BranchService {
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
             pg_version: branch.pg_version,
+            endpoint_status,
         })
     }
 
@@ -196,17 +206,21 @@ impl BranchService {
 
         let branches = self.branch_repo.list_by_project_id(project_id).await?;
 
-        Ok(branches
-            .into_iter()
-            .map(|b| BranchResponse {
+        let mut results = Vec::with_capacity(branches.len());
+        for b in branches {
+            let endpoint_status = self.endpoint_service.get_status_for_branch(b.id).await;
+            results.push(BranchResponse {
                 id: b.id,
                 project_id: b.project_id,
                 name: b.name,
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
                 pg_version: b.pg_version,
-            })
-            .collect())
+                endpoint_status,
+            });
+        }
+
+        Ok(results)
     }
 
     pub async fn update(
@@ -245,6 +259,8 @@ impl BranchService {
 
         let updated = self.branch_repo.update(branch_id, &req.name).await?;
 
+        let endpoint_status = self.endpoint_service.get_status_for_branch(updated.id).await;
+
         Ok(BranchResponse {
             id: updated.id,
             project_id: updated.project_id,
@@ -252,6 +268,7 @@ impl BranchService {
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
             pg_version: updated.pg_version,
+            endpoint_status,
         })
     }
 

@@ -159,6 +159,14 @@ impl EndpointService {
         }
     }
 
+    pub async fn get_status_for_branch(&self, branch_id: Uuid) -> ComputeEndpointStatus {
+        let endpoints = self.endpoints.lock().await;
+        endpoints
+            .get(&branch_id)
+            .map(|e| e.get_status())
+            .unwrap_or(ComputeEndpointStatus::Stopped)
+    }
+
     pub async fn status(
         &self,
         user_id: Uuid,

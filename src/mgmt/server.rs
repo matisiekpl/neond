@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use neon_utils::shard::TenantShardId;
 use std::sync::Arc;
@@ -53,18 +53,11 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
                 .put(branch::update)
                 .delete(branch::delete),
         )
-        // TODO(matisiekpl): rethink those endpoints
         .route(
-            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/start",
-            put(endpoint::start),
-        )
-        .route(
-            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/stop",
-            put(endpoint::stop),
-        )
-        .route(
-            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/status",
-            get(endpoint::status),
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint",
+            post(endpoint::start)
+                .delete(endpoint::stop)
+                .get(endpoint::status),
         )
         .with_state(state);
 
