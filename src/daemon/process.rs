@@ -58,10 +58,26 @@ impl ProcessControl {
     pub fn stop(&mut self) -> Result<(), anyhow::Error> {
         if let Some(mut child) = self.child.take() {
             #[cfg(unix)]
-            unsafe {
-                tracing::debug!("Sending SIGINT to process: {}", child.id());
-                libc::killpg(child.id() as i32, libc::SIGINT);
-                std::thread::sleep(std::time::Duration::from_secs(5));
+            {
+                let pid = child.id() as i32;
+                tracing::debug!("Sending SIGINT to process group: {}", pid);
+                unsafe {
+                    libc::killpg(pid, libc::SIGINT);
+                }
+                for _ in 0..50 {
+                    match child.try_wait() {
+                        Ok(Some(_)) => {
+                            tracing::info!("{} stopped gracefully", self.name);
+                            return Ok(());
+                        }
+                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+                        Err(e) => {
+                            tracing::warn!("Error waiting for {}: {}", self.name, e);
+                            break;
+                        }
+                    }
+                }
+                tracing::warn!("{} did not stop gracefully, sending SIGKILL", self.name);
             }
             child.kill().ok();
             child.wait().ok();

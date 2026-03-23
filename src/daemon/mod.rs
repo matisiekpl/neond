@@ -156,9 +156,9 @@ impl Daemon {
         tracing::info!("Stopping daemon...");
         self.pageserver.stop()?;
         self.safekeeper.stop()?;
-        self.tracer.stop();
-        self.storage_broker.stop()?;
         self.storage_controller.stop()?;
+        self.storage_broker.stop()?;
+        self.tracer.stop();
         self.storage_controller_postgres.stop()?;
         self.management_postgres.stop()?;
         Ok(())

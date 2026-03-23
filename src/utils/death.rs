@@ -6,6 +6,7 @@ pub fn configure_death_signal(cmd: &mut Command) {
     unsafe {
         cmd.pre_exec(|| {
             libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM, 0, 0, 0);
+            libc::setpgid(0, 0);
             Ok(())
         });
     }

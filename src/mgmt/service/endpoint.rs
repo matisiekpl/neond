@@ -69,10 +69,23 @@ impl EndpointService {
         let mut endpoints = self.endpoints.lock().await;
 
         if let Some(existing) = endpoints.get(&branch_id) {
-            if existing.get_status() == ComputeEndpointStatus::Running {
-                return Err(AppError::Conflict(
-                    "Endpoint for this branch is already running".into(),
-                ));
+            match existing.get_status() {
+                ComputeEndpointStatus::Running => {
+                    return Err(AppError::Conflict(
+                        "Endpoint for this branch is already running".into(),
+                    ));
+                }
+                ComputeEndpointStatus::Starting => {
+                    return Err(AppError::Conflict(
+                        "Endpoint for this branch is already starting".into(),
+                    ));
+                }
+                ComputeEndpointStatus::Stopping => {
+                    return Err(AppError::Conflict(
+                        "Endpoint for this branch is currently stopping".into(),
+                    ));
+                }
+                ComputeEndpointStatus::Stopped | ComputeEndpointStatus::Failed => {}
             }
         }
 
@@ -145,7 +158,10 @@ impl EndpointService {
     pub async fn shutdown_all(&self) {
         let mut endpoints = self.endpoints.lock().await;
         for (branch_id, endpoint) in endpoints.iter_mut() {
-            if endpoint.get_status() == ComputeEndpointStatus::Running {
+            let status = endpoint.get_status();
+            if status == ComputeEndpointStatus::Running
+                || status == ComputeEndpointStatus::Starting
+            {
                 if let Err(e) = endpoint.shutdown() {
                     tracing::error!(
                         "Failed to shutdown endpoint for branch {}: {}",

@@ -22,7 +22,7 @@ use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 use tempfile::TempDir;
 
-use crate::utils::stdout::wait_for_output;
+use crate::utils::stdout::wait_for_output_timeout;
 
 use crate::mgmt::model::branch::Branch;
 use neon_control_plane::postgresql_conf::PostgresConf;
@@ -36,8 +36,11 @@ type HmacSha256 = Hmac<Sha256>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ComputeEndpointStatus {
+    Starting,
     Running,
+    Stopping,
     Stopped,
+    Failed,
 }
 
 pub struct ComputeEndpoint {
@@ -70,6 +73,14 @@ impl ComputeEndpoint {
         if self.status == ComputeEndpointStatus::Running {
             return Err(anyhow!("Compute endpoint is already running"));
         }
+        if self.status == ComputeEndpointStatus::Starting {
+            return Err(anyhow!("Compute endpoint is already starting"));
+        }
+        if self.status == ComputeEndpointStatus::Stopping {
+            return Err(anyhow!("Compute endpoint is currently stopping"));
+        }
+
+        self.status = ComputeEndpointStatus::Starting;
 
         self.generate_certificates();
         let config = self.generate_config();
@@ -117,12 +128,25 @@ impl ComputeEndpoint {
             .spawn()?;
 
         let pid = child.id();
-        wait_for_output(
+        let result = wait_for_output_timeout(
             child.stderr.take().unwrap(),
             "listening on IPv4 address",
             true,
             true,
-        )?;
+            Some(std::time::Duration::from_secs(50)),
+        );
+
+        if let Err(e) = result {
+            tracing::error!(
+                "Compute endpoint {} failed to start: {}",
+                self.branch.timeline_id,
+                e
+            );
+            child.kill().ok();
+            child.wait().ok();
+            self.status = ComputeEndpointStatus::Failed;
+            return Err(anyhow!("Compute endpoint failed to start: {}", e));
+        }
 
         self.child = Some(child);
         self.status = ComputeEndpointStatus::Running;
@@ -140,13 +164,35 @@ impl ComputeEndpoint {
         if self.status == ComputeEndpointStatus::Stopped {
             return Err(anyhow!("Compute endpoint is already stopped"));
         }
+        if self.status == ComputeEndpointStatus::Stopping {
+            return Err(anyhow!("Compute endpoint is already stopping"));
+        }
+
+        self.status = ComputeEndpointStatus::Stopping;
 
         if let Some(mut child) = self.child.take() {
             #[cfg(unix)]
-            unsafe {
-                tracing::debug!("Sending SIGINT to compute process: {}", child.id());
-                libc::killpg(child.id() as i32, libc::SIGINT);
-                std::thread::sleep(std::time::Duration::from_secs(5));
+            {
+                let pid = child.id() as i32;
+                tracing::debug!("Sending SIGINT to compute process group: {}", pid);
+                unsafe {
+                    libc::killpg(pid, libc::SIGINT);
+                }
+                for _ in 0..50 {
+                    match child.try_wait() {
+                        Ok(Some(_)) => {
+                            self.status = ComputeEndpointStatus::Stopped;
+                            tracing::info!("Compute endpoint {} stopped gracefully", self.branch.timeline_id);
+                            return Ok(());
+                        }
+                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+                        Err(e) => {
+                            tracing::warn!("Error waiting for compute endpoint {}: {}", self.branch.timeline_id, e);
+                            break;
+                        }
+                    }
+                }
+                tracing::warn!("Compute endpoint {} did not stop gracefully, sending SIGKILL", self.branch.timeline_id);
             }
             child.kill().ok();
             child.wait().ok();
@@ -460,7 +506,9 @@ impl ComputeEndpoint {
 
 impl Drop for ComputeEndpoint {
     fn drop(&mut self) {
-        if self.status == ComputeEndpointStatus::Running {
+        if self.status == ComputeEndpointStatus::Running
+            || self.status == ComputeEndpointStatus::Starting
+        {
             if let Err(e) = self.shutdown() {
                 tracing::error!("Failed to shutdown compute endpoint: {}", e);
             }
