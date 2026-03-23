@@ -1,8 +1,9 @@
+pub mod compute;
 mod death;
 mod pageserver;
 mod postgres;
 mod process;
-mod stdout;
+pub mod stdout;
 mod tracer;
 
 use crate::daemon::process::ProcessControl;

@@ -1,7 +1,9 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::mgmt::repository::Repositories;
 use crate::mgmt::service::branch::BranchService;
+use crate::mgmt::service::endpoint::EndpointService;
 use crate::mgmt::service::membership::MembershipService;
 use crate::mgmt::service::organization::OrganizationService;
 use crate::mgmt::service::project::ProjectService;
@@ -13,6 +15,7 @@ pub struct Services {
     project: ProjectService,
     membership: MembershipService,
     branch: BranchService,
+    endpoint: EndpointService,
 }
 
 impl Services {
@@ -20,6 +23,7 @@ impl Services {
         repositories: &Repositories,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         jwt_secret: String,
+        daemon_directory: PathBuf,
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
 
@@ -41,6 +45,12 @@ impl Services {
                 Arc::new(repositories.project().clone()),
                 Arc::new(membership.clone()),
                 pageserver_client,
+            ),
+            endpoint: EndpointService::new(
+                Arc::new(repositories.branch().clone()),
+                Arc::new(repositories.project().clone()),
+                Arc::new(membership.clone()),
+                daemon_directory,
             ),
             membership,
         }
@@ -64,5 +74,9 @@ impl Services {
 
     pub fn branch(&self) -> &BranchService {
         &self.branch
+    }
+
+    pub fn endpoint(&self) -> &EndpointService {
+        &self.endpoint
     }
 }

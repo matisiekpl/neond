@@ -6,6 +6,7 @@ use crate::mgmt::service::Services;
 use std::env::current_dir;
 use std::process;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tracing_panic::panic_hook;
 use tracing_subscriber::EnvFilter;
 
@@ -39,10 +40,6 @@ pub async fn run() -> Result<(), anyhow::Error> {
 
     daemon.start().await?;
     let database_url = daemon.get_management_postgres_uri();
-    ctrlc::set_handler(move || {
-        daemon.stop().unwrap();
-        process::exit(0);
-    })?;
 
     run_migrations(&database_url)
         .await
@@ -59,8 +56,16 @@ pub async fn run() -> Result<(), anyhow::Error> {
     );
 
     let repositories = Repositories::new().await;
-    let services = Services::new(&repositories, Arc::new(pageserver_client), jwt_secret);
-    let state = AppState { services };
+    let services = Services::new(&repositories, Arc::new(pageserver_client), jwt_secret, daemon_directory);
+    let state = AppState { services: Arc::new(services) };
+
+    let shutdown_services = Arc::clone(&state.services);
+    let rt_handle = Handle::current();
+    ctrlc::set_handler(move || {
+        rt_handle.block_on(shutdown_services.endpoint().shutdown_all());
+        daemon.stop().unwrap();
+        process::exit(0);
+    })?;
 
     serve(port, state).await?;
     Ok(())

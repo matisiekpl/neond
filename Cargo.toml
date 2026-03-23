@@ -22,9 +22,11 @@ rustls-platform-verifier = "0.5.0"
 tokio-postgres = "0.7"
 tokio-postgres-rustls = "0.13.0"
 futures-util = "0.3"
+neon_compute_api = { path = "neon/libs/compute_api", package = "compute_api" }
 neon_pageserver_client = { path = "neon/pageserver/client", package = "pageserver_client" }
 neon_pageserver_api = { path = "neon/libs/pageserver_api", package = "pageserver_api" }
 neon_utils = { path = "neon/libs/utils", package = "utils" }
+neon_control_plane = { path = "neon/control_plane", package = "control_plane" }
 pprof_util = "=0.7.0"
 jemalloc_pprof = "=0.7.0"
 mappings = "=0.7.0"

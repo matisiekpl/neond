@@ -1,4 +1,5 @@
 pub mod branch;
+pub mod endpoint;
 pub mod services;
 pub mod membership;
 pub mod organization;

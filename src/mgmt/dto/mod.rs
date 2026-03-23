@@ -1,5 +1,6 @@
 pub mod branch_response;
 pub mod create_branch_request;
+pub mod endpoint_response;
 pub mod create_membership_request;
 pub mod create_organization_request;
 pub mod create_project_request;
