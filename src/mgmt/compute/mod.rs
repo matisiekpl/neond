@@ -1,26 +1,40 @@
 use anyhow::anyhow;
+use base64::prelude::*;
+use hmac::{Hmac, Mac};
 use neon_compute_api::responses::{ComputeConfig, ComputeCtlConfig};
 use neon_compute_api::spec::{
-    Cluster, ComputeAudit, ComputeMode, ComputeSpec, PageserverConnectionInfo,
-    PageserverShardConnectionInfo, PageserverShardInfo,
+    Cluster, ComputeAudit, ComputeMode, ComputeSpec, Database, PageserverConnectionInfo,
+    PageserverShardConnectionInfo, PageserverShardInfo, PgIdent, Role,
 };
 use neon_utils::id::{NodeId, TenantId, TimelineId};
 use neon_utils::shard::{ShardCount, ShardIndex};
+use pbkdf2::pbkdf2_hmac;
+use rcgen::{
+    BasicConstraints, CertificateParams, DistinguishedName, DnValue, ExtendedKeyUsagePurpose, IsCa,
+    Issuer, KeyPair, KeyUsagePurpose,
+};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
+use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 use tempfile::TempDir;
-use uuid::Uuid;
 
 use crate::utils::stdout::wait_for_output;
 
 use crate::mgmt::model::branch::Branch;
 use neon_control_plane::postgresql_conf::PostgresConf;
+use postgres_protocol::authentication::sasl::{ChannelBinding, ScramSha256};
+
+use base64::{Engine as _, engine::general_purpose};
+use rand::RngCore;
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ComputeEndpointStatus {
     Running,
     Stopped,
@@ -29,10 +43,11 @@ pub enum ComputeEndpointStatus {
 pub struct ComputeEndpoint {
     branch: Branch,
     port: u16,
-    pgdata_dir: TempDir,
+    compute_dir: TempDir,
     binaries_directory: PathBuf,
     child: Option<Child>,
     status: ComputeEndpointStatus,
+    channel_binding_signature: Option<Vec<u8>>,
 }
 
 impl ComputeEndpoint {
@@ -43,10 +58,11 @@ impl ComputeEndpoint {
         Ok(Self {
             branch,
             port,
-            pgdata_dir,
+            compute_dir: pgdata_dir,
             binaries_directory,
             child: None,
             status: ComputeEndpointStatus::Stopped,
+            channel_binding_signature: None,
         })
     }
 
@@ -57,9 +73,10 @@ impl ComputeEndpoint {
             return Err(anyhow!("Compute endpoint is already running"));
         }
 
+        self.generate_certificates();
         let config = self.generate_config();
-        let config_path = self.pgdata_dir.path().join("config.json");
-        std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+        let config_path = self.compute_dir.path().join("config.json");
+        fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
 
         let compute_ctl_binary = self.binaries_directory.join("compute_ctl");
         let pgbin = self.binaries_directory.join(format!(
@@ -67,10 +84,8 @@ impl ComputeEndpoint {
             self.branch.pg_version
         ));
 
-        let connection_string = format!(
-            "postgresql://neon_superuser@localhost:{}/postgres",
-            self.port
-        );
+        let connection_string =
+            format!("postgresql://cloud_admin@localhost:{}/postgres", self.port);
 
         let mut cmd = Command::new(&compute_ctl_binary);
         #[cfg(unix)]
@@ -90,7 +105,7 @@ impl ComputeEndpoint {
         let mut child = cmd
             .env_clear()
             .arg("--pgdata")
-            .arg(self.pgdata_dir.path().to_str().unwrap())
+            .arg(self.compute_dir.path().join("pg_data").to_str().unwrap())
             .arg("--pgbin")
             .arg(pgbin.to_str().unwrap())
             .arg("--compute-id")
@@ -152,6 +167,133 @@ impl ComputeEndpoint {
         self.port
     }
 
+    fn generate_certificates(&mut self) {
+        let ca_key = KeyPair::generate().expect("failed to generate CA key");
+        let mut ca_params = CertificateParams::default();
+        ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        ca_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
+        ca_params.distinguished_name = {
+            let mut dn = DistinguishedName::new();
+            dn.push(
+                rcgen::DnType::CommonName,
+                DnValue::PrintableString("neond".try_into().unwrap()),
+            );
+            dn
+        };
+        let ca_cert = ca_params
+            .self_signed(&ca_key)
+            .expect("failed to self-sign CA");
+
+        let issuer = Issuer::new(ca_params, &ca_key);
+
+        fs::write(self.compute_dir.path().join("root_ca.pem"), ca_cert.pem())
+            .expect("failed to write root_ca.pem");
+        fs::write(
+            self.compute_dir.path().join("root_ca.key"),
+            ca_key.serialize_pem(),
+        )
+        .expect("failed to write root_ca.key");
+
+        let server_key = KeyPair::generate().expect("failed to generate server key");
+        let mut server_params = CertificateParams::new(vec!["localhost".to_string()])
+            .expect("failed to create server params");
+        server_params.distinguished_name = {
+            let mut dn = DistinguishedName::new();
+            dn.push(
+                rcgen::DnType::CommonName,
+                DnValue::PrintableString("neond-server".try_into().unwrap()),
+            );
+            dn
+        };
+        server_params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+        let server_cert = server_params
+            .signed_by(&server_key, &issuer)
+            .expect("failed to sign server cert");
+
+        fs::write(self.compute_dir.path().join("server.pem"), server_cert.pem())
+            .expect("failed to write server.pem");
+        let server_key_path = self.compute_dir.path().join("server.key");
+        fs::write(&server_key_path, server_key.serialize_pem())
+            .expect("failed to write server.key");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&server_key_path, fs::Permissions::from_mode(0o600))
+                .expect("failed to set server.key permissions");
+        }
+
+        let client_key = KeyPair::generate().expect("failed to generate client key");
+        let mut client_params = CertificateParams::default();
+        client_params.distinguished_name = {
+            let mut dn = DistinguishedName::new();
+            dn.push(
+                rcgen::DnType::CommonName,
+                DnValue::PrintableString("neond-client".try_into().unwrap()),
+            );
+            dn
+        };
+        client_params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+        client_params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
+        let client_cert = client_params
+            .signed_by(&client_key, &issuer)
+            .expect("failed to sign client cert");
+
+        fs::write(self.compute_dir.path().join("client.pem"), client_cert.pem())
+            .expect("failed to write client.pem");
+        fs::write(
+            self.compute_dir.path().join("client.key"),
+            client_key.serialize_pem(),
+        )
+        .expect("failed to write client.key");
+
+        let cert_der = server_cert.der();
+        let channel_binding_signature = Sha256::digest(cert_der.as_ref()).to_vec();
+        self.channel_binding_signature = Some(channel_binding_signature);
+    }
+
+    fn encrypt_password(&self, password: String) -> Result<String, anyhow::Error> {
+        let channel_binding = self.channel_binding_signature.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Failed to encrypt password. Channel binding signature is missing.")
+        })?;
+
+        const ITERATIONS: u32 = 4096;
+
+        let mut salted_password = [0u8; 32];
+        pbkdf2_hmac::<Sha256>(
+            password.as_bytes(),
+            channel_binding,
+            ITERATIONS,
+            &mut salted_password,
+        );
+
+        let mut client_key_mac = Hmac::<Sha256>::new_from_slice(&salted_password)
+            .expect("HMAC can take key of any size");
+        client_key_mac.update(b"Client Key");
+        let client_key = client_key_mac.finalize().into_bytes();
+
+        let stored_key = Sha256::digest(&client_key);
+
+        let mut server_key_mac = Hmac::<Sha256>::new_from_slice(&salted_password)
+            .expect("HMAC can take key of any size");
+        server_key_mac.update(b"Server Key");
+        let server_key = server_key_mac.finalize().into_bytes();
+
+        let salt_b64 = BASE64_STANDARD.encode(channel_binding);
+        let stored_key_b64 = BASE64_STANDARD.encode(&stored_key);
+        let server_key_b64 = BASE64_STANDARD.encode(&server_key);
+
+        Ok(format!(
+            "SCRAM-SHA-256${ITERATIONS}:{salt_b64}${stored_key_b64}:{server_key_b64}"
+        ))
+    }
+
+    fn generate_random_port() -> u16 {
+        // TODO(matisiekpl): randomize on predefined range
+        let listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind to random port");
+        listener.local_addr().unwrap().port()
+    }
+
     fn setup_pg_conf(&self) -> PostgresConf {
         let mut conf = PostgresConf::new();
         conf.append("max_wal_senders", "10");
@@ -179,13 +321,25 @@ impl ComputeEndpoint {
         conf.append("synchronous_standby_names", "walproposer");
         conf.append("neon.safekeepers", "localhost:5454");
 
-        conf
-    }
+        conf.append("password_encryption", "scram-sha-256");
 
-    fn generate_random_port() -> u16 {
-        let listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind to random port");
-        listener.local_addr().unwrap().port()
+        conf.append_line("");
+        // Configure SSL
+        conf.append("ssl", "on");
+        conf.append(
+            "ssl_cert_file",
+            self.compute_dir.path().join("server.pem").to_str().unwrap(),
+        );
+        conf.append(
+            "ssl_key_file",
+            self.compute_dir.path().join("server.key").to_str().unwrap(),
+        );
+        conf.append(
+            "ssl_ca_file",
+            self.compute_dir.path().join("root_ca.pem").to_str().unwrap(),
+        );
+
+        conf
     }
 
     fn generate_config(&self) -> ComputeConfig {
@@ -202,12 +356,13 @@ impl ComputeEndpoint {
             PageserverShardInfo {
                 pageservers: vec![PageserverShardConnectionInfo {
                     id: Some(NodeId(1)),
-                    libpq_url: Some("postgres://no_user@127.0.0.1:64000".to_string()),
+                    libpq_url: Some("postgres://cloud_admin@127.0.0.1:64000".to_string()),
                     grpc_url: None,
                 }],
             },
         );
 
+        let password = self.encrypt_password(self.branch.password.clone()).unwrap();
         let spec = ComputeSpec {
             format_version: 1.0,
             operation_uuid: None,
@@ -219,8 +374,18 @@ impl ComputeEndpoint {
                 cluster_id: None,
                 name: None,
                 state: None,
-                roles: vec![],
-                databases: vec![],
+                roles: vec![Role {
+                    name: PgIdent::from("cloud_admin"),
+                    encrypted_password: Some(password),
+                    options: None,
+                }],
+                databases: vec![Database {
+                    name: PgIdent::from("postgres"),
+                    owner: PgIdent::from("postgres"),
+                    options: None,
+                    restrict_conn: false,
+                    invalid: false,
+                }],
                 postgresql_conf: Some(postgresql_conf),
                 settings: None,
             },
@@ -234,7 +399,7 @@ impl ComputeEndpoint {
                 shards,
                 prefer_protocol: Default::default(),
             }),
-            pageserver_connstring: Some("postgres://neon_superuser@127.0.0.1:64000".to_string()),
+            pageserver_connstring: Some("postgres://cloud_admin@127.0.0.1:64000".to_string()),
             shard_stripe_size: None,
             project_id: None,
             branch_id: None,
