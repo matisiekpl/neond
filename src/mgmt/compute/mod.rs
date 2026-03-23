@@ -67,8 +67,6 @@ impl ComputeEndpoint {
     }
 
     pub fn launch(&mut self) -> Result<(), anyhow::Error> {
-        // TODO(matisiekpl): set password
-        // TODO(matisiekpl): set tls
         if self.status == ComputeEndpointStatus::Running {
             return Err(anyhow!("Compute endpoint is already running"));
         }
@@ -210,8 +208,11 @@ impl ComputeEndpoint {
             .signed_by(&server_key, &issuer)
             .expect("failed to sign server cert");
 
-        fs::write(self.compute_dir.path().join("server.pem"), server_cert.pem())
-            .expect("failed to write server.pem");
+        fs::write(
+            self.compute_dir.path().join("server.pem"),
+            server_cert.pem(),
+        )
+        .expect("failed to write server.pem");
         let server_key_path = self.compute_dir.path().join("server.key");
         fs::write(&server_key_path, server_key.serialize_pem())
             .expect("failed to write server.key");
@@ -238,8 +239,11 @@ impl ComputeEndpoint {
             .signed_by(&client_key, &issuer)
             .expect("failed to sign client cert");
 
-        fs::write(self.compute_dir.path().join("client.pem"), client_cert.pem())
-            .expect("failed to write client.pem");
+        fs::write(
+            self.compute_dir.path().join("client.pem"),
+            client_cert.pem(),
+        )
+        .expect("failed to write client.pem");
         fs::write(
             self.compute_dir.path().join("client.key"),
             client_key.serialize_pem(),
@@ -324,6 +328,18 @@ impl ComputeEndpoint {
         conf.append("password_encryption", "scram-sha-256");
 
         conf.append_line("");
+        // Configure HBA
+        self.write_pg_hba();
+        conf.append(
+            "hba_file",
+            self.compute_dir
+                .path()
+                .join("pg_hba.conf")
+                .to_str()
+                .unwrap(),
+        );
+
+        conf.append_line("");
         // Configure SSL
         conf.append("ssl", "on");
         conf.append(
@@ -336,10 +352,20 @@ impl ComputeEndpoint {
         );
         conf.append(
             "ssl_ca_file",
-            self.compute_dir.path().join("root_ca.pem").to_str().unwrap(),
+            self.compute_dir
+                .path()
+                .join("root_ca.pem")
+                .to_str()
+                .unwrap(),
         );
 
         conf
+    }
+
+    fn write_pg_hba(&self) {
+        let pg_hba = include_str!("pg_hba.conf");
+        fs::write(self.compute_dir.path().join("pg_hba.conf"), pg_hba)
+            .expect("failed to write pg_hba.conf");
     }
 
     fn generate_config(&self) -> ComputeConfig {
@@ -362,7 +388,9 @@ impl ComputeEndpoint {
             },
         );
 
-        let password = self.encrypt_password(self.branch.password.clone()).unwrap();
+        let password = postgres_protocol::password::scram_sha_256(
+            String::from(self.branch.password.clone()).as_bytes(),
+        );
         let spec = ComputeSpec {
             format_version: 1.0,
             operation_uuid: None,
@@ -375,7 +403,7 @@ impl ComputeEndpoint {
                 name: None,
                 state: None,
                 roles: vec![Role {
-                    name: PgIdent::from("cloud_admin"),
+                    name: PgIdent::from("postgres"),
                     encrypted_password: Some(password),
                     options: None,
                 }],
@@ -390,7 +418,7 @@ impl ComputeEndpoint {
                 settings: None,
             },
             delta_operations: None,
-            skip_pg_catalog_updates: true,
+            skip_pg_catalog_updates: false,
             tenant_id: Some(tenant_id),
             timeline_id: Some(timeline_id),
             pageserver_connection_info: Some(PageserverConnectionInfo {

@@ -49,7 +49,6 @@ base64 = "0.22.1"
 hmac = "0.12"
 sha2 = "0.10"
 pbkdf2 = { version = "0.12", features = ["hmac"] }
-digest = "0.10"  # pin to one version explicitly
 
 [build-dependencies]
 tar = "0.4"

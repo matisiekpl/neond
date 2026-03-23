@@ -3748,7 +3748,6 @@ dependencies = [
  "diesel-async",
  "diesel-derive-enum",
  "diesel_migrations",
- "digest",
  "dotenvy",
  "flate2",
  "fs2",
