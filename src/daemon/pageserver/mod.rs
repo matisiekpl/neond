@@ -26,11 +26,14 @@ struct PageserverMetadata {
     pub port: i64,
 }
 
-pub fn write_pageserver_init_files(daemon_directory: &PathBuf) -> Result<(), anyhow::Error> {
+pub fn write_pageserver_init_files(
+    daemon_directory: &PathBuf,
+    binaries_directory: &PathBuf,
+) -> Result<(), anyhow::Error> {
     let config = PageserverConfig {
         availability_zone: "neond-1".to_string(),
-        pg_distrib_dir: daemon_directory
-            .join("binaries/pg_install")
+        pg_distrib_dir: binaries_directory
+            .join("pg_install")
             .to_str()
             .unwrap()
             .to_string(),

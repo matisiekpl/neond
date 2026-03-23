@@ -1,6 +1,7 @@
 use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
 use neon_utils::id::{TenantId, TimelineId};
 use neon_utils::shard::TenantShardId;
+use rand::Rng;
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -9,6 +10,7 @@ use crate::mgmt::dto::branch_response::BranchResponse;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
+use crate::mgmt::model::branch::PgVersion;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::membership::MembershipService;
@@ -105,6 +107,9 @@ impl BranchService {
             .map_err(|e| AppError::Internal(format!("Failed to create timeline: {e}")))?;
 
         let id = Uuid::new_v4();
+        let password = Self::generate_password();
+        let pg_version = req.pg_version.unwrap_or(PgVersion::V17);
+
         let branch = self
             .branch_repo
             .create(
@@ -113,6 +118,8 @@ impl BranchService {
                 &req.name,
                 req.parent_branch_id,
                 timeline_uuid,
+                &password,
+                pg_version,
             )
             .await?;
 
@@ -122,6 +129,7 @@ impl BranchService {
             name: branch.name,
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
+            pg_version: branch.pg_version,
         })
     }
 
@@ -162,6 +170,7 @@ impl BranchService {
             name: branch.name,
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
+            pg_version: branch.pg_version,
         })
     }
 
@@ -195,6 +204,7 @@ impl BranchService {
                 name: b.name,
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
+                pg_version: b.pg_version,
             })
             .collect())
     }
@@ -241,6 +251,7 @@ impl BranchService {
             name: updated.name,
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
+            pg_version: updated.pg_version,
         })
     }
 
@@ -301,6 +312,18 @@ impl BranchService {
         }
 
         self.branch_repo.delete(branch_id).await
+    }
+
+    fn generate_password() -> String {
+        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        const PASSWORD_LEN: usize = 32;
+        let mut rng = rand::rng();
+        (0..PASSWORD_LEN)
+            .map(|_| {
+                let idx = rng.random_range(0..CHARSET.len());
+                CHARSET[idx] as char
+            })
+            .collect()
     }
 
     fn validate_branch_name(name: &str) -> Result<()> {

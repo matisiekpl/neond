@@ -63,7 +63,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
         &repositories,
         Arc::new(pageserver_client),
         jwt_secret,
-        daemon_directory,
+        binaries_directory,
     );
     let state = AppState {
         services: Arc::new(services),

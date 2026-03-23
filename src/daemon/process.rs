@@ -1,5 +1,5 @@
-use crate::daemon::death;
-use crate::daemon::stdout::wait_for_output;
+use crate::utils::death;
+use crate::utils::stdout::wait_for_output;
 use anyhow::anyhow;
 use std::ffi::OsString;
 use std::path::PathBuf;

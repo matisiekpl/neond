@@ -1,7 +1,7 @@
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::daemon::compute::ComputeEndpointStatus;
+use crate::mgmt::compute::ComputeEndpointStatus;
 
 #[derive(Serialize)]
 pub struct EndpointResponse {

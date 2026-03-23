@@ -1,9 +1,6 @@
-pub mod compute;
-mod death;
 mod pageserver;
 mod postgres;
 mod process;
-pub mod stdout;
 mod tracer;
 
 use crate::daemon::process::ProcessControl;
@@ -12,6 +9,7 @@ use tracing::info;
 
 pub struct Daemon {
     daemon_directory: PathBuf,
+    binaries_directory: PathBuf,
     storage_controller_postgres: postgres::Postgres,
     management_postgres: postgres::Postgres,
     tracer: tracer::Tracer,
@@ -124,6 +122,7 @@ impl Daemon {
 
         Daemon {
             daemon_directory: daemon_directory.clone(),
+            binaries_directory: binaries_directory.clone(),
             storage_controller_postgres,
             management_postgres,
             tracer: tracer::Tracer::new(),
@@ -148,7 +147,7 @@ impl Daemon {
         self.safekeeper.start()?;
         self.register_safekeeper().await?;
         std::fs::create_dir_all(&self.pageserver_working_directory)?;
-        pageserver::write_pageserver_init_files(&self.daemon_directory)?;
+        pageserver::write_pageserver_init_files(&self.daemon_directory, &self.binaries_directory)?;
         self.pageserver.start()?;
         Ok(())
     }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::daemon::compute::{ComputeEndpoint, ComputeEndpointStatus};
+use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointStatus};
 use crate::mgmt::dto::endpoint_response::EndpointResponse;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::repository::branch::BranchRepository;
@@ -16,7 +16,7 @@ pub struct EndpointService {
     branch_repo: Arc<BranchRepository>,
     project_repo: Arc<ProjectRepository>,
     membership_service: Arc<MembershipService>,
-    daemon_directory: PathBuf,
+    binaries_directory: PathBuf,
 }
 
 impl EndpointService {
@@ -24,14 +24,14 @@ impl EndpointService {
         branch_repo: Arc<BranchRepository>,
         project_repo: Arc<ProjectRepository>,
         membership_service: Arc<MembershipService>,
-        daemon_directory: PathBuf,
+        binaries_directory: PathBuf,
     ) -> Self {
         Self {
             endpoints: Arc::new(Mutex::new(HashMap::new())),
             branch_repo,
             project_repo,
             membership_service,
-            daemon_directory,
+            binaries_directory,
         }
     }
 
@@ -76,12 +76,8 @@ impl EndpointService {
             }
         }
 
-        let mut endpoint = ComputeEndpoint::new(
-            branch.timeline_id,
-            project_id,
-            self.daemon_directory.clone(),
-        )
-        .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
+        let mut endpoint = ComputeEndpoint::new(branch, self.binaries_directory.clone())
+            .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
 
         endpoint
             .launch()
@@ -131,9 +127,7 @@ impl EndpointService {
 
         let mut endpoints = self.endpoints.lock().await;
 
-        let endpoint = endpoints
-            .get_mut(&branch_id)
-            .ok_or(AppError::NotFound)?;
+        let endpoint = endpoints.get_mut(&branch_id).ok_or(AppError::NotFound)?;
 
         endpoint
             .shutdown()
@@ -153,7 +147,11 @@ impl EndpointService {
         for (branch_id, endpoint) in endpoints.iter_mut() {
             if endpoint.get_status() == ComputeEndpointStatus::Running {
                 if let Err(e) = endpoint.shutdown() {
-                    tracing::error!("Failed to shutdown endpoint for branch {}: {}", branch_id, e);
+                    tracing::error!(
+                        "Failed to shutdown endpoint for branch {}: {}",
+                        branch_id,
+                        e
+                    );
                 } else {
                     tracing::info!("Shutdown endpoint for branch {}", branch_id);
                 }
@@ -194,9 +192,7 @@ impl EndpointService {
 
         let endpoints = self.endpoints.lock().await;
 
-        let endpoint = endpoints
-            .get(&branch_id)
-            .ok_or(AppError::NotFound)?;
+        let endpoint = endpoints.get(&branch_id).ok_or(AppError::NotFound)?;
 
         Ok(EndpointResponse {
             branch_id,

@@ -15,8 +15,9 @@ use std::str::FromStr;
 use tempfile::TempDir;
 use uuid::Uuid;
 
-use crate::daemon::stdout::wait_for_output;
+use crate::utils::stdout::wait_for_output;
 
+use crate::mgmt::model::branch::Branch;
 use neon_control_plane::postgresql_conf::PostgresConf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,36 +27,32 @@ pub enum ComputeEndpointStatus {
 }
 
 pub struct ComputeEndpoint {
-    timeline_id: Uuid,
-    tenant_id: Uuid,
+    branch: Branch,
     port: u16,
     pgdata_dir: TempDir,
-    daemon_directory: PathBuf,
+    binaries_directory: PathBuf,
     child: Option<Child>,
     status: ComputeEndpointStatus,
 }
 
 impl ComputeEndpoint {
-    pub fn new(
-        timeline_id: Uuid,
-        tenant_id: Uuid,
-        daemon_directory: PathBuf,
-    ) -> Result<Self, anyhow::Error> {
+    pub fn new(branch: Branch, binaries_directory: PathBuf) -> Result<Self, anyhow::Error> {
         let port = Self::generate_random_port();
-        let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", timeline_id))?;
+        let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))?;
 
         Ok(Self {
-            timeline_id,
-            tenant_id,
+            branch,
             port,
             pgdata_dir,
-            daemon_directory,
+            binaries_directory,
             child: None,
             status: ComputeEndpointStatus::Stopped,
         })
     }
 
     pub fn launch(&mut self) -> Result<(), anyhow::Error> {
+        // TODO(matisiekpl): set password
+        // TODO(matisiekpl): set tls
         if self.status == ComputeEndpointStatus::Running {
             return Err(anyhow!("Compute endpoint is already running"));
         }
@@ -64,13 +61,16 @@ impl ComputeEndpoint {
         let config_path = self.pgdata_dir.path().join("config.json");
         std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
 
-        let compute_ctl_binary = self.daemon_directory.join("binaries/compute_ctl");
-        // TODO(matisiekpl): control version of postgres
-        let pgbin = self
-            .daemon_directory
-            .join("binaries/pg_install/v17/bin/postgres");
+        let compute_ctl_binary = self.binaries_directory.join("compute_ctl");
+        let pgbin = self.binaries_directory.join(format!(
+            "pg_install/{}/bin/postgres",
+            self.branch.pg_version
+        ));
 
-        let connection_string = format!("postgresql://neon_superuser@localhost:{}/postgres", self.port);
+        let connection_string = format!(
+            "postgresql://neon_superuser@localhost:{}/postgres",
+            self.port
+        );
 
         let mut cmd = Command::new(&compute_ctl_binary);
         #[cfg(unix)]
@@ -89,13 +89,12 @@ impl ComputeEndpoint {
 
         let mut child = cmd
             .env_clear()
-            .current_dir(&self.daemon_directory)
             .arg("--pgdata")
             .arg(self.pgdata_dir.path().to_str().unwrap())
             .arg("--pgbin")
             .arg(pgbin.to_str().unwrap())
             .arg("--compute-id")
-            .arg(format!("compute-{}", self.timeline_id))
+            .arg(format!("compute-{}", self.branch.timeline_id))
             .arg("--connstr")
             .arg(&connection_string)
             .arg("--config")
@@ -116,7 +115,7 @@ impl ComputeEndpoint {
         self.status = ComputeEndpointStatus::Running;
         tracing::info!(
             "Compute endpoint {} started on PID: {}, port: {}",
-            self.timeline_id,
+            self.branch.timeline_id,
             pid,
             self.port
         );
@@ -141,7 +140,7 @@ impl ComputeEndpoint {
         }
 
         self.status = ComputeEndpointStatus::Stopped;
-        tracing::info!("Compute endpoint {} stopped", self.timeline_id);
+        tracing::info!("Compute endpoint {} stopped", self.branch.timeline_id);
         Ok(())
     }
 
@@ -192,9 +191,9 @@ impl ComputeEndpoint {
     fn generate_config(&self) -> ComputeConfig {
         let postgresql_conf = self.setup_pg_conf().to_string();
 
-        let tenant_id = TenantId::from_str(&self.tenant_id.simple().to_string())
+        let tenant_id = TenantId::from_str(&self.branch.project_id.simple().to_string())
             .expect("Failed to parse tenant_id");
-        let timeline_id = TimelineId::from_str(&self.timeline_id.simple().to_string())
+        let timeline_id = TimelineId::from_str(&self.branch.timeline_id.simple().to_string())
             .expect("Failed to parse timeline_id");
 
         let mut shards = HashMap::new();
@@ -239,7 +238,7 @@ impl ComputeEndpoint {
             shard_stripe_size: None,
             project_id: None,
             branch_id: None,
-            endpoint_id: Some(format!("compute-{}", self.timeline_id)),
+            endpoint_id: Some(format!("compute-{}", self.branch.timeline_id)),
             safekeepers_generation: None,
             safekeeper_connstrings: vec!["127.0.0.1:5454".to_string()],
             mode: ComputeMode::Primary,

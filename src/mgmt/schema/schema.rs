@@ -2,6 +2,10 @@ pub mod sql_types {
     #[derive(diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "endpoint_state"))]
     pub struct EndpointState;
+
+    #[derive(diesel::sql_types::SqlType, diesel::query_builder::QueryId)]
+    #[diesel(postgres_type(name = "pg_version"))]
+    pub struct PgVersion;
 }
 
 diesel::table! {
@@ -36,12 +40,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::PgVersion;
     branches (id) {
         id -> Uuid,
         name -> Varchar,
         parent_branch_id -> Nullable<Uuid>,
         timeline_id -> Uuid,
         project_id -> Uuid,
+        password -> Text,
+        pg_version -> PgVersion,
     }
 }
 

@@ -23,7 +23,7 @@ impl Services {
         repositories: &Repositories,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         jwt_secret: String,
-        daemon_directory: PathBuf,
+        binaries_directory: PathBuf,
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
 
@@ -50,7 +50,7 @@ impl Services {
                 Arc::new(repositories.branch().clone()),
                 Arc::new(repositories.project().clone()),
                 Arc::new(membership.clone()),
-                daemon_directory,
+                binaries_directory,
             ),
             membership,
         }
