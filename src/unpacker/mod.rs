@@ -18,8 +18,7 @@ const STORAGE_CONTROLLER_BINARY: &[u8] =
 const PG_INSTALL_TAR: &[u8] = include_bytes!("../../neon/target/pg_install.tar");
 
 impl Unpacker {
-    pub fn new(daemon_directory: PathBuf) -> Result<Self, std::io::Error> {
-        let binaries_directory = daemon_directory.join("binaries");
+    pub fn new(binaries_directory: PathBuf) -> Result<Self, std::io::Error> {
         std::fs::create_dir_all(&binaries_directory)?;
         Ok(Unpacker {
             compute_ctl_path: binaries_directory.join("compute_ctl"),
@@ -32,11 +31,6 @@ impl Unpacker {
     }
 
     pub fn unpack(self) -> Result<(), anyhow::Error> {
-        if cfg!(debug_assertions) {
-            tracing::info!("Debug mode enabled, skipping unpacking");
-            return Ok(());
-        }
-
         self.unpack_neon_binaries()?;
         self.unpack_pg_install()?;
         Ok(())

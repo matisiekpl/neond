@@ -34,9 +34,12 @@ pub async fn run() -> Result<(), anyhow::Error> {
         .expect("Failed to get current directory")
         .join("neon_daemon_data");
 
-    crate::preflight::check(daemon_directory.clone())?;
-    crate::unpacker::Unpacker::new(daemon_directory.clone())?.unpack()?;
-    let mut daemon = crate::daemon::Daemon::new(daemon_directory.clone());
+    let binaries_directory = tempfile::TempDir::new()?.keep();
+
+    crate::preflight::check(daemon_directory.clone(), binaries_directory.clone())?;
+    crate::unpacker::Unpacker::new(binaries_directory.clone())?.unpack()?;
+    let mut daemon =
+        crate::daemon::Daemon::new(daemon_directory.clone(), binaries_directory.clone());
 
     daemon.start().await?;
     let database_url = daemon.get_management_postgres_uri();
@@ -56,8 +59,15 @@ pub async fn run() -> Result<(), anyhow::Error> {
     );
 
     let repositories = Repositories::new().await;
-    let services = Services::new(&repositories, Arc::new(pageserver_client), jwt_secret, daemon_directory);
-    let state = AppState { services: Arc::new(services) };
+    let services = Services::new(
+        &repositories,
+        Arc::new(pageserver_client),
+        jwt_secret,
+        daemon_directory,
+    );
+    let state = AppState {
+        services: Arc::new(services),
+    };
 
     let shutdown_services = Arc::clone(&state.services);
     let rt_handle = Handle::current();

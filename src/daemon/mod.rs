@@ -26,7 +26,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    pub fn new(daemon_directory: PathBuf) -> Self {
+    pub fn new(daemon_directory: PathBuf, binaries_directory: PathBuf) -> Self {
         let verbose = cfg!(debug_assertions);
 
         let pageserver_working_directory = daemon_directory.join("pageserver");
@@ -35,6 +35,7 @@ impl Daemon {
         let storage_controller_postgres = postgres::Postgres::new(
             "storage_controller_db",
             daemon_directory.clone(),
+            binaries_directory.clone(),
             "storage_controller_pg_data",
             5431,
             // TODO(matisiekpl): change password
@@ -43,6 +44,7 @@ impl Daemon {
         let management_postgres = postgres::Postgres::new(
             "management_db",
             daemon_directory.clone(),
+            binaries_directory.clone(),
             "management_pg_data",
             5430,
             // TODO(matisiekpl): change password
@@ -51,7 +53,7 @@ impl Daemon {
 
         let storage_broker = ProcessControl::new(
             "Storage broker",
-            daemon_directory.join("binaries/storage_broker"),
+            binaries_directory.join("storage_broker"),
             ["-l", "127.0.0.1:50051"],
             daemon_directory.clone(),
             "listening",
@@ -60,7 +62,7 @@ impl Daemon {
 
         let storage_controller = ProcessControl::new(
             "Storage controller",
-            daemon_directory.join("binaries/storage_controller"),
+            binaries_directory.join("storage_controller"),
             [
                 "-l",
                 "127.0.0.1:1234",
@@ -80,7 +82,7 @@ impl Daemon {
 
         let safekeeper = ProcessControl::new(
             "Safekeeper",
-            daemon_directory.join("binaries/safekeeper"),
+            binaries_directory.join("safekeeper"),
             [
                 "-D",
                 safekeeper_working_directory
@@ -106,7 +108,7 @@ impl Daemon {
 
         let pageserver = ProcessControl::new(
             "Pageserver",
-            daemon_directory.join("binaries/pageserver"),
+            binaries_directory.join("pageserver"),
             [
                 "-D",
                 pageserver_working_directory

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 mod network;
 
 const STORAGE_BROKER_PORT: u16 = 50051;
@@ -12,7 +14,7 @@ const TRACER_PORT: u16 = 1235;
 
 const MINIMUM_FREE_SPACE_GB: u64 = 3;
 
-pub fn check(daemon_directory: std::path::PathBuf) -> Result<(), PreflightError> {
+pub fn check(daemon_directory: PathBuf, binaries_directory: PathBuf) -> Result<(), PreflightError> {
     if !network::is_port_open(STORAGE_BROKER_PORT) {
         return Err(PreflightError::PortAlreadyReserved(STORAGE_BROKER_PORT));
     }
@@ -48,16 +50,25 @@ pub fn check(daemon_directory: std::path::PathBuf) -> Result<(), PreflightError>
             .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
     }
 
+    if !binaries_directory.exists() {
+        std::fs::create_dir_all(&binaries_directory)
+            .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
+    }
+
     let daemon_directory_stats = fs2::statvfs(&daemon_directory)
         .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
+    let binaries_directory_stats = fs2::statvfs(&binaries_directory)
+        .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
 
-    if daemon_directory_stats.available_space() < MINIMUM_FREE_SPACE_GB * 1_000_000_000 {
+    let available_space =
+        daemon_directory_stats.available_space() + binaries_directory_stats.available_space();
+    if available_space < MINIMUM_FREE_SPACE_GB * 1_000_000_000 {
         return Err(PreflightError::NotEnoughSpace);
     }
 
     tracing::info!(
         "Preflight check completed successfully. Available {} MBs.",
-        daemon_directory_stats.available_space() / 1_000_000
+        available_space / 1_000_000
     );
 
     Ok(())
