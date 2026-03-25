@@ -1,3 +1,4 @@
+use names::Generator;
 use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
 use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
 use neon_utils::id::{TenantId, TimelineId};
@@ -112,6 +113,7 @@ impl BranchService {
 
         let id = Uuid::new_v4();
         let password = Self::generate_password();
+        let slug = self.generate_unique_slug().await?;
 
         let branch = self
             .branch_repo
@@ -122,6 +124,7 @@ impl BranchService {
                 req.parent_branch_id,
                 timeline_uuid,
                 &password,
+                &slug,
             )
             .await?;
 
@@ -131,6 +134,7 @@ impl BranchService {
             id: branch.id,
             project_id: branch.project_id,
             name: branch.name,
+            slug: branch.slug,
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
             endpoint_status,
@@ -186,6 +190,7 @@ impl BranchService {
                 id: b.id,
                 project_id: b.project_id,
                 name: b.name,
+                slug: b.slug,
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
                 endpoint_status,
@@ -243,6 +248,7 @@ impl BranchService {
             id: updated.id,
             project_id: updated.project_id,
             name: updated.name,
+            slug: updated.slug,
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
             endpoint_status,
@@ -321,6 +327,20 @@ impl BranchService {
                 CHARSET[idx] as char
             })
             .collect()
+    }
+
+    async fn generate_unique_slug(&self) -> Result<String> {
+        for _ in 0..10 {
+            let slug = Generator::default()
+                .next()
+                .unwrap_or_else(|| format!("branch-{}", Uuid::new_v4()));
+
+            if self.branch_repo.find_by_slug(&slug).await?.is_none() {
+                return Ok(slug);
+            }
+        }
+
+        Ok(format!("branch-{}", Uuid::new_v4()))
     }
 
     fn validate_branch_name(name: &str) -> Result<()> {

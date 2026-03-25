@@ -24,6 +24,7 @@ impl BranchRepository {
         parent_branch_id: Option<Uuid>,
         timeline_id: Uuid,
         password: &str,
+        slug: &str,
     ) -> Result<Branch> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -35,9 +36,21 @@ impl BranchRepository {
                 branches::parent_branch_id.eq(parent_branch_id),
                 branches::timeline_id.eq(timeline_id),
                 branches::password.eq(password),
+                branches::slug.eq(slug),
             ))
             .get_result(conn)
             .await
+            .map_err(Into::into)
+    }
+
+    pub async fn find_by_slug(&self, slug: &str) -> Result<Option<Branch>> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        branches::table
+            .filter(branches::slug.eq(slug))
+            .first::<Branch>(conn)
+            .await
+            .optional()
             .map_err(Into::into)
     }
 

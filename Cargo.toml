@@ -9,6 +9,7 @@ diesel-async = { version = "0.7.4", features = ["postgres", "bb8", "migrations"]
 diesel_migrations = "2.2.0"
 uuid = { version = "1", features = ["v4", "serde"] }
 rand = "0.9"
+names = "0.14"
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

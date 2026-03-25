@@ -1,0 +1,1 @@
+ALTER TABLE branches DROP COLUMN slug;

@@ -9,6 +9,7 @@ pub struct BranchResponse {
     pub id: Uuid,
     pub project_id: Uuid,
     pub name: String,
+    pub slug: String,
     pub parent_branch_id: Option<Uuid>,
     pub timeline_id: Uuid,
     pub endpoint_status: ComputeEndpointStatus,

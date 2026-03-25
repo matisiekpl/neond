@@ -10,4 +10,5 @@ pub struct Branch {
     pub timeline_id: Uuid,
     pub project_id: Uuid,
     pub password: String,
+    pub slug: String,
 }

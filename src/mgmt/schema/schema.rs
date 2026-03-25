@@ -50,6 +50,7 @@ diesel::table! {
         timeline_id -> Uuid,
         project_id -> Uuid,
         password -> Text,
+        slug -> Varchar,
     }
 }
 
