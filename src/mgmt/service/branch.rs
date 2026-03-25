@@ -10,7 +10,6 @@ use crate::mgmt::dto::branch_response::BranchResponse;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
-use crate::mgmt::model::branch::PgVersion;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::endpoint::EndpointService;
@@ -112,7 +111,6 @@ impl BranchService {
 
         let id = Uuid::new_v4();
         let password = Self::generate_password();
-        let pg_version = req.pg_version.unwrap_or(PgVersion::V17);
 
         let branch = self
             .branch_repo
@@ -123,7 +121,6 @@ impl BranchService {
                 req.parent_branch_id,
                 timeline_uuid,
                 &password,
-                pg_version,
             )
             .await?;
 
@@ -135,7 +132,6 @@ impl BranchService {
             name: branch.name,
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
-            pg_version: branch.pg_version,
             endpoint_status,
         })
     }
@@ -179,7 +175,6 @@ impl BranchService {
             name: branch.name,
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
-            pg_version: branch.pg_version,
             endpoint_status,
         })
     }
@@ -215,7 +210,6 @@ impl BranchService {
                 name: b.name,
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
-                pg_version: b.pg_version,
                 endpoint_status,
             });
         }
@@ -267,7 +261,6 @@ impl BranchService {
             name: updated.name,
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
-            pg_version: updated.pg_version,
             endpoint_status,
         })
     }

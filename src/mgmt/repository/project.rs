@@ -3,7 +3,7 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::mgmt::dto::error::{AppError, Result};
-use crate::mgmt::model::project::Project;
+use crate::mgmt::model::project::{PgVersion, Project};
 use crate::mgmt::repository::db::DbPool;
 use crate::mgmt::schema::schema::projects;
 
@@ -17,7 +17,7 @@ impl ProjectRepository {
         Self { pool }
     }
 
-    pub async fn create(&self, id: Uuid, org_id: Uuid, name: &str) -> Result<Project> {
+    pub async fn create(&self, id: Uuid, org_id: Uuid, name: &str, pg_version: PgVersion) -> Result<Project> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;
         diesel::insert_into(projects::table)
@@ -25,6 +25,7 @@ impl ProjectRepository {
                 projects::id.eq(id),
                 projects::organization_id.eq(org_id),
                 projects::name.eq(name),
+                projects::pg_version.eq(pg_version),
             ))
             .get_result(conn)
             .await

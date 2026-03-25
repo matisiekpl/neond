@@ -25,6 +25,7 @@ use tempfile::TempDir;
 use crate::utils::stdout::wait_for_output_timeout;
 
 use crate::mgmt::model::branch::Branch;
+use crate::mgmt::model::project::PgVersion;
 use neon_control_plane::postgresql_conf::PostgresConf;
 use postgres_protocol::authentication::sasl::{ChannelBinding, ScramSha256};
 
@@ -45,6 +46,7 @@ pub enum ComputeEndpointStatus {
 
 pub struct ComputeEndpoint {
     branch: Branch,
+    pg_version: PgVersion,
     port: u16,
     compute_dir: TempDir,
     binaries_directory: PathBuf,
@@ -54,12 +56,13 @@ pub struct ComputeEndpoint {
 }
 
 impl ComputeEndpoint {
-    pub fn new(branch: Branch, binaries_directory: PathBuf) -> Result<Self, anyhow::Error> {
+    pub fn new(branch: Branch, pg_version: PgVersion, binaries_directory: PathBuf) -> Result<Self, anyhow::Error> {
         let port = Self::generate_random_port();
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))?;
 
         Ok(Self {
             branch,
+            pg_version,
             port,
             compute_dir: pgdata_dir,
             binaries_directory,
@@ -90,7 +93,7 @@ impl ComputeEndpoint {
         let compute_ctl_binary = self.binaries_directory.join("compute_ctl");
         let pgbin = self.binaries_directory.join(format!(
             "pg_install/{}/bin/postgres",
-            self.branch.pg_version
+            self.pg_version
         ));
 
         let connection_string =

@@ -32,16 +32,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::PgVersion;
     projects (id) {
         id -> Uuid,
         organization_id -> Uuid,
         name -> Varchar,
+        pg_version -> PgVersion,
     }
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::PgVersion;
     branches (id) {
         id -> Uuid,
         name -> Varchar,
@@ -49,7 +50,6 @@ diesel::table! {
         timeline_id -> Uuid,
         project_id -> Uuid,
         password -> Text,
-        pg_version -> PgVersion,
     }
 }
 

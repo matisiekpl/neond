@@ -2,7 +2,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 use crate::mgmt::dto::error::{AppError, Result};
-use crate::mgmt::model::branch::{Branch, PgVersion};
+use crate::mgmt::model::branch::Branch;
 use crate::mgmt::repository::db::DbPool;
 use crate::mgmt::schema::schema::branches;
 
@@ -24,7 +24,6 @@ impl BranchRepository {
         parent_branch_id: Option<Uuid>,
         timeline_id: Uuid,
         password: &str,
-        pg_version: PgVersion,
     ) -> Result<Branch> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -36,7 +35,6 @@ impl BranchRepository {
                 branches::parent_branch_id.eq(parent_branch_id),
                 branches::timeline_id.eq(timeline_id),
                 branches::password.eq(password),
-                branches::pg_version.eq(pg_version),
             ))
             .get_result(conn)
             .await

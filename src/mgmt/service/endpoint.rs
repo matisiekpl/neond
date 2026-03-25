@@ -89,7 +89,7 @@ impl EndpointService {
             }
         }
 
-        let mut endpoint = ComputeEndpoint::new(branch, self.binaries_directory.clone())
+        let mut endpoint = ComputeEndpoint::new(branch, project.pg_version, self.binaries_directory.clone())
             .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
 
         endpoint

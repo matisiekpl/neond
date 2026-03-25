@@ -10,6 +10,7 @@ use crate::mgmt::dto::create_project_request::CreateProjectRequest;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::project_response::ProjectResponse;
 use crate::mgmt::dto::update_project_request::UpdateProjectRequest;
+use crate::mgmt::model::project::PgVersion;
 use crate::mgmt::repository::organization::OrganizationRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::membership::MembershipService;
@@ -57,9 +58,10 @@ impl ProjectService {
         let tenant_id = TenantId::generate();
         let project_id = Uuid::from_str(tenant_id.to_string().as_str())
             .map_err(|_| AppError::Internal("Invalid project id".to_string()))?;
+        let pg_version = req.pg_version.unwrap_or(PgVersion::V17);
         let project = self
             .project_repo
-            .create(project_id, org_id, &req.name)
+            .create(project_id, org_id, &req.name, pg_version)
             .await?;
 
         let tenant_create_request = TenantCreateRequest {
@@ -87,6 +89,7 @@ impl ProjectService {
             id: project.id,
             organization_id: project.organization_id,
             name: project.name,
+            pg_version: project.pg_version,
         })
     }
 
@@ -109,6 +112,7 @@ impl ProjectService {
             id: project.id,
             organization_id: project.organization_id,
             name: project.name,
+            pg_version: project.pg_version,
         })
     }
 
@@ -131,6 +135,7 @@ impl ProjectService {
                 id: p.id,
                 organization_id: p.organization_id,
                 name: p.name,
+                pg_version: p.pg_version,
             })
             .collect())
     }
@@ -164,6 +169,7 @@ impl ProjectService {
             id: updated.id,
             organization_id: updated.organization_id,
             name: updated.name,
+            pg_version: updated.pg_version,
         })
     }
 

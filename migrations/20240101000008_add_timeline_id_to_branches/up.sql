@@ -1,1 +1,0 @@
-ALTER TABLE branches ADD COLUMN timeline_id UUID NOT NULL;
