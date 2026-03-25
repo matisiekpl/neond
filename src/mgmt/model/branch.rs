@@ -37,5 +37,6 @@ pub struct Branch {
     pub timeline_id: Uuid,
     pub project_id: Uuid,
     pub password: String,
+    // TODO(matisiekpl): move to project
     pub pg_version: PgVersion,
 }

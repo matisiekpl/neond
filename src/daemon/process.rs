@@ -39,7 +39,6 @@ impl ProcessControl {
         let mut cmd = Command::new(&self.binary);
         death::configure_death_signal(&mut cmd);
         let mut child = cmd
-            .env_clear()
             .current_dir(&self.working_directory)
             .args(&self.args)
             .stdout(Stdio::piped())
