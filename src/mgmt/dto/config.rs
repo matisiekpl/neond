@@ -2,24 +2,60 @@ use std::env::current_dir;
 use std::path::PathBuf;
 
 #[derive(Clone)]
+pub struct RemoteStorageConfig {
+    pub(crate) bucket: String,
+    pub(crate) region: String,
+}
+
+#[derive(Clone)]
 pub struct Config {
     pub(crate) port: u16,
     pub(crate) jwt_secret: String,
     pub(crate) daemon_directory: PathBuf,
     pub(crate) binaries_directory: PathBuf,
+    pub(crate) remote_storage_config: Option<RemoteStorageConfig>,
 }
+
+const DEFAULT_JWT_SECRET: &str = "super_secret_jwt_token";
 
 impl Config {
     pub fn new() -> Result<Self, anyhow::Error> {
-        let port: u16 = std::env::var("PORT")?.parse()?;
-        let jwt_secret = std::env::var("JWT_SECRET")?;
+        let port: u16 = match std::env::var("PORT") {
+            Ok(port) => port.parse()?,
+            Err(_) => 3000,
+        };
+        let jwt_secret =
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| DEFAULT_JWT_SECRET.to_string());
+        if jwt_secret == DEFAULT_JWT_SECRET {
+            tracing::warn!("JWT_SECRET is not set, using default value");
+        }
         let daemon_directory = current_dir()?.join("neon_daemon_data");
         let binaries_directory = tempfile::TempDir::new()?.keep();
+
+        let remote_storage_config = if std::env::var("AWS_S3_BUCKET").is_ok()
+            && std::env::var("AWS_REGION").is_ok()
+            && std::env::var("AWS_ACCESS_KEY_ID").is_ok()
+            && std::env::var("AWS_SECRET_ACCESS_KEY").is_ok()
+        {
+            let bucket = std::env::var("AWS_S3_BUCKET")?;
+            let region = std::env::var("AWS_REGION")?;
+            tracing::info!(
+                "Using remote storage - bucket: {}, region: {}",
+                bucket,
+                region
+            );
+            Some(RemoteStorageConfig { bucket, region })
+        } else {
+            tracing::info!("Using local storage");
+            None
+        };
+
         Ok(Self {
             port,
             jwt_secret,
             daemon_directory,
             binaries_directory,
+            remote_storage_config,
         })
     }
 }

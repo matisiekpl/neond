@@ -4,12 +4,12 @@ mod process;
 mod tracer;
 
 use crate::daemon::process::ProcessControl;
+use crate::mgmt::dto::config::Config;
 use std::path::PathBuf;
 use tracing::info;
 
 pub struct Daemon {
-    daemon_directory: PathBuf,
-    binaries_directory: PathBuf,
+    config: Config,
     storage_controller_postgres: postgres::Postgres,
     management_postgres: postgres::Postgres,
     tracer: tracer::Tracer,
@@ -24,16 +24,16 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    pub fn new(daemon_directory: PathBuf, binaries_directory: PathBuf) -> Self {
+    pub fn new(config: Config) -> Self {
         let verbose = cfg!(debug_assertions);
 
-        let pageserver_working_directory = daemon_directory.join("pageserver");
-        let safekeeper_working_directory = daemon_directory.join("safekeeper");
+        let pageserver_working_directory = config.daemon_directory.join("pageserver");
+        let safekeeper_working_directory = config.daemon_directory.join("safekeeper");
 
         let storage_controller_postgres = postgres::Postgres::new(
             "storage_controller_db",
-            daemon_directory.clone(),
-            binaries_directory.clone(),
+            config.daemon_directory.clone(),
+            config.binaries_directory.clone(),
             "storage_controller_pg_data",
             5431,
             // TODO(matisiekpl): change password
@@ -41,8 +41,8 @@ impl Daemon {
         );
         let management_postgres = postgres::Postgres::new(
             "management_db",
-            daemon_directory.clone(),
-            binaries_directory.clone(),
+            config.daemon_directory.clone(),
+            config.binaries_directory.clone(),
             "management_pg_data",
             5430,
             // TODO(matisiekpl): change password
@@ -51,16 +51,16 @@ impl Daemon {
 
         let storage_broker = ProcessControl::new(
             "Storage broker",
-            binaries_directory.join("storage_broker"),
+            config.binaries_directory.join("storage_broker"),
             ["-l", "127.0.0.1:50051"],
-            daemon_directory.clone(),
+            config.daemon_directory.clone(),
             "listening",
             verbose,
         );
 
         let storage_controller = ProcessControl::new(
             "Storage controller",
-            binaries_directory.join("storage_controller"),
+            config.binaries_directory.join("storage_controller"),
             [
                 "-l",
                 "127.0.0.1:1234",
@@ -73,14 +73,14 @@ impl Daemon {
                 "--control-plane-url",
                 "http://127.0.0.1:1235",
             ],
-            daemon_directory.clone(),
+            config.daemon_directory.clone(),
             "Serving HTTP on 127.0.0.1:1234",
             verbose,
         );
 
         let safekeeper = ProcessControl::new(
             "Safekeeper",
-            binaries_directory.join("safekeeper"),
+            config.binaries_directory.join("safekeeper"),
             [
                 "-D",
                 safekeeper_working_directory
@@ -99,14 +99,14 @@ impl Daemon {
                 "--availability-zone",
                 "neond-1",
             ],
-            daemon_directory.clone(),
+            config.daemon_directory.clone(),
             "starting safekeeper WAL service on",
             verbose,
         );
 
         let pageserver = ProcessControl::new(
             "Pageserver",
-            binaries_directory.join("pageserver"),
+            config.binaries_directory.join("pageserver"),
             [
                 "-D",
                 pageserver_working_directory
@@ -115,14 +115,13 @@ impl Daemon {
                     .to_owned()
                     .as_str(),
             ],
-            daemon_directory.clone(),
+            config.daemon_directory.clone(),
             "Starting pageserver http handler on 127.0.0.1:9898",
             verbose,
         );
 
         Daemon {
-            daemon_directory: daemon_directory.clone(),
-            binaries_directory: binaries_directory.clone(),
+            config,
             storage_controller_postgres,
             management_postgres,
             tracer: tracer::Tracer::new(),
@@ -147,7 +146,11 @@ impl Daemon {
         self.safekeeper.start()?;
         self.register_safekeeper().await?;
         std::fs::create_dir_all(&self.pageserver_working_directory)?;
-        pageserver::write_pageserver_init_files(&self.daemon_directory, &self.binaries_directory)?;
+        pageserver::write_pageserver_init_files(
+            &self.config.daemon_directory,
+            &self.config.binaries_directory,
+            &self.config.remote_storage_config,
+        )?;
         self.pageserver.start()?;
         Ok(())
     }

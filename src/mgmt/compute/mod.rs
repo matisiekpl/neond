@@ -56,7 +56,11 @@ pub struct ComputeEndpoint {
 }
 
 impl ComputeEndpoint {
-    pub fn new(branch: Branch, pg_version: PgVersion, binaries_directory: PathBuf) -> Result<Self, anyhow::Error> {
+    pub fn new(
+        branch: Branch,
+        pg_version: PgVersion,
+        binaries_directory: PathBuf,
+    ) -> Result<Self, anyhow::Error> {
         let port = Self::generate_random_port();
         // TODO(matisiekpl): add support for tls sni routing
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))?;
@@ -92,10 +96,9 @@ impl ComputeEndpoint {
         fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
 
         let compute_ctl_binary = self.binaries_directory.join("compute_ctl");
-        let pgbin = self.binaries_directory.join(format!(
-            "pg_install/{}/bin/postgres",
-            self.pg_version
-        ));
+        let pgbin = self
+            .binaries_directory
+            .join(format!("pg_install/{}/bin/postgres", self.pg_version));
 
         let connection_string =
             format!("postgresql://cloud_admin@localhost:{}/postgres", self.port);
@@ -186,17 +189,27 @@ impl ComputeEndpoint {
                     match child.try_wait() {
                         Ok(Some(_)) => {
                             self.status = ComputeEndpointStatus::Stopped;
-                            tracing::info!("Compute endpoint {} stopped gracefully", self.branch.timeline_id);
+                            tracing::info!(
+                                "Compute endpoint {} stopped gracefully",
+                                self.branch.timeline_id
+                            );
                             return Ok(());
                         }
                         Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
                         Err(e) => {
-                            tracing::warn!("Error waiting for compute endpoint {}: {}", self.branch.timeline_id, e);
+                            tracing::warn!(
+                                "Error waiting for compute endpoint {}: {}",
+                                self.branch.timeline_id,
+                                e
+                            );
                             break;
                         }
                     }
                 }
-                tracing::warn!("Compute endpoint {} did not stop gracefully, sending SIGKILL", self.branch.timeline_id);
+                tracing::warn!(
+                    "Compute endpoint {} did not stop gracefully, sending SIGKILL",
+                    self.branch.timeline_id
+                );
             }
             child.kill().ok();
             child.wait().ok();
@@ -303,42 +316,6 @@ impl ComputeEndpoint {
         let cert_der = server_cert.der();
         let channel_binding_signature = Sha256::digest(cert_der.as_ref()).to_vec();
         self.channel_binding_signature = Some(channel_binding_signature);
-    }
-
-    fn encrypt_password(&self, password: String) -> Result<String, anyhow::Error> {
-        let channel_binding = self.channel_binding_signature.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("Failed to encrypt password. Channel binding signature is missing.")
-        })?;
-
-        const ITERATIONS: u32 = 4096;
-
-        let mut salted_password = [0u8; 32];
-        pbkdf2_hmac::<Sha256>(
-            password.as_bytes(),
-            channel_binding,
-            ITERATIONS,
-            &mut salted_password,
-        );
-
-        let mut client_key_mac = Hmac::<Sha256>::new_from_slice(&salted_password)
-            .expect("HMAC can take key of any size");
-        client_key_mac.update(b"Client Key");
-        let client_key = client_key_mac.finalize().into_bytes();
-
-        let stored_key = Sha256::digest(&client_key);
-
-        let mut server_key_mac = Hmac::<Sha256>::new_from_slice(&salted_password)
-            .expect("HMAC can take key of any size");
-        server_key_mac.update(b"Server Key");
-        let server_key = server_key_mac.finalize().into_bytes();
-
-        let salt_b64 = BASE64_STANDARD.encode(channel_binding);
-        let stored_key_b64 = BASE64_STANDARD.encode(&stored_key);
-        let server_key_b64 = BASE64_STANDARD.encode(&server_key);
-
-        Ok(format!(
-            "SCRAM-SHA-256${ITERATIONS}:{salt_b64}${stored_key_b64}:{server_key_b64}"
-        ))
     }
 
     fn generate_random_port() -> u16 {

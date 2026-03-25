@@ -29,10 +29,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
         config.binaries_directory.clone(),
     )?;
     crate::unpacker::Unpacker::new(config.binaries_directory.clone())?.unpack()?;
-    let mut daemon = crate::daemon::Daemon::new(
-        config.daemon_directory.clone(),
-        config.binaries_directory.clone(),
-    );
+    let mut daemon = crate::daemon::Daemon::new(config.clone());
 
     daemon.start().await?;
     let database_url = daemon.get_management_postgres_uri();
