@@ -23,15 +23,6 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(branch)))
 }
 
-pub async fn get(
-    State(state): State<Arc<AppState>>,
-    UserId(user_id): UserId,
-    Path((org_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
-) -> Result<impl IntoResponse, AppError> {
-    let branch = state.services.branch().get(user_id, org_id, project_id, branch_id).await?;
-    Ok((StatusCode::OK, Json(branch)))
-}
-
 pub async fn list(
     State(state): State<Arc<AppState>>,
     UserId(user_id): UserId,

@@ -14,4 +14,5 @@ pub struct BranchResponse {
     pub endpoint_status: ComputeEndpointStatus,
     pub remote_consistent_lsn_visible: Lsn,
     pub last_record_lsn: Lsn,
+    pub current_logical_size: u64,
 }

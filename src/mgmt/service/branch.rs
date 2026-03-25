@@ -136,51 +136,7 @@ impl BranchService {
             endpoint_status,
             remote_consistent_lsn_visible: Default::default(),
             last_record_lsn: Default::default(),
-        })
-    }
-
-    pub async fn get(
-        &self,
-        user_id: Uuid,
-        org_id: Uuid,
-        project_id: Uuid,
-        branch_id: Uuid,
-    ) -> Result<BranchResponse> {
-        self.membership_service
-            .verify_membership(user_id, org_id)
-            .await?;
-
-        let project = self
-            .project_repo
-            .find_by_id(project_id)
-            .await?
-            .ok_or(AppError::NotFound)?;
-
-        if project.organization_id != org_id {
-            return Err(AppError::NotFound);
-        }
-
-        let branch = self
-            .branch_repo
-            .find_by_id(branch_id)
-            .await?
-            .ok_or(AppError::NotFound)?;
-
-        if branch.project_id != project_id {
-            return Err(AppError::NotFound);
-        }
-
-        let endpoint_status = self.endpoint_service.get_status_for_branch(branch.id).await;
-
-        Ok(BranchResponse {
-            id: branch.id,
-            project_id: branch.project_id,
-            name: branch.name,
-            parent_branch_id: branch.parent_branch_id,
-            timeline_id: branch.timeline_id,
-            endpoint_status,
-            remote_consistent_lsn_visible: Default::default(),
-            last_record_lsn: Default::default(),
+            current_logical_size: 0,
         })
     }
 
@@ -220,7 +176,7 @@ impl BranchService {
                 .timeline_info(
                     TenantShardId::unsharded(tenant_id),
                     timeline_id,
-                    ForceAwaitLogicalSize::No,
+                    ForceAwaitLogicalSize::Yes,
                 )
                 .await
                 .unwrap();
@@ -235,6 +191,7 @@ impl BranchService {
                 endpoint_status,
                 remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
                 last_record_lsn: timeline_info.last_record_lsn,
+                current_logical_size: timeline_info.current_logical_size,
             });
         }
 
@@ -291,6 +248,7 @@ impl BranchService {
             endpoint_status,
             remote_consistent_lsn_visible: Default::default(),
             last_record_lsn: Default::default(),
+            current_logical_size: 0,
         })
     }
 

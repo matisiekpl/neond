@@ -49,9 +49,7 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}",
-            get(branch::get)
-                .put(branch::update)
-                .delete(branch::delete),
+            put(branch::update).delete(branch::delete),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint",
