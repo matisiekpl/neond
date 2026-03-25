@@ -1,9 +1,9 @@
+use crate::mgmt::dto::config::Config;
 use crate::mgmt::handler::AppState;
 use crate::mgmt::repository::Repositories;
 use crate::mgmt::repository::db::{init_pool, run_migrations};
 use crate::mgmt::server::serve;
 use crate::mgmt::service::Services;
-use std::env::current_dir;
 use std::process;
 use std::sync::Arc;
 use tokio::runtime::Handle;
@@ -23,23 +23,16 @@ pub async fn run() -> Result<(), anyhow::Error> {
 
     dotenvy::dotenv().expect("Failed to load .env file");
 
-    let port: u16 = std::env::var("PORT")
-        .expect("PORT must be set in .env")
-        .parse()
-        .expect("PORT must be a valid number");
-
-    let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set in .env");
-
-    let daemon_directory = current_dir()
-        .expect("Failed to get current directory")
-        .join("neon_daemon_data");
-
-    let binaries_directory = tempfile::TempDir::new()?.keep();
-
-    crate::preflight::check(daemon_directory.clone(), binaries_directory.clone())?;
-    crate::unpacker::Unpacker::new(binaries_directory.clone())?.unpack()?;
-    let mut daemon =
-        crate::daemon::Daemon::new(daemon_directory.clone(), binaries_directory.clone());
+    let config = Config::new()?;
+    crate::preflight::check(
+        config.daemon_directory.clone(),
+        config.binaries_directory.clone(),
+    )?;
+    crate::unpacker::Unpacker::new(config.binaries_directory.clone())?.unpack()?;
+    let mut daemon = crate::daemon::Daemon::new(
+        config.daemon_directory.clone(),
+        config.binaries_directory.clone(),
+    );
 
     daemon.start().await?;
     let database_url = daemon.get_management_postgres_uri();
@@ -59,12 +52,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
     );
 
     let repositories = Repositories::new().await;
-    let services = Services::new(
-        &repositories,
-        Arc::new(pageserver_client),
-        jwt_secret,
-        binaries_directory,
-    );
+    let services = Services::new(&repositories, Arc::new(pageserver_client), config.clone());
     let state = AppState {
         services: Arc::new(services),
     };
@@ -77,6 +65,6 @@ pub async fn run() -> Result<(), anyhow::Error> {
         process::exit(0);
     })?;
 
-    serve(port, state).await?;
+    serve(config.port, state).await?;
     Ok(())
 }

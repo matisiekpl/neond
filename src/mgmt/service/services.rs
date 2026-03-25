@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-
+use crate::mgmt::dto::config::Config;
 use crate::mgmt::repository::Repositories;
 use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::endpoint::EndpointService;
@@ -8,6 +6,8 @@ use crate::mgmt::service::membership::MembershipService;
 use crate::mgmt::service::organization::OrganizationService;
 use crate::mgmt::service::project::ProjectService;
 use crate::mgmt::service::user::UserService;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 pub struct Services {
     user: UserService,
@@ -22,18 +22,17 @@ impl Services {
     pub fn new(
         repositories: &Repositories,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
-        jwt_secret: String,
-        binaries_directory: PathBuf,
+        config: Config,
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
         let endpoint = Arc::new(EndpointService::new(
             Arc::new(repositories.branch().clone()),
             Arc::new(repositories.project().clone()),
             Arc::new(membership.clone()),
-            binaries_directory,
+            config.binaries_directory,
         ));
         Self {
-            user: UserService::new(Arc::new(repositories.user().clone()), jwt_secret),
+            user: UserService::new(Arc::new(repositories.user().clone()), config.jwt_secret),
             organization: OrganizationService::new(
                 Arc::new(repositories.organization().clone()),
                 Arc::new(repositories.membership().clone()),
