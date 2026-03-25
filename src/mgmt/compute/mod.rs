@@ -58,6 +58,7 @@ pub struct ComputeEndpoint {
 impl ComputeEndpoint {
     pub fn new(branch: Branch, pg_version: PgVersion, binaries_directory: PathBuf) -> Result<Self, anyhow::Error> {
         let port = Self::generate_random_port();
+        // TODO(matisiekpl): add support for tls sni routing
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))?;
 
         Ok(Self {

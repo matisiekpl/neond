@@ -1,4 +1,5 @@
 use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
+use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
 use neon_utils::id::{TenantId, TimelineId};
 use neon_utils::shard::TenantShardId;
 use rand::Rng;
@@ -133,6 +134,8 @@ impl BranchService {
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
             endpoint_status,
+            remote_consistent_lsn_visible: Default::default(),
+            last_record_lsn: Default::default(),
         })
     }
 
@@ -176,6 +179,8 @@ impl BranchService {
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
             endpoint_status,
+            remote_consistent_lsn_visible: Default::default(),
+            last_record_lsn: Default::default(),
         })
     }
 
@@ -202,7 +207,24 @@ impl BranchService {
         let branches = self.branch_repo.list_by_project_id(project_id).await?;
 
         let mut results = Vec::with_capacity(branches.len());
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+
         for b in branches {
+            let timeline_id = TimelineId::from_str(b.timeline_id.as_simple().to_string().as_str())
+                .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+            let timeline_info = self
+                .pageserver_client
+                .timeline_info(
+                    TenantShardId::unsharded(tenant_id),
+                    timeline_id,
+                    ForceAwaitLogicalSize::No,
+                )
+                .await
+                .unwrap();
+
             let endpoint_status = self.endpoint_service.get_status_for_branch(b.id).await;
             results.push(BranchResponse {
                 id: b.id,
@@ -211,6 +233,8 @@ impl BranchService {
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
                 endpoint_status,
+                remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
+                last_record_lsn: timeline_info.last_record_lsn,
             });
         }
 
@@ -253,7 +277,10 @@ impl BranchService {
 
         let updated = self.branch_repo.update(branch_id, &req.name).await?;
 
-        let endpoint_status = self.endpoint_service.get_status_for_branch(updated.id).await;
+        let endpoint_status = self
+            .endpoint_service
+            .get_status_for_branch(updated.id)
+            .await;
 
         Ok(BranchResponse {
             id: updated.id,
@@ -262,6 +289,8 @@ impl BranchService {
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
             endpoint_status,
+            remote_consistent_lsn_visible: Default::default(),
+            last_record_lsn: Default::default(),
         })
     }
 

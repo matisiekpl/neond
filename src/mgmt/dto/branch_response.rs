@@ -1,3 +1,4 @@
+use neon_utils::lsn::Lsn;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -11,4 +12,6 @@ pub struct BranchResponse {
     pub parent_branch_id: Option<Uuid>,
     pub timeline_id: Uuid,
     pub endpoint_status: ComputeEndpointStatus,
+    pub remote_consistent_lsn_visible: Lsn,
+    pub last_record_lsn: Lsn,
 }
