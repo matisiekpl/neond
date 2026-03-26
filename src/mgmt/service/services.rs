@@ -43,6 +43,7 @@ impl Services {
                 Arc::new(repositories.organization().clone()),
                 Arc::new(membership.clone()),
                 Arc::clone(&pageserver_client),
+                config.clone(),
             ),
             branch: BranchService::new(
                 Arc::new(repositories.branch().clone()),

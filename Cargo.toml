@@ -51,6 +51,8 @@ hmac = "0.12"
 sha2 = "0.10"
 pbkdf2 = { version = "0.12", features = ["hmac"] }
 pg-sni-muxer = "0.1.0"
+pem = "3.0.3"
+openssl = "0.10"
 
 [build-dependencies]
 tar = "0.4"

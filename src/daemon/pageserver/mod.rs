@@ -1,4 +1,6 @@
+use crate::auth::DaemonAuth;
 use crate::mgmt::dto::config::RemoteStorageConfig;
+use neon_utils::auth::Scope;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -12,6 +14,10 @@ struct PageserverConfig {
     listen_http_addr: String,
     remote_storage: PageserverRemoteStorage,
     control_plane_api: String,
+    auth_validation_public_key_path: String,
+    http_auth_type: String,
+    pg_auth_type: String,
+    control_plane_api_token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,6 +45,7 @@ pub fn write_pageserver_init_files(
     daemon_directory: &PathBuf,
     binaries_directory: &PathBuf,
     remote_storage_config: &Option<RemoteStorageConfig>,
+    component_auth: &DaemonAuth,
 ) -> Result<(), anyhow::Error> {
     let config = PageserverConfig {
         availability_zone: "neond-1".to_string(),
@@ -65,6 +72,14 @@ pub fn write_pageserver_init_files(
             },
         },
         control_plane_api: "http://127.0.0.1:1234/upcall/v1/".to_string(),
+        auth_validation_public_key_path: component_auth
+            .public_key_path()
+            .to_str()
+            .unwrap()
+            .to_string(),
+        http_auth_type: "NeonJWT".to_string(),
+        pg_auth_type: "NeonJWT".to_string(),
+        control_plane_api_token: component_auth.generate_token(Scope::GenerationsApi, None),
     };
 
     let identity_filename = daemon_directory.join("pageserver/identity.toml");

@@ -7,6 +7,7 @@ use neon_compute_api::spec::{
     Cluster, ComputeAudit, ComputeMode, ComputeSpec, Database, PageserverConnectionInfo,
     PageserverShardConnectionInfo, PageserverShardInfo, PgIdent, Role,
 };
+use neon_utils::auth::Scope;
 use neon_utils::id::{NodeId, TenantId, TimelineId};
 use neon_utils::shard::{ShardCount, ShardIndex};
 use rcgen::{
@@ -476,7 +477,11 @@ impl ComputeEndpoint {
             safekeepers_generation: None,
             safekeeper_connstrings: vec!["127.0.0.1:5454".to_string()],
             mode: ComputeMode::Primary,
-            storage_auth_token: None,
+            storage_auth_token: Some(
+                self.config
+                    .component_auth
+                    .generate_token(Scope::Tenant, Some(tenant_id)),
+            ),
             remote_extensions: None,
             pgbouncer_settings: None,
             local_proxy_config: None,

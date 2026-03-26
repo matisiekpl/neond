@@ -42,11 +42,13 @@ pub async fn run() -> Result<(), anyhow::Error> {
     init_pool(&database_url).await;
 
     let pageserver_http_client = reqwest::Client::new();
-    // TODO(matisiekpl): add authentication
+    let pageserver_api_token = config
+        .component_auth
+        .generate_token(neon_utils::auth::Scope::PageServerApi, None);
     let pageserver_client = neon_pageserver_client::mgmt_api::Client::new(
         pageserver_http_client,
         "http://127.0.0.1:1234".to_string(),
-        None,
+        Some(pageserver_api_token.as_str()),
     );
 
     let repositories = Repositories::new().await;

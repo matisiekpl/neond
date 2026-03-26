@@ -5,6 +5,7 @@ mod tracer;
 
 use crate::daemon::process::ProcessControl;
 use crate::mgmt::dto::config::Config;
+use neon_utils::auth::Scope;
 use std::path::PathBuf;
 use tracing::info;
 
@@ -49,15 +50,33 @@ impl Daemon {
             "mateuszek".to_string(),
         );
 
+        let component_auth = &config.component_auth;
+        let public_key_path = component_auth
+            .public_key_path()
+            .to_str()
+            .unwrap()
+            .to_owned();
+
         let storage_broker = ProcessControl::new(
             "Storage broker",
             config.binaries_directory.join("storage_broker"),
             ["-l", "127.0.0.1:50051"],
+            vec![],
             config.daemon_directory.clone(),
             "listening",
             verbose,
         );
 
+        let pageserver_api_token =
+            component_auth.generate_token(Scope::PageServerApi, None);
+        let admin_token = component_auth.generate_token(Scope::Admin, None);
+        let safekeeper_data_token =
+            component_auth.generate_token(Scope::SafekeeperData, None);
+        let generations_api_token =
+            component_auth.generate_token(Scope::GenerationsApi, None);
+        let public_key_pem = component_auth.public_key_pem_string();
+
+        let public_key_arg = format!("--public-key={}", public_key_pem);
         let storage_controller = ProcessControl::new(
             "Storage controller",
             config.binaries_directory.join("storage_controller"),
@@ -72,7 +91,15 @@ impl Daemon {
                 "--timelines-onto-safekeepers",
                 "--control-plane-url",
                 "http://127.0.0.1:1235",
+                "--jwt-token",
+                &pageserver_api_token,
+                "--peer-jwt-token",
+                &admin_token,
+                "--safekeeper-jwt-token",
+                &safekeeper_data_token,
+                &public_key_arg,
             ],
+            vec![],
             config.daemon_directory.clone(),
             "Serving HTTP on 127.0.0.1:1234",
             verbose,
@@ -98,7 +125,14 @@ impl Daemon {
                 "127.0.0.1:7676",
                 "--availability-zone",
                 "neond-1",
+                "--pg-auth-public-key-path",
+                &public_key_path,
+                "--pg-tenant-only-auth-public-key-path",
+                &public_key_path,
+                "--http-auth-public-key-path",
+                &public_key_path,
             ],
+            vec![],
             config.daemon_directory.clone(),
             "starting safekeeper WAL service on",
             verbose,
@@ -114,6 +148,12 @@ impl Daemon {
                     .unwrap()
                     .to_owned()
                     .as_str(),
+            ],
+            vec![
+                (
+                    "NEON_AUTH_TOKEN".to_string(),
+                    safekeeper_data_token.clone(),
+                ),
             ],
             config.daemon_directory.clone(),
             "Starting pageserver http handler on 127.0.0.1:9898",
@@ -143,6 +183,14 @@ impl Daemon {
         self.storage_broker.start()?;
         self.storage_controller.start()?;
         std::fs::create_dir_all(&self.safekeeper_working_directory)?;
+        let peer_token = self
+            .config
+            .component_auth
+            .generate_token(Scope::SafekeeperData, None);
+        std::fs::write(
+            self.safekeeper_working_directory.join("peer_jwt_token"),
+            &peer_token,
+        )?;
         self.safekeeper.start()?;
         self.register_safekeeper().await?;
         std::fs::create_dir_all(&self.pageserver_working_directory)?;
@@ -150,6 +198,7 @@ impl Daemon {
             &self.config.daemon_directory,
             &self.config.binaries_directory,
             &self.config.remote_storage_config,
+            &self.config.component_auth,
         )?;
         self.pageserver.start()?;
         Ok(())
@@ -182,9 +231,14 @@ impl Daemon {
             "updated_at": now
         });
 
+        let admin_token = self
+            .config
+            .component_auth
+            .generate_token(Scope::Admin, None);
         let response = safekeeper_http_client
             .post("http://127.0.0.1:1234/control/v1/safekeeper/1")
             .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", admin_token))
             .json(&body)
             .send()
             .await?;

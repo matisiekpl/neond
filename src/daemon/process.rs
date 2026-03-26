@@ -9,6 +9,7 @@ pub struct ProcessControl {
     name: String,
     binary: PathBuf,
     args: Vec<OsString>,
+    env_vars: Vec<(String, String)>,
     working_directory: PathBuf,
     needle: String,
     verbose: bool,
@@ -20,6 +21,7 @@ impl ProcessControl {
         name: impl Into<String>,
         binary: PathBuf,
         args: impl IntoIterator<Item = impl Into<OsString>>,
+        env_vars: Vec<(String, String)>,
         working_directory: PathBuf,
         needle: impl Into<String>,
         verbose: bool,
@@ -28,6 +30,7 @@ impl ProcessControl {
             name: name.into(),
             binary,
             args: args.into_iter().map(|a| a.into()).collect(),
+            env_vars,
             working_directory,
             needle: needle.into(),
             verbose,
@@ -41,6 +44,7 @@ impl ProcessControl {
         let mut child = cmd
             .current_dir(&self.working_directory)
             .args(&self.args)
+            .envs(self.env_vars.iter().map(|(k, v)| (k, v)))
             .stdout(Stdio::piped())
             .spawn()?;
 

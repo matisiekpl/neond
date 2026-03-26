@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::create_project_request::CreateProjectRequest;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::project_response::ProjectResponse;
@@ -20,6 +21,7 @@ pub struct ProjectService {
     org_repo: Arc<OrganizationRepository>,
     membership_service: Arc<MembershipService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+    config: Config,
 }
 
 impl ProjectService {
@@ -28,12 +30,14 @@ impl ProjectService {
         org_repo: Arc<OrganizationRepository>,
         membership_service: Arc<MembershipService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        config: Config,
     ) -> Self {
         Self {
             project_repo,
             org_repo,
             membership_service,
             pageserver_client,
+            config,
         }
     }
 
@@ -72,10 +76,14 @@ impl ProjectService {
             config: Default::default(),
         };
 
-        // TODO(matisiekpl): refactor this in future
+        let token = self
+            .config
+            .component_auth
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None);
         let pageserver_http_client = reqwest::Client::new();
         let response = pageserver_http_client
             .request(Method::POST, "http://127.0.0.1:1234/v1/tenant")
+            .header("Authorization", format!("Bearer {}", token))
             .json(&tenant_create_request)
             .send()
             .await

@@ -1,5 +1,8 @@
 use std::env::current_dir;
 use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::auth::DaemonAuth;
 
 #[derive(Clone)]
 pub struct RemoteStorageConfig {
@@ -20,6 +23,7 @@ pub struct Config {
     pub(crate) port_range: PortRange,
     pub(crate) hostname: Option<String>,
     pub(crate) pg_proxy_port: u16,
+    pub(crate) component_auth: Arc<DaemonAuth>,
 }
 
 const DEFAULT_JWT_SECRET: &str = "super_secret_jwt_token";
@@ -86,6 +90,7 @@ impl Config {
             port_range,
             hostname,
             pg_proxy_port,
+            component_auth: Arc::new(DaemonAuth::generate()?),
         })
     }
 }
