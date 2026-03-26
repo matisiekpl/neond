@@ -77,6 +77,10 @@ impl ComputeEndpoint {
         })
     }
 
+    pub fn get_branch(&self) -> &Branch {
+        &self.branch
+    }
+
     pub fn launch(&mut self) -> Result<(), anyhow::Error> {
         if self.status == ComputeEndpointStatus::Running {
             return Err(anyhow!("Compute endpoint is already running"));

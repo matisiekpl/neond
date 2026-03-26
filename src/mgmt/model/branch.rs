@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use uuid::Uuid;
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Clone)]
 #[diesel(table_name = crate::mgmt::schema::schema::branches)]
 pub struct Branch {
     pub id: Uuid,

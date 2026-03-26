@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::format;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -94,8 +95,10 @@ impl EndpointService {
             }
         }
 
-        let mut endpoint = ComputeEndpoint::new(self.config.clone(), branch, project.pg_version)
-            .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
+        let mut endpoint =
+            ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version).map_err(
+                |e| AppError::Internal(format!("Failed to create compute endpoint: {e}")),
+            )?;
 
         endpoint
             .launch()
@@ -106,6 +109,14 @@ impl EndpointService {
             status: endpoint.get_status(),
             port: endpoint.get_port(),
         };
+
+        if let Some(ref hostname) = self.config.hostname {
+            let sni_hostname = format!("{}.{}", branch.slug, hostname);
+            let backend_addr: SocketAddr = format!("127.0.0.1:{}", response.port)
+                .parse()
+                .expect("valid socket addr");
+            self.pg_proxy.set_mapping(sni_hostname, backend_addr).await;
+        }
 
         endpoints.insert(branch_id, endpoint);
 
@@ -151,6 +162,11 @@ impl EndpointService {
             .shutdown()
             .map_err(|e| AppError::Internal(format!("Failed to shutdown compute endpoint: {e}")))?;
 
+        if let Some(ref hostname) = self.config.hostname {
+            let sni_hostname = format!("{}.{}", branch.slug, hostname);
+            self.pg_proxy.remove_mapping(&sni_hostname).await;
+        }
+
         let response = EndpointResponse {
             branch_id,
             status: endpoint.get_status(),
@@ -174,6 +190,10 @@ impl EndpointService {
                     );
                 } else {
                     tracing::info!("Shutdown endpoint for branch {}", branch_id);
+                    if let Some(ref hostname) = self.config.hostname {
+                        let sni_hostname = format!("{}.{}", endpoint.get_branch().slug, hostname);
+                        self.pg_proxy.remove_mapping(&sni_hostname).await;
+                    }
                 }
             }
         }
