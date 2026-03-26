@@ -26,10 +26,10 @@ impl Services {
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
         let endpoint = Arc::new(EndpointService::new(
+            config.clone(),
             Arc::new(repositories.branch().clone()),
             Arc::new(repositories.project().clone()),
             Arc::new(membership.clone()),
-            config.binaries_directory,
         ));
         Self {
             user: UserService::new(Arc::new(repositories.user().clone()), config.jwt_secret),

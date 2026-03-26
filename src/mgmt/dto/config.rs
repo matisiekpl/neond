@@ -8,12 +8,17 @@ pub struct RemoteStorageConfig {
 }
 
 #[derive(Clone)]
+pub struct PortRange(pub u16, pub u16);
+
+#[derive(Clone)]
 pub struct Config {
     pub(crate) port: u16,
     pub(crate) jwt_secret: String,
     pub(crate) daemon_directory: PathBuf,
     pub(crate) binaries_directory: PathBuf,
     pub(crate) remote_storage_config: Option<RemoteStorageConfig>,
+    pub(crate) port_range: PortRange,
+    pub(crate) hostname: Option<String>,
 }
 
 const DEFAULT_JWT_SECRET: &str = "super_secret_jwt_token";
@@ -49,6 +54,21 @@ impl Config {
             tracing::info!("Using local storage");
             None
         };
+        let port_range = match std::env::var("PORT_RANGE") {
+            Ok(port_range) => {
+                let mut parts = port_range.split('-');
+                let start = parts.next().unwrap().parse()?;
+                let end = parts.next().unwrap().parse()?;
+                PortRange(start, end)
+            }
+            Err(_) => PortRange(49152, 65535),
+        };
+        let hostname = std::env::var("PG_HOSTNAME").ok();
+        if let Some(hostname) = hostname.clone() {
+            tracing::info!("Using hostname: {}", hostname);
+        } else {
+            tracing::info!("Hostname (PG_HOSTNAME) is not set, TLS SNI routing disabled");
+        }
 
         Ok(Self {
             port,
@@ -56,6 +76,8 @@ impl Config {
             daemon_directory,
             binaries_directory,
             remote_storage_config,
+            port_range,
+            hostname,
         })
     }
 }

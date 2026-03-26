@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointStatus};
+use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::endpoint_response::EndpointResponse;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::repository::branch::BranchRepository;
@@ -16,22 +17,22 @@ pub struct EndpointService {
     branch_repo: Arc<BranchRepository>,
     project_repo: Arc<ProjectRepository>,
     membership_service: Arc<MembershipService>,
-    binaries_directory: PathBuf,
+    config: Config,
 }
 
 impl EndpointService {
     pub fn new(
+        config: Config,
         branch_repo: Arc<BranchRepository>,
         project_repo: Arc<ProjectRepository>,
         membership_service: Arc<MembershipService>,
-        binaries_directory: PathBuf,
     ) -> Self {
         Self {
+            config,
             endpoints: Arc::new(Mutex::new(HashMap::new())),
             branch_repo,
             project_repo,
             membership_service,
-            binaries_directory,
         }
     }
 
@@ -89,8 +90,12 @@ impl EndpointService {
             }
         }
 
-        let mut endpoint = ComputeEndpoint::new(branch, project.pg_version, self.binaries_directory.clone())
-            .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
+        let mut endpoint = ComputeEndpoint::new(
+            self.config.clone(),
+            branch,
+            project.pg_version,
+        )
+        .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
 
         endpoint
             .launch()
@@ -159,8 +164,7 @@ impl EndpointService {
         let mut endpoints = self.endpoints.lock().await;
         for (branch_id, endpoint) in endpoints.iter_mut() {
             let status = endpoint.get_status();
-            if status == ComputeEndpointStatus::Running
-                || status == ComputeEndpointStatus::Starting
+            if status == ComputeEndpointStatus::Running || status == ComputeEndpointStatus::Starting
             {
                 if let Err(e) = endpoint.shutdown() {
                     tracing::error!(

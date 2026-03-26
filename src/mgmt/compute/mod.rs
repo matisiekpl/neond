@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use base64::prelude::*;
-use hmac::{Hmac, Mac};
+use hmac::Hmac;
+use hmac::Mac;
 use neon_compute_api::responses::{ComputeConfig, ComputeCtlConfig};
 use neon_compute_api::spec::{
     Cluster, ComputeAudit, ComputeMode, ComputeSpec, Database, PageserverConnectionInfo,
@@ -8,7 +9,6 @@ use neon_compute_api::spec::{
 };
 use neon_utils::id::{NodeId, TenantId, TimelineId};
 use neon_utils::shard::{ShardCount, ShardIndex};
-use pbkdf2::pbkdf2_hmac;
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnValue, ExtendedKeyUsagePurpose, IsCa,
     Issuer, KeyPair, KeyUsagePurpose,
@@ -29,8 +29,9 @@ use crate::mgmt::model::project::PgVersion;
 use neon_control_plane::postgresql_conf::PostgresConf;
 use postgres_protocol::authentication::sasl::{ChannelBinding, ScramSha256};
 
+use crate::mgmt::dto::config::Config;
 use base64::{Engine as _, engine::general_purpose};
-use rand::RngCore;
+use rand::{Rng, RngCore};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -47,30 +48,29 @@ pub enum ComputeEndpointStatus {
 pub struct ComputeEndpoint {
     branch: Branch,
     pg_version: PgVersion,
-    port: u16,
+    port: Option<u16>,
     compute_dir: TempDir,
-    binaries_directory: PathBuf,
     child: Option<Child>,
     status: ComputeEndpointStatus,
     channel_binding_signature: Option<Vec<u8>>,
+    config: Config,
 }
 
 impl ComputeEndpoint {
     pub fn new(
+        config: Config,
         branch: Branch,
         pg_version: PgVersion,
-        binaries_directory: PathBuf,
     ) -> Result<Self, anyhow::Error> {
-        let port = Self::generate_random_port();
         // TODO(matisiekpl): add support for tls sni routing
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))?;
 
         Ok(Self {
+            config,
             branch,
             pg_version,
-            port,
+            port: None,
             compute_dir: pgdata_dir,
-            binaries_directory,
             child: None,
             status: ComputeEndpointStatus::Stopped,
             channel_binding_signature: None,
@@ -88,6 +88,9 @@ impl ComputeEndpoint {
             return Err(anyhow!("Compute endpoint is currently stopping"));
         }
 
+        let port = self.generate_random_port()?;
+        self.port = Some(port);
+
         self.status = ComputeEndpointStatus::Starting;
 
         self.generate_certificates();
@@ -95,13 +98,13 @@ impl ComputeEndpoint {
         let config_path = self.compute_dir.path().join("config.json");
         fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
 
-        let compute_ctl_binary = self.binaries_directory.join("compute_ctl");
+        let compute_ctl_binary = self.config.binaries_directory.join("compute_ctl");
         let pgbin = self
+            .config
             .binaries_directory
             .join(format!("pg_install/{}/bin/postgres", self.pg_version));
 
-        let connection_string =
-            format!("postgresql://cloud_admin@localhost:{}/postgres", self.port);
+        let connection_string = format!("postgresql://cloud_admin@localhost:{}/postgres", port);
 
         let mut cmd = Command::new(&compute_ctl_binary);
         #[cfg(unix)]
@@ -161,7 +164,7 @@ impl ComputeEndpoint {
             "Compute endpoint {} started on PID: {}, port: {}",
             self.branch.timeline_id,
             pid,
-            self.port
+            port,
         );
 
         Ok(())
@@ -225,7 +228,7 @@ impl ComputeEndpoint {
     }
 
     pub fn get_port(&self) -> u16 {
-        self.port
+        self.port.unwrap_or(0)
     }
 
     fn generate_certificates(&mut self) {
@@ -318,11 +321,17 @@ impl ComputeEndpoint {
         self.channel_binding_signature = Some(channel_binding_signature);
     }
 
-    fn generate_random_port() -> u16 {
-        // TODO(matisiekpl): randomize on predefined range
-        let listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind to random port");
-        listener.local_addr().unwrap().port()
+    fn generate_random_port(&self) -> Result<u16, anyhow::Error> {
+        const MAX_ATTEMPTS: usize = 100;
+        let mut rng = rand::rng();
+        for _ in 0..MAX_ATTEMPTS {
+            let port = rng.random_range(self.config.port_range.0..=self.config.port_range.1);
+
+            if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                return Ok(port);
+            }
+        }
+        anyhow::bail!("Failed to find a free port");
     }
 
     fn setup_pg_conf(&self) -> PostgresConf {
@@ -338,7 +347,7 @@ impl ComputeEndpoint {
         conf.append("wal_level", "logical");
         conf.append("wal_sender_timeout", "5s");
         conf.append("listen_addresses", "127.0.0.1");
-        conf.append("port", &self.port.to_string());
+        conf.append("port", &self.port.unwrap_or(0).to_string());
         conf.append("wal_keep_size", "0");
         conf.append("restart_after_crash", "off");
         conf.append("shared_preload_libraries", "neon");
