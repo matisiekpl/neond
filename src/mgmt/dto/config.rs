@@ -16,7 +16,7 @@ pub struct PortRange(pub u16, pub u16);
 #[derive(Clone)]
 pub struct Config {
     pub(crate) port: u16,
-    pub(crate) jwt_secret: String,
+    pub(crate) server_secret: String,
     pub(crate) daemon_directory: PathBuf,
     pub(crate) binaries_directory: PathBuf,
     pub(crate) remote_storage_config: Option<RemoteStorageConfig>,
@@ -26,19 +26,14 @@ pub struct Config {
     pub(crate) component_auth: Arc<DaemonAuth>,
 }
 
-const DEFAULT_JWT_SECRET: &str = "super_secret_jwt_token";
-
 impl Config {
     pub fn new() -> Result<Self, anyhow::Error> {
         let port: u16 = match std::env::var("PORT") {
             Ok(port) => port.parse()?,
             Err(_) => 3000,
         };
-        let jwt_secret =
-            std::env::var("JWT_SECRET").unwrap_or_else(|_| DEFAULT_JWT_SECRET.to_string());
-        if jwt_secret == DEFAULT_JWT_SECRET {
-            tracing::warn!("JWT_SECRET is not set, using default value");
-        }
+        let server_secret =
+            std::env::var("SERVER_SECRET").map_err(|_| anyhow::anyhow!("SERVER_SECRET not set"))?;
         let daemon_directory = current_dir()?.join("neon_daemon_data");
         let binaries_directory = tempfile::TempDir::new()?.keep();
 
@@ -83,7 +78,7 @@ impl Config {
 
         Ok(Self {
             port,
-            jwt_secret,
+            server_secret,
             daemon_directory,
             binaries_directory,
             remote_storage_config,

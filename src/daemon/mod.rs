@@ -37,8 +37,7 @@ impl Daemon {
             config.binaries_directory.clone(),
             "storage_controller_pg_data",
             5431,
-            // TODO(matisiekpl): change password
-            "mateuszek".to_string(),
+            config.server_secret.clone(),
         );
         let management_postgres = postgres::Postgres::new(
             "management_db",
@@ -46,8 +45,7 @@ impl Daemon {
             config.binaries_directory.clone(),
             "management_pg_data",
             5430,
-            // TODO(matisiekpl): change password
-            "mateuszek".to_string(),
+            config.server_secret.clone(),
         );
 
         let component_auth = &config.component_auth;

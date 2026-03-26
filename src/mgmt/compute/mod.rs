@@ -58,13 +58,18 @@ pub struct ComputeEndpoint {
     config: Config,
 }
 
+#[derive(Clone)]
+pub struct ComputeEndpointInfo {
+    pub(crate) status: ComputeEndpointStatus,
+    pub(crate) port: u16,
+}
+
 impl ComputeEndpoint {
     pub fn new(
         config: Config,
         branch: Branch,
         pg_version: PgVersion,
     ) -> Result<Self, anyhow::Error> {
-        // TODO(matisiekpl): add support for tls sni routing
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))?;
 
         Ok(Self {

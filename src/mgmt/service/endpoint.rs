@@ -5,10 +5,11 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointStatus};
+use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointInfo, ComputeEndpointStatus};
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::endpoint_response::EndpointResponse;
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::model::branch::Branch;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::membership::MembershipService;
@@ -115,7 +116,9 @@ impl EndpointService {
             let backend_addr: SocketAddr = format!("127.0.0.1:{}", port)
                 .parse()
                 .expect("valid socket addr");
-            self.pg_proxy.set_mapping(sni_hostname.clone(), backend_addr).await;
+            self.pg_proxy
+                .set_mapping(sni_hostname.clone(), backend_addr)
+                .await;
         }
 
         let launched_status = endpoint.get_status();
@@ -123,7 +126,11 @@ impl EndpointService {
             .update_recent_status(branch_id, launched_status)
             .await
             .unwrap_or_else(|e| {
-                tracing::warn!("Failed to save recent_status for branch {}: {}", branch_id, e);
+                tracing::warn!(
+                    "Failed to save recent_status for branch {}: {}",
+                    branch_id,
+                    e
+                );
                 branch.clone()
             });
 
@@ -194,7 +201,11 @@ impl EndpointService {
             .update_recent_status(branch_id, final_status)
             .await
             .unwrap_or_else(|e| {
-                tracing::warn!("Failed to save recent_status for branch {}: {}", branch_id, e);
+                tracing::warn!(
+                    "Failed to save recent_status for branch {}: {}",
+                    branch_id,
+                    e
+                );
                 branch.clone()
             });
 
@@ -232,12 +243,17 @@ impl EndpointService {
         }
     }
 
-    pub async fn get_status_for_branch(&self, branch_id: Uuid) -> ComputeEndpointStatus {
+    pub async fn get_endpoint_info(
+        &self,
+        branch_id: Uuid,
+    ) -> Option<ComputeEndpointInfo> {
         let endpoints = self.endpoints.lock().await;
         endpoints
             .get(&branch_id)
-            .map(|e| e.get_status())
-            .unwrap_or(ComputeEndpointStatus::Stopped)
+            .map(|e| ComputeEndpointInfo {
+                status: e.get_status(),
+                port: e.get_port(),
+            })
     }
 
     pub async fn status(
@@ -363,9 +379,12 @@ impl EndpointService {
 
                     if let Some(ref sni_hostname) = sni_hostname {
                         let port = endpoint.get_port();
-                        let backend_addr: std::net::SocketAddr =
-                            format!("127.0.0.1:{}", port).parse().expect("valid socket addr");
-                        self.pg_proxy.set_mapping(sni_hostname.clone(), backend_addr).await;
+                        let backend_addr: std::net::SocketAddr = format!("127.0.0.1:{}", port)
+                            .parse()
+                            .expect("valid socket addr");
+                        self.pg_proxy
+                            .set_mapping(sni_hostname.clone(), backend_addr)
+                            .await;
                     }
 
                     tracing::info!("Recovered endpoint for branch {}", branch.id);

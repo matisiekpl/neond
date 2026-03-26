@@ -37,12 +37,12 @@ where
                 .strip_prefix("Bearer ")
                 .ok_or(AppError::Unauthorized)?;
 
-            let jwt_secret = std::env::var("JWT_SECRET")
-                .map_err(|_| AppError::Internal("JWT_SECRET not configured".into()))?;
+            let server_secret = std::env::var("SERVER_SECRET")
+                .map_err(|_| AppError::Internal("SERVER_SECRET not configured".into()))?;
 
             let token_data = decode::<Claims>(
                 token,
-                &DecodingKey::from_secret(jwt_secret.as_bytes()),
+                &DecodingKey::from_secret(server_secret.as_bytes()),
                 &Validation::default(),
             )
             .map_err(|_| AppError::Unauthorized)?;

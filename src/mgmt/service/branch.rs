@@ -1,13 +1,4 @@
-use names::Generator;
-use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
-use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
-use neon_utils::id::{TenantId, TimelineId};
-use neon_utils::shard::TenantShardId;
-use rand::Rng;
-use std::str::FromStr;
-use std::sync::Arc;
-use uuid::Uuid;
-
+use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::branch_response::BranchResponse;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
@@ -17,6 +8,15 @@ use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::endpoint::EndpointService;
 use crate::mgmt::service::membership::MembershipService;
+use names::Generator;
+use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
+use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
+use neon_utils::id::{TenantId, TimelineId};
+use neon_utils::shard::TenantShardId;
+use rand::Rng;
+use std::str::FromStr;
+use std::sync::Arc;
+use uuid::Uuid;
 
 pub struct BranchService {
     branch_repo: Arc<BranchRepository>,
@@ -132,8 +132,7 @@ impl BranchService {
             )
             .await?;
 
-        let endpoint_status = self.endpoint_service.get_status_for_branch(branch.id).await;
-        let sni_hostname = self.config.hostname.as_ref().map(|h| format!("{}.{}", branch.slug, h));
+        let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
 
         Ok(BranchResponse {
             id: branch.id,
@@ -142,11 +141,15 @@ impl BranchService {
             slug: branch.slug.clone(),
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
-            endpoint_status,
+            endpoint_status: endpoint_info
+                .clone()
+                .map(|info| info.status)
+                .unwrap_or(ComputeEndpointStatus::Stopped),
             remote_consistent_lsn_visible: Default::default(),
             last_record_lsn: Default::default(),
             current_logical_size: 0,
-            sni_hostname,
+            connection_string: endpoint_info
+                .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
             password: branch.password.clone(),
         })
     }
@@ -192,8 +195,7 @@ impl BranchService {
                 .await
                 .unwrap();
 
-            let endpoint_status = self.endpoint_service.get_status_for_branch(b.id).await;
-            let sni_hostname = self.config.hostname.as_ref().map(|h| format!("{}.{}", b.slug, h));
+            let endpoint_info = self.endpoint_service.get_endpoint_info(b.id).await;
             results.push(BranchResponse {
                 id: b.id,
                 project_id: b.project_id,
@@ -201,11 +203,17 @@ impl BranchService {
                 slug: b.slug.clone(),
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
-                endpoint_status,
+                endpoint_status: endpoint_info
+                    .clone()
+                    .map(|info| info.status)
+                    .unwrap_or(ComputeEndpointStatus::Stopped),
                 remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
                 last_record_lsn: timeline_info.last_record_lsn,
                 current_logical_size: timeline_info.current_logical_size,
-                sni_hostname,
+                connection_string: match endpoint_info {
+                    Some(info) => Some(b.get_connection_string(self.config.clone(), info.port)),
+                    None => None,
+                },
                 password: b.password.clone(),
             });
         }
@@ -249,12 +257,7 @@ impl BranchService {
 
         let updated = self.branch_repo.update(branch_id, &req.name).await?;
 
-        let endpoint_status = self
-            .endpoint_service
-            .get_status_for_branch(updated.id)
-            .await;
-        let sni_hostname = self.config.hostname.as_ref().map(|h| format!("{}.{}", updated.slug, h));
-
+        let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
         Ok(BranchResponse {
             id: updated.id,
             project_id: updated.project_id,
@@ -262,11 +265,16 @@ impl BranchService {
             slug: updated.slug.clone(),
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
-            endpoint_status,
+            endpoint_status: endpoint_info
+                .clone()
+                .map(|info| info.status)
+                .unwrap_or(ComputeEndpointStatus::Stopped),
             remote_consistent_lsn_visible: Default::default(),
             last_record_lsn: Default::default(),
             current_logical_size: 0,
-            sni_hostname,
+            connection_string: endpoint_info
+                .as_ref()
+                .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
             password: updated.password.clone(),
         })
     }

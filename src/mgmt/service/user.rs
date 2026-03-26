@@ -19,14 +19,14 @@ struct Claims {
 
 pub struct UserService {
     user_repo: Arc<UserRepository>,
-    jwt_secret: String,
+    server_secret: String,
 }
 
 impl UserService {
-    pub fn new(user_repo: Arc<UserRepository>, jwt_secret: String) -> Self {
+    pub fn new(user_repo: Arc<UserRepository>, server_secret: String) -> Self {
         Self {
             user_repo,
-            jwt_secret,
+            server_secret,
         }
     }
 
@@ -83,7 +83,7 @@ impl UserService {
         encode(
             &Header::default(),
             &claims,
-            &EncodingKey::from_secret(self.jwt_secret.as_bytes()),
+            &EncodingKey::from_secret(self.server_secret.as_bytes()),
         )
         .map_err(|e| AppError::Internal(e.to_string()))
     }
