@@ -63,6 +63,11 @@ pub async fn run() -> Result<(), anyhow::Error> {
         process::exit(0);
     })?;
 
+    let listen_services = Arc::clone(&state.services);
+    tokio::spawn(async move {
+        listen_services.endpoint().listen().await.unwrap();
+    });
+
     serve(config.port, state).await?;
     Ok(())
 }

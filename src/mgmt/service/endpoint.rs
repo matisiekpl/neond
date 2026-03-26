@@ -229,7 +229,7 @@ impl EndpointService {
         })
     }
 
-    pub async fn listen(&mut self) -> std::result::Result<(), anyhow::Error> {
+    pub async fn listen(&self) -> std::result::Result<(), anyhow::Error> {
         if self.config.hostname.is_some() {
             let listener =
                 TcpListener::bind(format!("0.0.0.0:{}", self.config.pg_proxy_port)).await?;
@@ -237,7 +237,7 @@ impl EndpointService {
                 "TLS SNI proxy listening on port 0.0.0.0:{}",
                 self.config.pg_proxy_port
             );
-            Arc::clone(&self.pg_proxy).listen(listener).await?;
+            self.pg_proxy.clone().listen(listener).await?;
         }
         Ok(())
     }
