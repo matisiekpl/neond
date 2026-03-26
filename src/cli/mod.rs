@@ -27,6 +27,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
     crate::preflight::check(
         config.daemon_directory.clone(),
         config.binaries_directory.clone(),
+        config.pg_proxy_port,
     )?;
     crate::unpacker::Unpacker::new(config.binaries_directory.clone())?.unpack()?;
     let mut daemon = crate::daemon::Daemon::new(config.clone());

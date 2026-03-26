@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fmt::format;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -11,6 +11,8 @@ use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::membership::MembershipService;
+use pg_sni_muxer::PgSniMuxer;
+use tokio::net::TcpListener;
 
 pub struct EndpointService {
     endpoints: Arc<Mutex<HashMap<Uuid, ComputeEndpoint>>>,
@@ -18,6 +20,7 @@ pub struct EndpointService {
     project_repo: Arc<ProjectRepository>,
     membership_service: Arc<MembershipService>,
     config: Config,
+    pg_proxy: Arc<PgSniMuxer>,
 }
 
 impl EndpointService {
@@ -33,6 +36,7 @@ impl EndpointService {
             branch_repo,
             project_repo,
             membership_service,
+            pg_proxy: Arc::new(PgSniMuxer::new()),
         }
     }
 
@@ -90,12 +94,8 @@ impl EndpointService {
             }
         }
 
-        let mut endpoint = ComputeEndpoint::new(
-            self.config.clone(),
-            branch,
-            project.pg_version,
-        )
-        .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
+        let mut endpoint = ComputeEndpoint::new(self.config.clone(), branch, project.pg_version)
+            .map_err(|e| AppError::Internal(format!("Failed to create compute endpoint: {e}")))?;
 
         endpoint
             .launch()
@@ -227,5 +227,18 @@ impl EndpointService {
             status: endpoint.get_status(),
             port: endpoint.get_port(),
         })
+    }
+
+    pub async fn listen(&mut self) -> std::result::Result<(), anyhow::Error> {
+        if self.config.hostname.is_some() {
+            let listener =
+                TcpListener::bind(format!("0.0.0.0:{}", self.config.pg_proxy_port)).await?;
+            tracing::info!(
+                "TLS SNI proxy listening on port 0.0.0.0:{}",
+                self.config.pg_proxy_port
+            );
+            Arc::clone(&self.pg_proxy).listen(listener).await?;
+        }
+        Ok(())
     }
 }

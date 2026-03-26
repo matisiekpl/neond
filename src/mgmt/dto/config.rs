@@ -19,6 +19,7 @@ pub struct Config {
     pub(crate) remote_storage_config: Option<RemoteStorageConfig>,
     pub(crate) port_range: PortRange,
     pub(crate) hostname: Option<String>,
+    pub(crate) pg_proxy_port: u16,
 }
 
 const DEFAULT_JWT_SECRET: &str = "super_secret_jwt_token";
@@ -63,9 +64,15 @@ impl Config {
             }
             Err(_) => PortRange(49152, 65535),
         };
+
+        let pg_proxy_port = match std::env::var("PG_PROXY_PORT") {
+            Ok(port) => port.parse()?,
+            Err(_) => 5432,
+        };
+
         let hostname = std::env::var("PG_HOSTNAME").ok();
         if let Some(hostname) = hostname.clone() {
-            tracing::info!("Using hostname: {}", hostname);
+            tracing::info!("Using hostname *.{}:{}", hostname, pg_proxy_port);
         } else {
             tracing::info!("Hostname (PG_HOSTNAME) is not set, TLS SNI routing disabled");
         }
@@ -78,6 +85,7 @@ impl Config {
             remote_storage_config,
             port_range,
             hostname,
+            pg_proxy_port,
         })
     }
 }

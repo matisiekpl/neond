@@ -14,7 +14,11 @@ const TRACER_PORT: u16 = 1235;
 
 const MINIMUM_FREE_SPACE_GB: u64 = 3;
 
-pub fn check(daemon_directory: PathBuf, binaries_directory: PathBuf) -> Result<(), PreflightError> {
+pub fn check(
+    daemon_directory: PathBuf,
+    binaries_directory: PathBuf,
+    pg_proxy_port: u16,
+) -> Result<(), PreflightError> {
     if !network::is_port_open(STORAGE_BROKER_PORT) {
         return Err(PreflightError::PortAlreadyReserved(STORAGE_BROKER_PORT));
     }
@@ -43,6 +47,9 @@ pub fn check(daemon_directory: PathBuf, binaries_directory: PathBuf) -> Result<(
     }
     if !network::is_port_open(TRACER_PORT) {
         return Err(PreflightError::PortAlreadyReserved(TRACER_PORT));
+    }
+    if !network::is_port_open(pg_proxy_port) {
+        return Err(PreflightError::PortAlreadyReserved(pg_proxy_port));
     }
 
     if !daemon_directory.exists() {

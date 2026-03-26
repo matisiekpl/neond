@@ -3831,6 +3831,7 @@ dependencies = [
  "pageserver_api",
  "pageserver_client",
  "pbkdf2",
+ "pg-sni-muxer",
  "postgres-protocol 0.6.10",
  "pprof_util",
  "rand 0.9.2",
@@ -4578,6 +4579,16 @@ checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset 0.5.7",
  "indexmap 2.13.0",
+]
+
+[[package]]
+name = "pg-sni-muxer"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04f1c38264011b3b90f12d771d7d1f85fd3d1685794dd440c2cdc97ea1def055"
+dependencies = [
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
