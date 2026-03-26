@@ -9,6 +9,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::mgmt::dto::branch_response::BranchResponse;
+use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
@@ -23,6 +24,7 @@ pub struct BranchService {
     membership_service: Arc<MembershipService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     endpoint_service: Arc<EndpointService>,
+    config: Config,
 }
 
 impl BranchService {
@@ -32,6 +34,7 @@ impl BranchService {
         membership_service: Arc<MembershipService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         endpoint_service: Arc<EndpointService>,
+        config: Config,
     ) -> Self {
         Self {
             branch_repo,
@@ -39,6 +42,7 @@ impl BranchService {
             membership_service,
             pageserver_client,
             endpoint_service,
+            config,
         }
     }
 
@@ -129,18 +133,21 @@ impl BranchService {
             .await?;
 
         let endpoint_status = self.endpoint_service.get_status_for_branch(branch.id).await;
+        let sni_hostname = self.config.hostname.as_ref().map(|h| format!("{}.{}", branch.slug, h));
 
         Ok(BranchResponse {
             id: branch.id,
             project_id: branch.project_id,
-            name: branch.name,
-            slug: branch.slug,
+            name: branch.name.clone(),
+            slug: branch.slug.clone(),
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
             endpoint_status,
             remote_consistent_lsn_visible: Default::default(),
             last_record_lsn: Default::default(),
             current_logical_size: 0,
+            sni_hostname,
+            password: branch.password.clone(),
         })
     }
 
@@ -186,17 +193,20 @@ impl BranchService {
                 .unwrap();
 
             let endpoint_status = self.endpoint_service.get_status_for_branch(b.id).await;
+            let sni_hostname = self.config.hostname.as_ref().map(|h| format!("{}.{}", b.slug, h));
             results.push(BranchResponse {
                 id: b.id,
                 project_id: b.project_id,
-                name: b.name,
-                slug: b.slug,
+                name: b.name.clone(),
+                slug: b.slug.clone(),
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
                 endpoint_status,
                 remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
                 last_record_lsn: timeline_info.last_record_lsn,
                 current_logical_size: timeline_info.current_logical_size,
+                sni_hostname,
+                password: b.password.clone(),
             });
         }
 
@@ -243,18 +253,21 @@ impl BranchService {
             .endpoint_service
             .get_status_for_branch(updated.id)
             .await;
+        let sni_hostname = self.config.hostname.as_ref().map(|h| format!("{}.{}", updated.slug, h));
 
         Ok(BranchResponse {
             id: updated.id,
             project_id: updated.project_id,
-            name: updated.name,
-            slug: updated.slug,
+            name: updated.name.clone(),
+            slug: updated.slug.clone(),
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
             endpoint_status,
             remote_consistent_lsn_visible: Default::default(),
             last_record_lsn: Default::default(),
             current_logical_size: 0,
+            sni_hostname,
+            password: updated.password.clone(),
         })
     }
 

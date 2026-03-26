@@ -16,4 +16,6 @@ pub struct BranchResponse {
     pub remote_consistent_lsn_visible: Lsn,
     pub last_record_lsn: Lsn,
     pub current_logical_size: u64,
+    pub sni_hostname: Option<String>,
+    pub password: String,
 }

@@ -104,19 +104,36 @@ impl EndpointService {
             .launch()
             .map_err(|e| AppError::Internal(format!("Failed to launch compute endpoint: {e}")))?;
 
-        let response = EndpointResponse {
-            branch_id,
-            status: endpoint.get_status(),
-            port: endpoint.get_port(),
-        };
+        let sni_hostname = self
+            .config
+            .hostname
+            .as_ref()
+            .map(|hostname| format!("{}.{}", branch.slug, hostname));
 
-        if let Some(ref hostname) = self.config.hostname {
-            let sni_hostname = format!("{}.{}", branch.slug, hostname);
-            let backend_addr: SocketAddr = format!("127.0.0.1:{}", response.port)
+        if let Some(ref sni_hostname) = sni_hostname {
+            let port = endpoint.get_port();
+            let backend_addr: SocketAddr = format!("127.0.0.1:{}", port)
                 .parse()
                 .expect("valid socket addr");
-            self.pg_proxy.set_mapping(sni_hostname, backend_addr).await;
+            self.pg_proxy.set_mapping(sni_hostname.clone(), backend_addr).await;
         }
+
+        let launched_status = endpoint.get_status();
+        self.branch_repo
+            .update_recent_status(branch_id, launched_status)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to save recent_status for branch {}: {}", branch_id, e);
+                branch.clone()
+            });
+
+        let response = EndpointResponse {
+            branch_id,
+            status: launched_status,
+            port: endpoint.get_port(),
+            sni_hostname,
+            password: branch.password.clone(),
+        };
 
         endpoints.insert(branch_id, endpoint);
 
@@ -162,15 +179,31 @@ impl EndpointService {
             .shutdown()
             .map_err(|e| AppError::Internal(format!("Failed to shutdown compute endpoint: {e}")))?;
 
-        if let Some(ref hostname) = self.config.hostname {
-            let sni_hostname = format!("{}.{}", branch.slug, hostname);
-            self.pg_proxy.remove_mapping(&sni_hostname).await;
+        let sni_hostname = self
+            .config
+            .hostname
+            .as_ref()
+            .map(|hostname| format!("{}.{}", branch.slug, hostname));
+
+        if let Some(ref sni_hostname) = sni_hostname {
+            self.pg_proxy.remove_mapping(sni_hostname).await;
         }
+
+        let final_status = endpoint.get_status();
+        self.branch_repo
+            .update_recent_status(branch_id, final_status)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to save recent_status for branch {}: {}", branch_id, e);
+                branch.clone()
+            });
 
         let response = EndpointResponse {
             branch_id,
-            status: endpoint.get_status(),
+            status: final_status,
             port: endpoint.get_port(),
+            sni_hostname,
+            password: branch.password.clone(),
         };
 
         Ok(response)
@@ -238,15 +271,126 @@ impl EndpointService {
             return Err(AppError::NotFound);
         }
 
+        let sni_hostname = self
+            .config
+            .hostname
+            .as_ref()
+            .map(|hostname| format!("{}.{}", branch.slug, hostname));
+
         let endpoints = self.endpoints.lock().await;
 
-        let endpoint = endpoints.get(&branch_id).ok_or(AppError::NotFound)?;
+        let (status, port) = if let Some(endpoint) = endpoints.get(&branch_id) {
+            (endpoint.get_status(), endpoint.get_port())
+        } else {
+            let recent = branch
+                .recent_status
+                .unwrap_or(ComputeEndpointStatus::Stopped);
+            (recent, 0)
+        };
 
         Ok(EndpointResponse {
             branch_id,
-            status: endpoint.get_status(),
-            port: endpoint.get_port(),
+            status,
+            port,
+            sni_hostname,
+            password: branch.password.clone(),
         })
+    }
+
+    pub async fn recover_running(&self) {
+        let branches = match self
+            .branch_repo
+            .list_all_with_recent_status(ComputeEndpointStatus::Running)
+            .await
+        {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("Failed to fetch branches for recovery: {}", e);
+                return;
+            }
+        };
+
+        if branches.is_empty() {
+            tracing::info!("No endpoints to recover");
+            return;
+        }
+
+        tracing::info!("Recovering {} running endpoint(s)", branches.len());
+
+        let mut endpoints = self.endpoints.lock().await;
+
+        for branch in branches {
+            let project = match self.project_repo.find_by_id(branch.project_id).await {
+                Ok(Some(p)) => p,
+                Ok(None) => {
+                    tracing::warn!(
+                        "Project not found for branch {} during recovery, skipping",
+                        branch.id
+                    );
+                    continue;
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to fetch project for branch {} during recovery: {}",
+                        branch.id,
+                        e
+                    );
+                    continue;
+                }
+            };
+
+            let mut endpoint =
+                match ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version)
+                {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to create endpoint for branch {} during recovery: {}",
+                            branch.id,
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+            match endpoint.launch() {
+                Ok(()) => {
+                    let sni_hostname = self
+                        .config
+                        .hostname
+                        .as_ref()
+                        .map(|hostname| format!("{}.{}", branch.slug, hostname));
+
+                    if let Some(ref sni_hostname) = sni_hostname {
+                        let port = endpoint.get_port();
+                        let backend_addr: std::net::SocketAddr =
+                            format!("127.0.0.1:{}", port).parse().expect("valid socket addr");
+                        self.pg_proxy.set_mapping(sni_hostname.clone(), backend_addr).await;
+                    }
+
+                    tracing::info!("Recovered endpoint for branch {}", branch.id);
+                    endpoints.insert(branch.id, endpoint);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to launch endpoint for branch {} during recovery: {}",
+                        branch.id,
+                        e
+                    );
+                    self.branch_repo
+                        .update_recent_status(branch.id, ComputeEndpointStatus::Failed)
+                        .await
+                        .unwrap_or_else(|e| {
+                            tracing::warn!(
+                                "Failed to save recent_status for branch {}: {}",
+                                branch.id,
+                                e
+                            );
+                            branch.clone()
+                        });
+                }
+            }
+        }
     }
 
     pub async fn listen(&self) -> std::result::Result<(), anyhow::Error> {

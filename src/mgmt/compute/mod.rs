@@ -35,7 +35,8 @@ use rand::{Rng, RngCore};
 
 type HmacSha256 = Hmac<Sha256>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
+#[ExistingTypePath = "crate::mgmt::schema::schema::sql_types::ComputeEndpointStatus"]
 #[serde(rename_all = "lowercase")]
 pub enum ComputeEndpointStatus {
     Starting,

@@ -6,6 +6,9 @@ pub mod sql_types {
     #[derive(diesel::sql_types::SqlType, diesel::query_builder::QueryId)]
     #[diesel(postgres_type(name = "pg_version"))]
     pub struct PgVersion;
+    #[derive(diesel::sql_types::SqlType, diesel::query_builder::QueryId)]
+    #[diesel(postgres_type(name = "compute_endpoint_status"))]
+    pub struct ComputeEndpointStatus;
 }
 
 diesel::table! {
@@ -43,6 +46,8 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ComputeEndpointStatus;
     branches (id) {
         id -> Uuid,
         name -> Varchar,
@@ -51,6 +56,7 @@ diesel::table! {
         project_id -> Uuid,
         password -> Text,
         slug -> Varchar,
+        recent_status -> Nullable<ComputeEndpointStatus>,
     }
 }
 

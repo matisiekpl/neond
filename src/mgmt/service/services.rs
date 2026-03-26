@@ -32,7 +32,7 @@ impl Services {
             Arc::new(membership.clone()),
         ));
         Self {
-            user: UserService::new(Arc::new(repositories.user().clone()), config.jwt_secret),
+            user: UserService::new(Arc::new(repositories.user().clone()), config.jwt_secret.clone()),
             organization: OrganizationService::new(
                 Arc::new(repositories.organization().clone()),
                 Arc::new(repositories.membership().clone()),
@@ -50,6 +50,7 @@ impl Services {
                 Arc::new(membership.clone()),
                 pageserver_client,
                 Arc::clone(&endpoint),
+                config.clone(),
             ),
             endpoint,
             membership,

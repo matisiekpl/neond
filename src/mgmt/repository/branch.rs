@@ -1,6 +1,7 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
+use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::model::branch::Branch;
 use crate::mgmt::repository::db::DbPool;
@@ -81,6 +82,26 @@ impl BranchRepository {
         diesel::update(branches::table.filter(branches::id.eq(id)))
             .set(branches::name.eq(name))
             .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn update_recent_status(&self, id: Uuid, status: ComputeEndpointStatus) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::update(branches::table.filter(branches::id.eq(id)))
+            .set(branches::recent_status.eq(status))
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn list_all_with_recent_status(&self, status: ComputeEndpointStatus) -> Result<Vec<Branch>> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        branches::table
+            .filter(branches::recent_status.eq(status))
+            .load::<Branch>(conn)
             .await
             .map_err(Into::into)
     }
