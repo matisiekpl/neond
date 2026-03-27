@@ -41,8 +41,16 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
-import { Copy, GitBranchPlus, Loader2, MoreVertical, Pencil, Play, Square, Trash2 } from "lucide-react"
+import { BookDown, Cloud, Copy, GitBranchPlus, Loader2, MoreVertical, Pencil, Play, Square, Trash2 } from "lucide-react"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/components/ui/hover-card"
 import type { BranchStatus } from "~/types/models/branch"
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B"
+  const units = ["B", "KB", "MB", "GB", "TB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
 
 const STATUS_CONFIG: Record<BranchStatus, { label: string; className: string }> = {
   running:  { label: "Running",  className: "bg-green-500" },
@@ -318,10 +326,10 @@ export default function ProjectViewRoute() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Last recorded LSN</TableHead>
-                  <TableHead className="text-right">Durable LSN</TableHead>
-                  <TableHead className="text-right">Created</TableHead>
+                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead className="w-24">Size</TableHead>
+                  <TableHead className="w-44">Durability</TableHead>
+                  <TableHead className="w-28">Created</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -339,24 +347,67 @@ export default function ProjectViewRoute() {
                         <span>{branch.name}</span>
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-28">
                       {(() => {
                         const s = STATUS_CONFIG[branch.endpoint_status]
                         return (
                           <span className="flex items-center gap-1.5">
                             <span className={`inline-block size-2 shrink-0 rounded-full ${s.className}`} />
-                            <span className="text-sm text-muted-foreground">{s.label}</span>
+                            <span className="text-xs text-muted-foreground">{s.label}</span>
                           </span>
                         )
                       })()}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                      {branch.last_record_lsn}
+                    <TableCell className="w-24 text-xs text-muted-foreground">
+                      {formatBytes(branch.current_logical_size)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                      {branch.remote_consistent_lsn_visible}
+                    <TableCell className="w-44">
+                      {(() => {
+                        const synced = branch.remote_consistent_lsn_visible === branch.last_record_lsn
+                        return (
+                          <HoverCard openDelay={0} closeDelay={500}>
+                            <HoverCardTrigger asChild>
+                              <span className={`inline-flex cursor-default items-center rounded border px-1.5 py-0.5 text-xs font-medium ${synced ? "border-green-500/30 bg-green-500/10 text-green-600" : "border-amber-500/30 bg-amber-500/10 text-amber-600"}`}>
+                                {synced ? "checkpointed" : "awaiting checkpoint"}
+                              </span>
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-72">
+                              <div className="flex flex-col gap-4">
+                                <div className="flex w-full items-center gap-3">
+                                  <div className="flex w-20 flex-col items-center gap-1">
+                                    <span className="text-[10px] font-medium text-muted-foreground">WAL</span>
+                                    <BookDown className="size-5 shrink-0 text-green-500" />
+                                    <span className="w-full truncate text-center font-mono text-[10px] text-muted-foreground">{branch.last_record_lsn}</span>
+                                  </div>
+                                  <div className="flex-1 self-start pt-[22px]">
+                                    <div
+                                      className="h-px w-full"
+                                      style={{
+                                        backgroundImage: `radial-gradient(circle, ${synced ? "rgb(34 197 94)" : "rgb(156 163 175)"} 1px, transparent 1px)`,
+                                        backgroundSize: "6px 1px",
+                                        animation: "dash 1s linear infinite",
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="flex w-20 flex-col items-center gap-1">
+                                    <span className="text-[10px] font-medium text-muted-foreground">Storage</span>
+                                    <Cloud className={`size-5 shrink-0 ${synced ? "text-green-500" : "text-muted-foreground"}`} />
+                                    <span className="w-full truncate text-center font-mono text-[10px] text-muted-foreground">{branch.remote_consistent_lsn_visible}</span>
+                                  </div>
+                                </div>
+                                <style>{`@keyframes dash { from { background-position: 0 0; } to { background-position: 12px 0; } }`}</style>
+                                <p className="text-center text-xs text-muted-foreground">
+                                  {synced
+                                    ? "All WAL records have been durably stored."
+                                    : <>WAL is ahead of durable storage.<br />Pageserver is awaiting checkpoint.</>}
+                                </p>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        )
+                      })()}
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
+                    <TableCell className="w-28 text-muted-foreground">
                       {new Date(branch.created_at).toLocaleDateString(undefined, {
                         year: "numeric",
                         month: "short",
