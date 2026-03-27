@@ -41,7 +41,16 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
-import { Loader2, MoreVertical } from "lucide-react"
+import { Copy, GitBranchPlus, Loader2, MoreVertical, Pencil, Play, Square, Trash2 } from "lucide-react"
+import type { BranchStatus } from "~/types/models/branch"
+
+const STATUS_CONFIG: Record<BranchStatus, { label: string; className: string }> = {
+  running:  { label: "Running",  className: "bg-green-500" },
+  starting: { label: "Starting", className: "bg-amber-400" },
+  stopping: { label: "Stopping", className: "bg-amber-400" },
+  stopped:  { label: "Stopped",  className: "bg-muted-foreground" },
+  failed:   { label: "Failed",   className: "bg-destructive" },
+}
 import type { Branch } from "~/types/models/branch"
 
 type BranchNode = Branch & { children: BranchNode[] }
@@ -81,12 +90,15 @@ export default function ProjectViewRoute() {
       fetchProjects: s.fetchProjects,
     })),
   )
-  const { branches, loading: branchesLoading, fetchBranches, createBranch, deleteBranch } = useBranchStore(
+  const { branches, loading: branchesLoading, fetchBranches, createBranch, renameBranch, startEndpoint, stopEndpoint, deleteBranch } = useBranchStore(
     useShallow((s) => ({
       branches: s.branches,
       loading: s.loading,
       fetchBranches: s.fetchBranches,
       createBranch: s.createBranch,
+      renameBranch: s.renameBranch,
+      startEndpoint: s.startEndpoint,
+      stopEndpoint: s.stopEndpoint,
       deleteBranch: s.deleteBranch,
     })),
   )
@@ -143,6 +155,32 @@ export default function ProjectViewRoute() {
       toast.error(getAppError(e))
     } finally {
       setBranchFromCreating(false)
+    }
+  }
+
+  const [renameOpen, setRenameOpen] = React.useState(false)
+  const [renameBranch_, setRenameBranch_] = React.useState<Branch | null>(null)
+  const [renameName, setRenameName] = React.useState("")
+  const [renaming, setRenaming] = React.useState(false)
+
+  function openRename(branch: Branch) {
+    setRenameBranch_(branch)
+    setRenameName(branch.name)
+    setRenameOpen(true)
+  }
+
+  async function submitRename() {
+    if (!selectedOrganizationId || !projectId || !renameBranch_) return
+    const trimmed = renameName.trim()
+    if (!trimmed || trimmed === renameBranch_.name) return
+    setRenaming(true)
+    try {
+      await renameBranch(selectedOrganizationId, projectId, renameBranch_.id, trimmed)
+      setRenameOpen(false)
+    } catch (e) {
+      toast.error(getAppError(e))
+    } finally {
+      setRenaming(false)
     }
   }
 
@@ -280,8 +318,9 @@ export default function ProjectViewRoute() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead className="text-right">Last record LSN</TableHead>
-                  <TableHead className="text-right">Consistent LSN</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Last recorded LSN</TableHead>
+                  <TableHead className="text-right">Durable LSN</TableHead>
                   <TableHead className="text-right">Created</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -299,6 +338,17 @@ export default function ProjectViewRoute() {
                         )}
                         <span>{branch.name}</span>
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const s = STATUS_CONFIG[branch.endpoint_status]
+                        return (
+                          <span className="flex items-center gap-1.5">
+                            <span className={`inline-block size-2 shrink-0 rounded-full ${s.className}`} />
+                            <span className="text-sm text-muted-foreground">{s.label}</span>
+                          </span>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs text-muted-foreground">
                       {branch.last_record_lsn}
@@ -321,14 +371,50 @@ export default function ProjectViewRoute() {
                             <span className="sr-only">Open menu</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-44">
+                          {(branch.endpoint_status === "stopped" || branch.endpoint_status === "failed") && (
+                            <DropdownMenuItem onClick={() => void startEndpoint(selectedOrganizationId!, projectId!, branch.id)}>
+                              <Play className="size-4" />
+                              Start
+                            </DropdownMenuItem>
+                          )}
+                          {branch.endpoint_status === "running" && (
+                            <DropdownMenuItem onClick={() => void stopEndpoint(selectedOrganizationId!, projectId!, branch.id)}>
+                              <Square className="size-4" />
+                              Stop
+                            </DropdownMenuItem>
+                          )}
+                          {(branch.endpoint_status === "starting" || branch.endpoint_status === "stopping") && (
+                            <DropdownMenuItem disabled>
+                              <Loader2 className="size-4 animate-spin" />
+                              {branch.endpoint_status === "starting" ? "Starting…" : "Stopping…"}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            disabled={!branch.connection_string}
+                            onClick={() => {
+                              if (branch.connection_string) {
+                                void navigator.clipboard.writeText(branch.connection_string)
+                                toast.success("Connection string copied")
+                              }
+                            }}
+                          >
+                            <Copy className="size-4" />
+                            Copy connection string
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openRename(branch)}>
+                            <Pencil className="size-4" />
+                            Rename
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openBranchFrom(branch)}>
+                            <GitBranchPlus className="size-4" />
                             Branch from here
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
                             onClick={() => openDelete(branch.id)}
                           >
+                            <Trash2 className="size-4" />
                             Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -364,6 +450,41 @@ export default function ProjectViewRoute() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Rename branch</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label htmlFor="rename-branch-name">Name</Label>
+            <Input
+              id="rename-branch-name"
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  void submitRename()
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" type="button" onClick={() => setRenameOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={renaming || !renameName.trim() || renameName.trim() === renameBranch_?.name}
+              onClick={() => void submitRename()}
+            >
+              {renaming && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={branchFromOpen} onOpenChange={setBranchFromOpen}>
         <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
