@@ -10,6 +10,7 @@ export default [
     "routes/dashboard/Dashboard.tsx",
     [
       index("routes/dashboard/DashboardIndex.tsx"),
+      route("projects", "routes/projects/ProjectsIndex.tsx"),
       route("setup-organization", "routes/organization/DashboardSetupOrganization.tsx"),
       route(
         "settings/organization",

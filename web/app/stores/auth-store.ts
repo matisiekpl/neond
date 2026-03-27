@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { authApi } from "~/api/auth"
 import { ACCESS_TOKEN } from "~/lib/constants"
 import { getAppError } from "~/lib/errors"
-import type { User } from "~/types/models"
+import type { User } from "~/types/models/user"
 
 type AuthState = {
   navigate: NavigateFunction | null

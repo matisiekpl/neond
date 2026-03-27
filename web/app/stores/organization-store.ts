@@ -4,7 +4,7 @@ import { membersApi } from "~/api/members"
 import { organizationsApi } from "~/api/organizations"
 import { CURRENT_ORG_STORAGE_KEY } from "~/lib/constants"
 import { getAppError } from "~/lib/errors"
-import type { Organization, OrganizationMemberUser } from "~/types/models"
+import type { Organization, OrganizationMemberUser } from "~/types/models/organization"
 
 type OrganizationState = {
   organizations: Organization[]

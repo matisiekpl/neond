@@ -1,4 +1,4 @@
-import type { OrganizationMemberUser } from "~/types/models"
+import type { OrganizationMemberUser } from "~/types/models/organization"
 import api from "./client"
 
 export const membersApi = {

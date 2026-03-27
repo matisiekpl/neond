@@ -1,4 +1,4 @@
-import type { User } from "~/types/models"
+import type { User } from "~/types/models/user"
 import api from "./client"
 
 interface AuthResponse {
