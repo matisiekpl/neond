@@ -1,37 +1,46 @@
 {
-  "name": "web",
+  "name": "web2",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "build": "react-router build",
+    "dev": "react-router dev",
+    "start": "react-router-serve ./build/server/index.js",
+    "typecheck": "react-router typegen && tsc",
+    "format": "prettier --write \"**/*.{ts,tsx}\""
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.2.2",
-    "@vueuse/core": "^14.2.1",
-    "axios": "^1.13.6",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@react-router/node": "7.13.1",
+    "@react-router/serve": "7.13.1",
+    "axios": "^1.14.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "isbot": "^5.1.36",
     "jwt-decode": "^4.0.0",
-    "lucide-vue-next": "^1.0.0",
-    "pinia": "^3.0.4",
-    "reka-ui": "^2.9.2",
+    "lucide-react": "^1.7.0",
+    "next-themes": "^0.4.6",
+    "radix-ui": "^1.4.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router": "7.13.1",
+    "shadcn": "^4.1.1",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
-    "tailwindcss": "^4.2.2",
-    "vue": "^3.5.30",
-    "vue-router": "^5.0.4",
-    "vue-sonner": "^2.0.9"
+    "tw-animate-css": "^1.4.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
-    "@vitejs/plugin-vue": "^6.0.5",
-    "@vue/tsconfig": "^0.9.0",
-    "tw-animate-css": "^1.4.0",
-    "typescript": "~5.9.3",
-    "vite": "^8.0.1",
-    "vue-tsc": "^3.2.5"
-  },
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+    "@react-router/dev": "7.13.1",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/node": "^22",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "prettier": "^3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  }
 }
