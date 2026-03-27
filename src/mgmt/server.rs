@@ -2,6 +2,7 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
+use tower_http::cors::CorsLayer;
 use neon_utils::shard::TenantShardId;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -12,9 +13,10 @@ use crate::mgmt::handler::{branch, endpoint, organization, project, user};
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     let state = Arc::new(state);
 
-    let app = Router::new()
+    let api = Router::new()
         .route("/auth/login", post(user::login))
         .route("/auth/register", post(user::register))
+        .route("/auth/me", get(user::me))
         .route(
             "/organizations",
             post(organization::create).get(organization::list),
@@ -58,6 +60,8 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
                 .get(endpoint::status),
         )
         .with_state(state);
+
+    let app = Router::new().nest("/api", api).layer(CorsLayer::permissive());
 
     let listener = TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("Listening on 0.0.0.0:{}", port);

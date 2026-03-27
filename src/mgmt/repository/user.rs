@@ -26,6 +26,16 @@ impl UserRepository {
         Self { pool }
     }
 
+    pub async fn find_by_id(&self, id: Uuid) -> Result<Option<User>> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        users::table
+            .filter(users::id.eq(id))
+            .first::<User>(conn)
+            .await
+            .optional()
+            .map_err(Into::into)
+    }
     pub async fn find_by_email(&self, email: &str) -> Result<Option<User>> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;
