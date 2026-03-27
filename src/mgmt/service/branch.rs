@@ -151,6 +151,8 @@ impl BranchService {
             connection_string: endpoint_info
                 .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
             password: branch.password.clone(),
+            created_at: branch.created_at,
+            updated_at: branch.updated_at,
         })
     }
 
@@ -215,6 +217,8 @@ impl BranchService {
                     None => None,
                 },
                 password: b.password.clone(),
+                created_at: b.created_at,
+                updated_at: b.updated_at,
             });
         }
 
@@ -276,6 +280,8 @@ impl BranchService {
                 .as_ref()
                 .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
             password: updated.password.clone(),
+            created_at: updated.created_at,
+            updated_at: updated.updated_at,
         })
     }
 
