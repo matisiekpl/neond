@@ -1,3 +1,4 @@
+pub mod add_member_by_email_request;
 pub mod branch_response;
 pub mod create_branch_request;
 pub mod endpoint_response;
@@ -14,4 +15,5 @@ pub mod register_user_response;
 pub mod update_branch_request;
 pub mod update_organization_request;
 pub mod update_project_request;
+pub mod user_response;
 pub mod config;

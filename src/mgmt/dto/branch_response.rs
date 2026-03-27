@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use neon_utils::lsn::Lsn;
 use serde::Serialize;
 use uuid::Uuid;
@@ -19,5 +20,7 @@ pub struct BranchResponse {
     pub current_logical_size: u64,
     pub connection_string: Option<String>,
     pub password: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 

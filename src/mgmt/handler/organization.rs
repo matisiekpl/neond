@@ -7,6 +7,7 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::mgmt::dto::add_member_by_email_request::AddMemberByEmailRequest;
 use crate::mgmt::dto::error::AppError;
 use crate::mgmt::dto::create_organization_request::CreateOrganizationRequest;
 use crate::mgmt::dto::update_organization_request::UpdateOrganizationRequest;
@@ -83,4 +84,18 @@ pub async fn list_members(
 ) -> Result<impl IntoResponse, AppError> {
     let members = state.services.organization().list_members(user_id, org_id).await?;
     Ok((StatusCode::OK, Json(members)))
+}
+
+pub async fn assign_member_by_email(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path(org_id): Path<Uuid>,
+    Json(req): Json<AddMemberByEmailRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    state
+        .services
+        .organization()
+        .assign_member_by_email(user_id, org_id, &req.email)
+        .await?;
+    Ok((StatusCode::CREATED, ()))
 }

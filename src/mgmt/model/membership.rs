@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use uuid::Uuid;
 
@@ -6,4 +7,6 @@ use uuid::Uuid;
 pub struct Membership {
     pub user_id: Uuid,
     pub organization_id: Uuid,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }

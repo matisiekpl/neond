@@ -1,5 +1,5 @@
 use bcrypt::{DEFAULT_COST, hash, verify};
-use jsonwebtoken::{EncodingKey, Header, encode};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -9,6 +9,7 @@ use crate::mgmt::dto::login_user_request::LoginUserRequest;
 use crate::mgmt::dto::login_user_response::LoginUserResponse;
 use crate::mgmt::dto::register_user_request::RegisterUserRequest;
 use crate::mgmt::dto::register_user_response::RegisterUserResponse;
+use crate::mgmt::dto::user_response::UserResponse;
 use crate::mgmt::repository::user::UserRepository;
 
 #[derive(Serialize, Deserialize)]
@@ -72,6 +73,26 @@ impl UserService {
         Ok(RegisterUserResponse { token })
     }
 
+    pub async fn me(&self, token: &str) -> Result<UserResponse> {
+        let token_data = decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(self.server_secret.as_bytes()),
+            &Validation::default(),
+        )
+        .map_err(|_| AppError::Unauthorized)?;
+        let user = self
+            .user_repo
+            .find_by_id(token_data.claims.sub)
+            .await?
+            .ok_or(AppError::NotFound)?;
+        Ok(UserResponse {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+        })
+    }
     fn generate_token(&self, user_id: Uuid) -> Result<String> {
         let exp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

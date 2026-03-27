@@ -4,3 +4,6 @@ neond.iml
 .env
 
 neon_daemon_data/
+
+.junie/
+.claude/

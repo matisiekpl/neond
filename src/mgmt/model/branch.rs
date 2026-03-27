@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::branch_response::BranchResponse;
 use crate::mgmt::dto::config::Config;
@@ -15,6 +16,8 @@ pub struct Branch {
     pub password: String,
     pub slug: String,
     pub recent_status: Option<ComputeEndpointStatus>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 impl Branch {

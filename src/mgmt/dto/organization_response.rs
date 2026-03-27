@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -5,4 +6,6 @@ use uuid::Uuid;
 pub struct OrganizationResponse {
     pub id: Uuid,
     pub name: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }

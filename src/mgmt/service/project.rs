@@ -98,6 +98,8 @@ impl ProjectService {
             organization_id: project.organization_id,
             name: project.name,
             pg_version: project.pg_version,
+            created_at: project.created_at,
+            updated_at: project.updated_at,
         })
     }
 
@@ -121,6 +123,8 @@ impl ProjectService {
             organization_id: project.organization_id,
             name: project.name,
             pg_version: project.pg_version,
+            created_at: project.created_at,
+            updated_at: project.updated_at,
         })
     }
 
@@ -144,6 +148,8 @@ impl ProjectService {
                 organization_id: p.organization_id,
                 name: p.name,
                 pg_version: p.pg_version,
+                created_at: p.created_at,
+                updated_at: p.updated_at,
             })
             .collect())
     }
@@ -178,6 +184,8 @@ impl ProjectService {
             organization_id: updated.organization_id,
             name: updated.name,
             pg_version: updated.pg_version,
+            created_at: updated.created_at,
+            updated_at: updated.updated_at,
         })
     }
 

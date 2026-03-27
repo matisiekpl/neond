@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-diesel = { version = "2.3.0", features = ["postgres", "uuid"] }
+diesel = { version = "2.3.0", features = ["postgres", "uuid", "chrono"] }
 diesel-async = { version = "0.7.4", features = ["postgres", "bb8", "migrations"] }
 diesel_migrations = "2.2.0"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -53,6 +53,7 @@ pbkdf2 = { version = "0.12", features = ["hmac"] }
 pg-sni-muxer = "0.1.0"
 pem = "3.0.3"
 openssl = "0.10"
+tower-http = { version = "0.6.8", features = ["cors"] }
 
 [build-dependencies]
 tar = "0.4"

@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -35,4 +36,6 @@ pub struct Project {
     pub organization_id: Uuid,
     pub name: String,
     pub pg_version: PgVersion,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }

@@ -37,6 +37,7 @@ impl Services {
                 Arc::new(repositories.organization().clone()),
                 Arc::new(repositories.membership().clone()),
                 Arc::new(membership.clone()),
+                Arc::new(repositories.user().clone()),
             ),
             project: ProjectService::new(
                 Arc::new(repositories.project().clone()),
