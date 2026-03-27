@@ -45,21 +45,6 @@ components:
       properties:
         token:
           type: string
-    User:
-      type: object
-      required:
-        - id
-        - name
-        - email
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        email:
-          type: string
-          format: email
     OrganizationResponse:
       type: object
       required:
@@ -262,7 +247,7 @@ paths:
             schema:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
-        '200':
+        '201':
           description: Successful registration
           content:
             application/json:
