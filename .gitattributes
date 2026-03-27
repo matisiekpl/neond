@@ -1,0 +1,4 @@
+*.ts -linguist-detectable
+*.tsx -linguist-detectable
+*.css -linguist-detectable
+Makefile -linguist-detectable
