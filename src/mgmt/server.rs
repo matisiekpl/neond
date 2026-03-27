@@ -2,15 +2,24 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use tower_http::cors::CorsLayer;
 use neon_utils::shard::TenantShardId;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
 
 use crate::mgmt::handler::AppState;
 use crate::mgmt::handler::{branch, endpoint, organization, project, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
+    // TODO(matisiekpl): integrate React hosting into app
+    // TODO(matisiekpl): add PITR restoration
+    // TODO(matisiekpl): add configurable PITR horizon
+    // TODO(matisiekpl): add daemon settings - list mappings, active branches, durability of them
+    // TODO(matisiekpl): add button to shutdown daemon
+    // TODO(matisiekpl): in daemon settings show used remote storage
+    // TODO(matisiekpl): display tenant size
+    // TODO(matisiekpl): add ability to detach ancestor
+    // TODO(matisiekpl): add option to configure gc_period, gc_horizon, pitr_interval, checkpoint_distance, checkpoint_timeout
     let state = Arc::new(state);
 
     let api = Router::new()
@@ -61,7 +70,9 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         )
         .with_state(state);
 
-    let app = Router::new().nest("/api", api).layer(CorsLayer::permissive());
+    let app = Router::new()
+        .nest("/api", api)
+        .layer(CorsLayer::permissive());
 
     let listener = TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("Listening on 0.0.0.0:{}", port);
