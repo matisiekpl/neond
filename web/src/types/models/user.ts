@@ -2,6 +2,6 @@ export interface User {
   id: string
   name: string
   email: string
-  createdAt: Date
-  updatedAt: Date
+  created_at: string
+  updated_at: string
 }

@@ -56,7 +56,7 @@ onMounted(() => {
           />
         </div>
 
-        <Button type="submit" class="w-full cursor-pointer" :disabled="authStore.loading">
+        <Button type="submit" class="w-full" :disabled="authStore.loading">
           <Spinner v-if="authStore.loading" class="mr-2" />
           Sign up
         </Button>

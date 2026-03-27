@@ -29,7 +29,7 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         )
         .route(
             "/organizations/{org_id}/members",
-            get(organization::list_members),
+            get(organization::list_members).post(organization::assign_member_by_email),
         )
         .route(
             "/organizations/{org_id}/members/{user_id}",

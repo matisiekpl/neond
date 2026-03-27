@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.shadcn-vue.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "mcp__claude_ai_Context7__resolve-library-id",
+      "WebFetch(domain:api.github.com)"
+    ]
+  }
+}

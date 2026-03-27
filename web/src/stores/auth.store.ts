@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function check() {
     if (localStorage.getItem(ACCESS_TOKEN)) {
-      await router.push('/')
+      await router.push('/dashboard')
     }
     if (route.query.email) {
       email.value = route.query.email as string
@@ -36,7 +36,7 @@ export const useAuthStore = defineStore('auth', () => {
       await init()
       const returnUrl = localStorage.getItem(RETURN_URL)
         || new URLSearchParams(window.location.search).get('return')
-        || '/'
+        || '/dashboard'
       localStorage.removeItem(RETURN_URL)
       await router.push(returnUrl)
     } catch (err) {
@@ -54,7 +54,7 @@ export const useAuthStore = defineStore('auth', () => {
       await init()
       const returnUrl = localStorage.getItem(RETURN_URL)
         || new URLSearchParams(window.location.search).get('return')
-        || '/'
+        || '/dashboard'
       localStorage.removeItem(RETURN_URL)
       await router.push(returnUrl)
     } catch (err) {
