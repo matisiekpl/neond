@@ -10,7 +10,7 @@ import {
   Plus,
   Settings,
 } from "lucide-react"
-import { CreateOrganizationDialog } from "~/components/CreateOrganizationDialog"
+import { CreateOrganizationDialog } from "~/components/organization/CreateOrganizationDialog"
 import { useOrganizationStore } from "~/stores/organization-store"
 import { useShallow } from "zustand/react/shallow"
 import {

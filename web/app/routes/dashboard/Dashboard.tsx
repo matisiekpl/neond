@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router"
 import { useShallow } from "zustand/react/shallow"
-import { AuthenticatedLayout } from "~/components/AuthenticatedLayout"
+import { AuthenticatedLayout } from "~/components/layout/AuthenticatedLayout"
 import { useAuthStore } from "~/stores/auth-store"
 import { useOrganizationStore } from "~/stores/organization-store"
 import { Spinner } from "~/components/ui/spinner"

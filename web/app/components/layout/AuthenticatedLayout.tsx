@@ -1,6 +1,6 @@
 import * as React from "react"
-import { AppMainHeader } from "~/components/AppMainHeader"
-import { AppSidebar } from "~/components/AppSidebar"
+import { AppMainHeader } from "~/components/layout/AppMainHeader"
+import { AppSidebar } from "~/components/layout/AppSidebar"
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar"
 
 export function AuthenticatedLayout({
