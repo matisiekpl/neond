@@ -1,5 +1,4 @@
 import { create } from "zustand"
-import { useShallow } from "zustand/react/shallow"
 import { toast } from "sonner"
 import { membersApi } from "~/api/members"
 import { organizationsApi } from "~/api/organizations"
@@ -10,6 +9,7 @@ import type { Organization, OrganizationMemberUser } from "~/types/models"
 type OrganizationState = {
   organizations: Organization[]
   selectedOrganizationId: string | null
+  loaded: boolean
   loading: boolean
   members: OrganizationMemberUser[]
   membersLoading: boolean
@@ -17,7 +17,7 @@ type OrganizationState = {
   saveSelectedOrganization: (id: string | null) => void
   initSelection: (orgs: Organization[]) => void
   fetchOrganizations: () => Promise<Organization[]>
-  ensureOrganizations: (userName: string) => Promise<void>
+  loadOrganizations: () => Promise<void>
   createOrganization: (name: string) => Promise<Organization>
   updateOrganization: (orgId: string, name: string) => Promise<Organization>
   deleteOrganization: (orgId: string) => Promise<void>
@@ -29,6 +29,7 @@ type OrganizationState = {
 export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   organizations: [],
   selectedOrganizationId: null,
+  loaded: false,
   loading: false,
   members: [],
   membersLoading: false,
@@ -37,6 +38,7 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     set({
       organizations: [],
       selectedOrganizationId: null,
+      loaded: false,
       members: [],
       loading: false,
       membersLoading: false,
@@ -77,13 +79,8 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     }
   },
 
-  ensureOrganizations: async (userName) => {
-    let orgs = await get().fetchOrganizations()
-    if (orgs.length === 0) {
-      const personalName = `${userName}'s organization`
-      await organizationsApi.create(personalName)
-      orgs = await get().fetchOrganizations()
-    }
+  loadOrganizations: async () => {
+    const orgs = await get().fetchOrganizations()
     get().initSelection(orgs)
   },
 
@@ -141,26 +138,3 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     }
   },
 }))
-
-export function useOrganization() {
-  return useOrganizationStore(
-    useShallow((s) => ({
-      organizations: s.organizations,
-      selectedOrganizationId: s.selectedOrganizationId,
-      currentOrganization: s.selectedOrganizationId
-        ? s.organizations.find((o) => o.id === s.selectedOrganizationId)
-        : undefined,
-      loading: s.loading,
-      members: s.members,
-      membersLoading: s.membersLoading,
-      saveSelectedOrganization: s.saveSelectedOrganization,
-      ensureOrganizations: s.ensureOrganizations,
-      createOrganization: s.createOrganization,
-      updateOrganization: s.updateOrganization,
-      deleteOrganization: s.deleteOrganization,
-      fetchMembers: s.fetchMembers,
-      addMemberByEmail: s.addMemberByEmail,
-      removeMember: s.removeMember,
-    })),
-  )
-}

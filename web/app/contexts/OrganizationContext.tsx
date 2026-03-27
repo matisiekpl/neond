@@ -10,10 +10,15 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       useOrganizationStore.getState().reset()
       return
     }
-    void useOrganizationStore.getState().ensureOrganizations(user.name)
-  }, [user?.id, user?.name])
+    useOrganizationStore.setState({ loaded: false })
+    void useOrganizationStore
+      .getState()
+      .loadOrganizations()
+      .finally(() => {
+        useOrganizationStore.setState({ loaded: true })
+      })
+  }, [user?.id])
 
   return <>{children}</>
 }
 
-export { useOrganization, useOrganizationStore } from "~/stores/organization-store"

@@ -19,4 +19,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-export { useAuth, useAuthStore } from "~/stores/auth-store"
+export { useAuthStore } from "~/stores/auth-store"

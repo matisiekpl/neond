@@ -1,13 +1,21 @@
 import * as React from "react"
 import { Link, Navigate, useSearchParams } from "react-router"
-import { useAuth } from "~/contexts/AuthContext"
+import { useShallow } from "zustand/react/shallow"
+import { useAuthStore } from "~/stores/auth-store"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Spinner } from "~/components/ui/spinner"
 
 export default function LoginRoute() {
-  const { user, initialized, loading, login } = useAuth()
+  const { user, initialized, loading, login } = useAuthStore(
+    useShallow((s) => ({
+      user: s.user,
+      initialized: s.initialized,
+      loading: s.loading,
+      login: s.login,
+    })),
+  )
   const [searchParams] = useSearchParams()
   const emailLocked = Boolean(searchParams.get("email"))
   const [email, setEmail] = React.useState("")

@@ -1,8 +1,8 @@
 import * as React from "react"
-import { useAuth } from "~/contexts/AuthContext"
+import { useAuthStore } from "~/stores/auth-store"
 
 export default function LogoutRoute() {
-  const { logout } = useAuth()
+  const logout = useAuthStore((s) => s.logout)
 
   React.useEffect(() => {
     logout()

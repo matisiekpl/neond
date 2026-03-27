@@ -1,6 +1,5 @@
 import { create } from "zustand"
 import type { NavigateFunction } from "react-router"
-import { useShallow } from "zustand/react/shallow"
 import { toast } from "sonner"
 import { authApi } from "~/api/auth"
 import { ACCESS_TOKEN } from "~/lib/constants"
@@ -84,17 +83,3 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     get().navigate?.("/login")
   },
 }))
-
-export function useAuth() {
-  return useAuthStore(
-    useShallow((s) => ({
-      user: s.user,
-      initialized: s.initialized,
-      loading: s.loading,
-      login: s.login,
-      register: s.register,
-      logout: s.logout,
-      refreshUser: s.refreshUser,
-    })),
-  )
-}

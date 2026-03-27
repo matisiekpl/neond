@@ -11,7 +11,8 @@ import {
   Settings,
 } from "lucide-react"
 import { CreateOrganizationDialog } from "~/components/CreateOrganizationDialog"
-import { useOrganization } from "~/contexts/OrganizationContext"
+import { useOrganizationStore } from "~/stores/organization-store"
+import { useShallow } from "zustand/react/shallow"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,11 +36,14 @@ import {
 
 export function AppSidebar() {
   const { pathname } = useLocation()
-  const {
-    organizations,
-    selectedOrganizationId,
-    saveSelectedOrganization,
-  } = useOrganization()
+  const { organizations, selectedOrganizationId, saveSelectedOrganization } =
+    useOrganizationStore(
+      useShallow((s) => ({
+        organizations: s.organizations,
+        selectedOrganizationId: s.selectedOrganizationId,
+        saveSelectedOrganization: s.saveSelectedOrganization,
+      })),
+    )
   const [createOpen, setCreateOpen] = React.useState(false)
 
   const displayOrg = organizations.find((o) => o.id === selectedOrganizationId)

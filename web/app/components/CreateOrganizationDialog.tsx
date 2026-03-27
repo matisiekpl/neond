@@ -1,6 +1,6 @@
 import * as React from "react"
 import { toast } from "sonner"
-import { useOrganization } from "~/contexts/OrganizationContext"
+import { useOrganizationStore } from "~/stores/organization-store"
 import { getAppError } from "~/lib/errors"
 import { Button } from "~/components/ui/button"
 import {
@@ -23,7 +23,7 @@ export function CreateOrganizationDialog({
   open,
   onOpenChange,
 }: CreateOrganizationDialogProps) {
-  const { createOrganization } = useOrganization()
+  const createOrganization = useOrganizationStore((s) => s.createOrganization)
   const [name, setName] = React.useState("")
   const [creating, setCreating] = React.useState(false)
 

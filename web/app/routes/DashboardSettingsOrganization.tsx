@@ -1,7 +1,8 @@
 import * as React from "react"
 import { toast } from "sonner"
-import { useAuth } from "~/contexts/AuthContext"
-import { useOrganization } from "~/contexts/OrganizationContext"
+import { useShallow } from "zustand/react/shallow"
+import { useAuthStore } from "~/stores/auth-store"
+import { useOrganizationStore } from "~/stores/organization-store"
 import { getAppError } from "~/lib/errors"
 import {
   AlertDialog,
@@ -41,7 +42,7 @@ import {
 } from "~/components/ui/table"
 
 export default function OrganizationSettingsRoute() {
-  const { user } = useAuth()
+  const { user } = useAuthStore(useShallow((s) => ({ user: s.user })))
   const {
     currentOrganization,
     selectedOrganizationId,
@@ -52,8 +53,23 @@ export default function OrganizationSettingsRoute() {
     removeMember,
     deleteOrganization,
     fetchMembers,
-    ensureOrganizations,
-  } = useOrganization()
+    loadOrganizations,
+  } = useOrganizationStore(
+    useShallow((s) => ({
+      currentOrganization: s.selectedOrganizationId
+        ? s.organizations.find((o) => o.id === s.selectedOrganizationId)
+        : undefined,
+      selectedOrganizationId: s.selectedOrganizationId,
+      members: s.members,
+      membersLoading: s.membersLoading,
+      updateOrganization: s.updateOrganization,
+      addMemberByEmail: s.addMemberByEmail,
+      removeMember: s.removeMember,
+      deleteOrganization: s.deleteOrganization,
+      fetchMembers: s.fetchMembers,
+      loadOrganizations: s.loadOrganizations,
+    })),
+  )
 
   const [organizationName, setOrganizationName] = React.useState("")
   const [savingName, setSavingName] = React.useState(false)
@@ -145,7 +161,7 @@ export default function OrganizationSettingsRoute() {
     try {
       await deleteOrganization(selectedOrganizationId)
       setDeleteOpen(false)
-      await ensureOrganizations(user.name)
+      await loadOrganizations()
     } catch (err) {
       toast.error(getAppError(err))
     } finally {
@@ -182,6 +198,14 @@ export default function OrganizationSettingsRoute() {
               id="organization-name"
               value={organizationName}
               onChange={(e) => setOrganizationName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  if (!savingName && organizationName.trim()) {
+                    void saveOrganizationName()
+                  }
+                }
+              }}
               className="w-full"
             />
           </div>
