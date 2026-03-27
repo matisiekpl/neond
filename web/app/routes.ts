@@ -11,6 +11,8 @@ export default [
     [
       index("routes/dashboard/DashboardIndex.tsx"),
       route("projects", "routes/projects/ProjectsIndex.tsx"),
+      route("projects/:projectId", "routes/projects/ProjectView.tsx"),
+      route("projects/:projectId/settings", "routes/projects/ProjectSettings.tsx"),
       route("setup-organization", "routes/organization/DashboardSetupOrganization.tsx"),
       route(
         "settings/organization",

@@ -1,4 +1,5 @@
 import * as React from "react"
+import { Link } from "react-router"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
 import { MoreHorizontal } from "lucide-react"
@@ -148,29 +149,38 @@ export default function ProjectsIndexRoute() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
-            <Card key={project.id} className="relative">
-              <CardHeader className="pb-2 pr-10">
-                <CardTitle className="truncate text-base">
-                  {project.name}
-                </CardTitle>
-                <CardDescription>
-                  PostgreSQL {project.pg_version.replace(/^V/i, "")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">
-                  Created{" "}
-                  {new Date(project.created_at).toLocaleDateString(undefined, {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </p>
-              </CardContent>
+            <div key={project.id} className="relative">
+              <Link to={`/dashboard/projects/${project.id}`} className="block">
+                <Card className="transition-colors hover:bg-accent/50">
+                  <CardHeader className="pb-2 pr-10">
+                    <CardTitle className="truncate text-base">
+                      {project.name}
+                    </CardTitle>
+                    <CardDescription>
+                      PostgreSQL {project.pg_version.replace(/^V/i, "")}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-xs text-muted-foreground">
+                      Created{" "}
+                      {new Date(project.created_at).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
               <div className="absolute right-3 top-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="size-7">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      onClick={(e) => e.preventDefault()}
+                    >
                       <MoreHorizontal className="size-4" />
                       <span className="sr-only">Open menu</span>
                     </Button>
@@ -190,7 +200,7 @@ export default function ProjectsIndexRoute() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
