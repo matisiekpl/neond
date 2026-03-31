@@ -3,15 +3,15 @@ import { toast } from "sonner"
 import { projectsApi } from "~/api/projects"
 import { getAppError } from "~/lib/errors"
 import type { Project } from "~/types/models/project"
-import type { CreateProjectDto } from "~/types/dto/project"
+import type { CreateProjectRequest, UpdateProjectRequest } from "~/types/dto/project"
 
 type ProjectState = {
   projects: Project[]
   loading: boolean
   reset: () => void
   fetchProjects: (orgId: string) => Promise<void>
-  createProject: (orgId: string, dto: CreateProjectDto) => Promise<Project>
-  updateProject: (orgId: string, projectId: string, name: string) => Promise<void>
+  createProject: (orgId: string, dto: CreateProjectRequest) => Promise<Project>
+  updateProject: (orgId: string, projectId: string, dto: UpdateProjectRequest) => Promise<void>
   deleteProject: (orgId: string, projectId: string) => Promise<void>
 }
 
@@ -43,9 +43,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  updateProject: async (orgId, projectId, name) => {
+  updateProject: async (orgId, projectId, dto) => {
     try {
-      await projectsApi.update(orgId, projectId, { name })
+      await projectsApi.update(orgId, projectId, dto)
       await get().fetchProjects(orgId)
       toast.success("Project updated")
     } catch (e) {

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router"
 import { useShallow } from "zustand/react/shallow"
 import { useProjectStore } from "~/stores/project-store"
 import { useOrganizationStore } from "~/stores/organization-store"
+import { projectsApi } from "~/api/projects"
 import { getAppError } from "~/lib/errors"
 import { toast } from "sonner"
 import {
@@ -26,6 +27,96 @@ import {
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Spinner } from "~/components/ui/spinner"
+import {
+  SliderRoot,
+  SliderTrack,
+  SliderRange,
+  SliderThumb,
+} from "~/components/ui/slider"
+
+const PITR_PRESETS = [
+  { label: "0h", value: "" },
+  { label: "1h", value: "1h" },
+  { label: "6h", value: "6h" },
+  { label: "12h", value: "12h" },
+  { label: "1 day", value: "1day" },
+  { label: "3 days", value: "3days" },
+  { label: "7 days", value: "7days" },
+  { label: "14 days", value: "14days" },
+  { label: "30 days", value: "30days" },
+]
+
+const GC_PERIOD_PRESETS = [
+  { label: "10m", value: "10m" },
+  { label: "30m", value: "30m" },
+  { label: "1h", value: "1h" },
+  { label: "2h", value: "2h" },
+  { label: "6h", value: "6h" },
+  { label: "12h", value: "12h" },
+  { label: "24h", value: "1day" },
+]
+
+const CHECKPOINT_TIMEOUT_PRESETS = [
+  { label: "1m", value: "1m" },
+  { label: "5m", value: "5m" },
+  { label: "10m", value: "10m" },
+  { label: "30m", value: "30m" },
+  { label: "1h", value: "1h" },
+]
+
+function presetToIndex(presets: { value: string }[], v: string) {
+  const idx = presets.findIndex((p) => p.value === v)
+  return idx === -1 ? 0 : idx
+}
+
+function SliderField({
+  presets,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  presets: { label: string; value: string }[]
+  value: string
+  onChange: (v: string) => void
+  ariaLabel: string
+}) {
+  return (
+    <div className="space-y-3">
+      <SliderRoot
+        min={0}
+        max={presets.length - 1}
+        step={1}
+        value={[presetToIndex(presets, value)]}
+        onValueChange={([idx]) => onChange(presets[idx].value)}
+      >
+        <SliderTrack>
+          <SliderRange />
+        </SliderTrack>
+        <SliderThumb aria-label={ariaLabel} />
+      </SliderRoot>
+      <div className="relative h-4">
+        {presets.map((p, i) => {
+          const pct = (i / (presets.length - 1)) * 100
+          const isFirst = i === 0
+          const isLast = i === presets.length - 1
+          return (
+            <span
+              key={p.label}
+              className="absolute text-xs text-muted-foreground"
+              style={{
+                left: isLast ? undefined : `${pct}%`,
+                right: isLast ? "0%" : undefined,
+                transform: isFirst || isLast ? undefined : "translateX(-50%)",
+              }}
+            >
+              {p.label}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export default function ProjectSettingsRoute() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -50,6 +141,27 @@ export default function ProjectSettingsRoute() {
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
 
+  const [gcPeriod, setGcPeriod] = React.useState("")
+  const [gcHorizon, setGcHorizon] = React.useState("")
+  const [pitrInterval, setPitrInterval] = React.useState("7days")
+  const [checkpointDistance, setCheckpointDistance] = React.useState("")
+  const [checkpointTimeout, setCheckpointTimeout] = React.useState("")
+  const [savedConfig, setSavedConfig] = React.useState({
+    gcPeriod: "",
+    gcHorizon: "",
+    pitrInterval: "7days",
+    checkpointDistance: "",
+    checkpointTimeout: "",
+  })
+  const [savingConfig, setSavingConfig] = React.useState(false)
+  const [configLoading, setConfigLoading] = React.useState(false)
+
+  const gcDirty = gcPeriod !== savedConfig.gcPeriod || gcHorizon !== savedConfig.gcHorizon
+  const pitrDirty = pitrInterval !== savedConfig.pitrInterval
+  const checkpointDirty =
+    checkpointDistance !== savedConfig.checkpointDistance ||
+    checkpointTimeout !== savedConfig.checkpointTimeout
+
   React.useEffect(() => {
     if (selectedOrganizationId) {
       void fetchProjects(selectedOrganizationId)
@@ -63,17 +175,65 @@ export default function ProjectSettingsRoute() {
     }
   }, [project?.id])
 
+  React.useEffect(() => {
+    if (!selectedOrganizationId || !projectId) return
+    setConfigLoading(true)
+    projectsApi
+      .get(selectedOrganizationId, projectId)
+      .then((p) => {
+        const fetched = {
+          gcPeriod: p.gc_period ?? "",
+          gcHorizon: p.gc_horizon !== undefined ? String(p.gc_horizon) : "",
+          pitrInterval: p.pitr_interval ?? "7days",
+          checkpointDistance: p.checkpoint_distance !== undefined ? String(p.checkpoint_distance) : "",
+          checkpointTimeout: p.checkpoint_timeout ?? "",
+        }
+        setGcPeriod(fetched.gcPeriod)
+        setGcHorizon(fetched.gcHorizon)
+        setPitrInterval(fetched.pitrInterval)
+        setCheckpointDistance(fetched.checkpointDistance)
+        setCheckpointTimeout(fetched.checkpointTimeout)
+        setSavedConfig(fetched)
+      })
+      .catch(() => {
+        // config fields stay empty if fetch fails
+      })
+      .finally(() => setConfigLoading(false))
+  }, [selectedOrganizationId, projectId])
+
   async function saveName() {
     if (!selectedOrganizationId || !projectId) return
     const trimmed = name.trim()
     if (!trimmed || trimmed === project?.name) return
     setSavingName(true)
     try {
-      await updateProject(selectedOrganizationId, projectId, trimmed)
+      await updateProject(selectedOrganizationId, projectId, { name: trimmed })
     } catch (e) {
       toast.error(getAppError(e))
     } finally {
       setSavingName(false)
+    }
+  }
+
+  async function saveConfig() {
+    if (!selectedOrganizationId || !projectId || !project) return
+    setSavingConfig(true)
+    try {
+      await updateProject(selectedOrganizationId, projectId, {
+        name: project.name,
+        gc_period: gcPeriod.trim() || undefined,
+        gc_horizon: gcHorizon.trim() ? Number(gcHorizon) : undefined,
+        pitr_interval: pitrInterval.trim() || undefined,
+        checkpoint_distance: checkpointDistance.trim()
+          ? Number(checkpointDistance)
+          : undefined,
+        checkpoint_timeout: checkpointTimeout.trim() || undefined,
+      })
+      setSavedConfig({ gcPeriod, gcHorizon, pitrInterval, checkpointDistance, checkpointTimeout })
+    } catch (e) {
+      toast.error(getAppError(e))
+    } finally {
+      setSavingConfig(false)
     }
   }
 
@@ -144,6 +304,148 @@ export default function ProjectSettingsRoute() {
           >
             Save changes
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Garbage collection</CardTitle>
+          <CardDescription>
+            Control when old data versions are removed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {configLoading ? (
+            <div className="flex justify-center py-4">
+              <Spinner className="size-5" />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-6">
+                <div className="grid gap-3">
+                  <Label>GC period</Label>
+                  <SliderField
+                    presets={GC_PERIOD_PRESETS}
+                    value={gcPeriod}
+                    onChange={setGcPeriod}
+                    ariaLabel="GC period"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How often garbage collection runs.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="gc-horizon">GC horizon (bytes)</Label>
+                  <Input
+                    id="gc-horizon"
+                    type="number"
+                    min={0}
+                    placeholder="e.g. 67108864"
+                    value={gcHorizon}
+                    onChange={(e) => setGcHorizon(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    WAL distance beyond which data can be GC'd.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                disabled={savingConfig || !gcDirty}
+                onClick={() => void saveConfig()}
+              >
+                Save
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Point-in-time recovery</CardTitle>
+          <CardDescription>
+            Choose the length of your restore window. This setting enables{" "}
+            <strong>instant restore</strong> for point-in-time recovery, time
+            travel queries, and branching from past states.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {configLoading ? (
+            <div className="flex justify-center py-4">
+              <Spinner className="size-5" />
+            </div>
+          ) : (
+            <>
+              <SliderField
+                presets={PITR_PRESETS}
+                value={pitrInterval}
+                onChange={setPitrInterval}
+                ariaLabel="PITR interval"
+              />
+              <Button
+                type="button"
+                disabled={savingConfig || !pitrDirty}
+                onClick={() => void saveConfig()}
+              >
+                Save
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Checkpointing</CardTitle>
+          <CardDescription>
+            Tune how frequently the pageserver flushes data to disk.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {configLoading ? (
+            <div className="flex justify-center py-4">
+              <Spinner className="size-5" />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-6">
+                <div className="grid gap-2">
+                  <Label htmlFor="checkpoint-distance">Checkpoint distance (bytes)</Label>
+                  <Input
+                    id="checkpoint-distance"
+                    type="number"
+                    min={0}
+                    placeholder="e.g. 268435456"
+                    value={checkpointDistance}
+                    onChange={(e) => setCheckpointDistance(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Amount of WAL data between checkpoints.
+                  </p>
+                </div>
+                <div className="grid gap-3">
+                  <Label>Checkpoint timeout</Label>
+                  <SliderField
+                    presets={CHECKPOINT_TIMEOUT_PRESETS}
+                    value={checkpointTimeout}
+                    onChange={setCheckpointTimeout}
+                    ariaLabel="Checkpoint timeout"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum time between forced checkpoints.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                disabled={savingConfig || !checkpointDirty}
+                onClick={() => void saveConfig()}
+              >
+                Save
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
 

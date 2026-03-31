@@ -3,9 +3,9 @@ clean:
 seed:
 	cargo test --test mgmt_api_test -- --nocapture
 kill:
-	kill $(lsof -i:50051 -t) || exit 0
-	kill $(lsof -i:5430 -t) || exit 0
-	kill $(lsof -i:5431 -t) || exit 0
-	kill $(lsof -i:1234 -t) || exit 0
-	kill $(lsof -i:1235 -t) || exit 0
-	kill $(lsof -i:9993 -t) || exit 0
+	-kill $(shell lsof -ti:50051) 2>/dev/null || true
+	-kill $(shell lsof -ti:5430)  2>/dev/null || true
+	-kill $(shell lsof -ti:5431)  2>/dev/null || true
+	-kill $(shell lsof -ti:1234)  2>/dev/null || true
+	-kill $(shell lsof -ti:1235)  2>/dev/null || true
+	-kill $(shell lsof -ti:9993)  2>/dev/null || true

@@ -1,4 +1,6 @@
 use neon_pageserver_api::controller_api::TenantCreateRequest;
+use neon_pageserver_api::models::{FieldPatch, TenantConfig, TenantConfigPatch, TenantConfigPatchRequest};
+use std::time::Duration;
 use neon_utils::id::TenantId;
 use neon_utils::shard::TenantShardId;
 use reqwest::Method;
@@ -73,7 +75,14 @@ impl ProjectService {
             generation: None,
             shard_parameters: Default::default(),
             placement_policy: None,
-            config: Default::default(),
+            config: TenantConfig {
+                gc_period: Some(Duration::from_secs(60 * 60)),            // 1h
+                gc_horizon: Some(64 * 1024 * 1024),                       // 64 MB
+                pitr_interval: Some(Duration::from_secs(7 * 24 * 60 * 60)), // 7 days
+                checkpoint_distance: Some(256 * 1024 * 1024),             // 256 MB
+                checkpoint_timeout: Some(Duration::from_secs(5 * 60)),    // 5m
+                ..Default::default()
+            },
         };
 
         let token = self
@@ -100,6 +109,11 @@ impl ProjectService {
             pg_version: project.pg_version,
             created_at: project.created_at,
             updated_at: project.updated_at,
+            gc_period: None,
+            gc_horizon: None,
+            pitr_interval: None,
+            checkpoint_distance: None,
+            checkpoint_timeout: None,
         })
     }
 
@@ -118,6 +132,52 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
+        let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
+        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+
+        let token = self
+            .config
+            .component_auth
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+        let config_resp = reqwest::Client::new()
+            .get(format!(
+                "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/config"
+            ))
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .ok();
+
+        let (gc_period, gc_horizon, pitr_interval, checkpoint_distance, checkpoint_timeout) =
+            if let Some(resp) = config_resp {
+                let val: serde_json::Value = resp.json().await.unwrap_or_default();
+                let overrides = val
+                    .get("tenant_specific_overrides")
+                    .cloned()
+                    .unwrap_or_default();
+                (
+                    overrides
+                        .get("gc_period")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    overrides.get("gc_horizon").and_then(|v| v.as_u64()),
+                    overrides
+                        .get("pitr_interval")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    overrides
+                        .get("checkpoint_distance")
+                        .and_then(|v| v.as_u64()),
+                    overrides
+                        .get("checkpoint_timeout")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                )
+            } else {
+                (None, None, None, None, None)
+            };
+
         Ok(ProjectResponse {
             id: project.id,
             organization_id: project.organization_id,
@@ -125,6 +185,11 @@ impl ProjectService {
             pg_version: project.pg_version,
             created_at: project.created_at,
             updated_at: project.updated_at,
+            gc_period,
+            gc_horizon,
+            pitr_interval,
+            checkpoint_distance,
+            checkpoint_timeout,
         })
     }
 
@@ -150,6 +215,11 @@ impl ProjectService {
                 pg_version: p.pg_version,
                 created_at: p.created_at,
                 updated_at: p.updated_at,
+                gc_period: None,
+                gc_horizon: None,
+                pitr_interval: None,
+                checkpoint_distance: None,
+                checkpoint_timeout: None,
             })
             .collect())
     }
@@ -179,6 +249,39 @@ impl ProjectService {
 
         let updated = self.project_repo.update(id, &req.name).await?;
 
+        let has_config = req.gc_period.is_some()
+            || req.gc_horizon.is_some()
+            || req.pitr_interval.is_some()
+            || req.checkpoint_distance.is_some()
+            || req.checkpoint_timeout.is_some();
+
+        if has_config {
+            let tenant_id = TenantId::from_str(id.as_simple().to_string().as_str())
+                .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
+
+            let config = TenantConfigPatch {
+                gc_period: req.gc_period.clone().map(FieldPatch::Upsert).unwrap_or_default(),
+                gc_horizon: req.gc_horizon.map(FieldPatch::Upsert).unwrap_or_default(),
+                pitr_interval: req.pitr_interval.clone().map(FieldPatch::Upsert).unwrap_or_default(),
+                checkpoint_distance: req
+                    .checkpoint_distance
+                    .map(FieldPatch::Upsert)
+                    .unwrap_or_default(),
+                checkpoint_timeout: req
+                    .checkpoint_timeout
+                    .clone()
+                    .map(FieldPatch::Upsert)
+                    .unwrap_or_default(),
+                ..Default::default()
+            };
+
+            let patch_request = TenantConfigPatchRequest { tenant_id, config };
+            self.pageserver_client
+                .patch_tenant_config(&patch_request)
+                .await
+                .map_err(|e| AppError::Internal(format!("Failed to update tenant config: {e}")))?;
+        }
+
         Ok(ProjectResponse {
             id: updated.id,
             organization_id: updated.organization_id,
@@ -186,6 +289,11 @@ impl ProjectService {
             pg_version: updated.pg_version,
             created_at: updated.created_at,
             updated_at: updated.updated_at,
+            gc_period: req.gc_period,
+            gc_horizon: req.gc_horizon,
+            pitr_interval: req.pitr_interval,
+            checkpoint_distance: req.checkpoint_distance,
+            checkpoint_timeout: req.checkpoint_timeout,
         })
     }
 

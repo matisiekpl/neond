@@ -19,7 +19,6 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): in daemon settings show used remote storage
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
-    // TODO(matisiekpl): add option to configure gc_period, gc_horizon, pitr_interval, checkpoint_distance, checkpoint_timeout
     let state = Arc::new(state);
 
     let api = Router::new()

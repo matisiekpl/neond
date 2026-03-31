@@ -1,5 +1,5 @@
 import type { Project } from "~/types/models/project"
-import type { CreateProjectDto, UpdateProjectDto } from "~/types/dto/project"
+import type { CreateProjectRequest, UpdateProjectRequest } from "~/types/dto/project"
 import api from "./client"
 
 export const projectsApi = {
@@ -8,12 +8,17 @@ export const projectsApi = {
     return response.data
   },
 
-  async create(orgId: string, dto: CreateProjectDto): Promise<Project> {
+  async get(orgId: string, projectId: string): Promise<Project> {
+    const response = await api.get<Project>(`organizations/${orgId}/projects/${projectId}`)
+    return response.data
+  },
+
+  async create(orgId: string, dto: CreateProjectRequest): Promise<Project> {
     const response = await api.post<Project>(`organizations/${orgId}/projects`, dto)
     return response.data
   },
 
-  async update(orgId: string, projectId: string, dto: UpdateProjectDto): Promise<Project> {
+  async update(orgId: string, projectId: string, dto: UpdateProjectRequest): Promise<Project> {
     const response = await api.put<Project>(
       `organizations/${orgId}/projects/${projectId}`,
       dto,

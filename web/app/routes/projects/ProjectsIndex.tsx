@@ -93,7 +93,7 @@ export default function ProjectsIndexRoute() {
     if (!trimmed) return
     setRenameSubmitting(true)
     try {
-      await updateProject(selectedOrganizationId, renameId, trimmed)
+      await updateProject(selectedOrganizationId, renameId, { name: trimmed })
       setRenameOpen(false)
     } catch (e) {
       toast.error(getAppError(e))
