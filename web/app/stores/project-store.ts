@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { toast } from "sonner"
 import { projectsApi } from "~/api/projects"
+import { branchesApi } from "~/api/branches"
 import { getAppError } from "~/lib/errors"
 import type { Project } from "~/types/models/project"
 import type { CreateProjectRequest, UpdateProjectRequest } from "~/types/dto/project"
@@ -34,6 +35,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   createProject: async (orgId, dto) => {
     try {
       const project = await projectsApi.create(orgId, dto)
+      await branchesApi.create(orgId, project.id, "production")
       await get().fetchProjects(orgId)
       toast.success("Project created")
       return project
