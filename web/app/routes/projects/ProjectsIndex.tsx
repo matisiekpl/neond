@@ -2,7 +2,7 @@ import * as React from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
-import { MoreHorizontal } from "lucide-react"
+import { Loader2, MoreHorizontal } from "lucide-react"
 import { useProjectStore } from "~/stores/project-store"
 import { useOrganizationStore } from "~/stores/organization-store"
 import { getAppError } from "~/lib/errors"
@@ -208,7 +208,7 @@ export default function ProjectsIndexRoute() {
       <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename project</DialogTitle>
           </DialogHeader>
@@ -263,6 +263,7 @@ export default function ProjectsIndexRoute() {
               disabled={deleteSubmitting}
               onClick={() => void confirmDelete()}
             >
+              {deleteSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
               Delete project
             </AlertDialogAction>
           </AlertDialogFooter>

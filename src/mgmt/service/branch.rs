@@ -319,13 +319,11 @@ impl BranchService {
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
             .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
 
-        self.delete_branch(tenant_id, branch_id).await
-    }
+        let _ = self
+            .endpoint_service
+            .stop(user_id, org_id, project_id, branch_id)
+            .await;
 
-    /// Deletes a branch and all its descendants from pageserver and the database.
-    /// Traverses the branch tree iteratively, deleting leaves first (post-order).
-    pub(crate) async fn delete_branch(&self, tenant_id: TenantId, branch_id: Uuid) -> Result<()> {
-        // Collect all branches in the subtree using DFS, then delete leaf-first.
         let mut to_delete: Vec<Uuid> = Vec::new();
         let mut stack = vec![branch_id];
 
@@ -337,7 +335,6 @@ impl BranchService {
             to_delete.push(id);
         }
 
-        // Reverse so leaves come before their parents.
         to_delete.reverse();
 
         for id in to_delete {
@@ -371,23 +368,6 @@ impl BranchService {
             }
 
             self.branch_repo.delete(id).await?;
-        }
-
-        Ok(())
-    }
-
-    pub(crate) async fn delete_all_for_project(
-        &self,
-        tenant_id: TenantId,
-        project_id: Uuid,
-    ) -> Result<()> {
-        let branches = self.branch_repo.list_by_project_id(project_id).await?;
-        let roots = branches
-            .into_iter()
-            .filter(|b| b.parent_branch_id.is_none());
-
-        for root in roots {
-            self.delete_branch(tenant_id, root.id).await?;
         }
 
         Ok(())

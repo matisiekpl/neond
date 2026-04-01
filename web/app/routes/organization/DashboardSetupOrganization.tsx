@@ -2,6 +2,7 @@ import * as React from "react"
 import { toast } from "sonner"
 import { useOrganizationStore } from "~/stores/organization-store"
 import { getAppError } from "~/lib/errors"
+import { Loader2 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -61,6 +62,7 @@ export default function DashboardSetupOrganizationRoute() {
           className="w-full"
           disabled={creating || !name.trim()}
         >
+          {creating && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
           Continue
         </Button>
       </form>

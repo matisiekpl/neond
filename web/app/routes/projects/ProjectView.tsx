@@ -136,7 +136,7 @@ export default function ProjectViewRoute() {
   }
 
   function openCreate() {
-    setNewBranchName(branches.length === 0 ? "main" : "")
+    setNewBranchName(branches.length === 0 ? "production" : "")
     setCreateOpen(true)
   }
 
@@ -503,7 +503,7 @@ export default function ProjectViewRoute() {
       </AlertDialog>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename branch</DialogTitle>
           </DialogHeader>
@@ -538,7 +538,7 @@ export default function ProjectViewRoute() {
       </Dialog>
 
       <Dialog open={branchFromOpen} onOpenChange={setBranchFromOpen}>
-        <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Branch from {branchFromParent?.name}</DialogTitle>
           </DialogHeader>
@@ -574,7 +574,7 @@ export default function ProjectViewRoute() {
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New branch</DialogTitle>
           </DialogHeader>

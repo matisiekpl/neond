@@ -138,7 +138,7 @@ impl OrganizationService {
 
         let projects = self.project_repo.list_by_org_id(id).await?;
         for project in projects {
-            self.project_service.delete_project(project).await?;
+            self.project_service.delete(user_id, id, project.id).await?;
         }
 
         self.membership_repo.delete_by_org_id(id).await?;

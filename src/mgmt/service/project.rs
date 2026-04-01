@@ -316,16 +316,15 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
-        self.delete_project(project).await
-    }
-
-    pub(crate) async fn delete_project(&self, project: Project) -> Result<()> {
         let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
             .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
 
-        self.branch_service
-            .delete_all_for_project(tenant_id, project.id)
-            .await?;
+        let branches = self.branch_service.list(user_id, org_id, project.id).await?;
+        for branch in branches.into_iter().filter(|b| b.parent_branch_id.is_none()) {
+            self.branch_service
+                .delete(user_id, org_id, project.id, branch.id)
+                .await?;
+        }
 
         let mut status_code;
         loop {

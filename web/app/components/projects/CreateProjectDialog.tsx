@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { useProjectStore } from "~/stores/project-store"
 import { useOrganizationStore } from "~/stores/organization-store"
 import { getAppError } from "~/lib/errors"
+import { Loader2 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import {
   Dialog,
@@ -64,6 +65,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
             <Label htmlFor="create-project-name">Name</Label>
             <Input
               id="create-project-name"
+              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="my-project"
@@ -100,6 +102,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
             disabled={creating || !name.trim()}
             onClick={() => void submit()}
           >
+            {creating && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
             Create
           </Button>
         </DialogFooter>

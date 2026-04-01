@@ -14,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog"
+import { Loader2 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -214,6 +215,7 @@ export default function OrganizationSettingsRoute() {
             disabled={savingName || !organizationName.trim()}
             onClick={() => void saveOrganizationName()}
           >
+            {savingName && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
             Save changes
           </Button>
         </CardContent>
@@ -310,7 +312,6 @@ export default function OrganizationSettingsRoute() {
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent
           className="sm:max-w-md"
-          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader>
             <DialogTitle>Add member</DialogTitle>
@@ -348,6 +349,7 @@ export default function OrganizationSettingsRoute() {
               disabled={inviteSubmitting || !inviteEmail.trim()}
               onClick={() => void submitInvite()}
             >
+              {inviteSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
               Add
             </Button>
           </DialogFooter>
@@ -371,6 +373,7 @@ export default function OrganizationSettingsRoute() {
               disabled={removeSubmitting}
               onClick={() => void confirmRemove()}
             >
+              {removeSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
               Remove
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -395,6 +398,7 @@ export default function OrganizationSettingsRoute() {
               disabled={deleteSubmitting}
               onClick={() => void confirmDelete()}
             >
+              {deleteSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
               Delete organization
             </AlertDialogAction>
           </AlertDialogFooter>

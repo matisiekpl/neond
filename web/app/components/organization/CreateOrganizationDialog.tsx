@@ -62,6 +62,7 @@ export function CreateOrganizationDialog({
           <Label htmlFor="create-org-name">Name</Label>
           <Input
             id="create-org-name"
+            autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Organization name"

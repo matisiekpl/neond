@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog"
+import { Loader2 } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -302,6 +303,7 @@ export default function ProjectSettingsRoute() {
             disabled={savingName || !name.trim() || name.trim() === project.name}
             onClick={() => void saveName()}
           >
+            {savingName && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
             Save changes
           </Button>
         </CardContent>
@@ -354,6 +356,7 @@ export default function ProjectSettingsRoute() {
                 disabled={savingConfig || !gcDirty}
                 onClick={() => void saveConfig()}
               >
+                {savingConfig && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
                 Save
               </Button>
             </>
@@ -388,6 +391,7 @@ export default function ProjectSettingsRoute() {
                 disabled={savingConfig || !pitrDirty}
                 onClick={() => void saveConfig()}
               >
+                {savingConfig && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
                 Save
               </Button>
             </>
@@ -442,6 +446,7 @@ export default function ProjectSettingsRoute() {
                 disabled={savingConfig || !checkpointDirty}
                 onClick={() => void saveConfig()}
               >
+                {savingConfig && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
                 Save
               </Button>
             </>
@@ -491,6 +496,7 @@ export default function ProjectSettingsRoute() {
               disabled={deleting}
               onClick={() => void confirmDelete()}
             >
+              {deleting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
               Delete project
             </AlertDialogAction>
           </AlertDialogFooter>
