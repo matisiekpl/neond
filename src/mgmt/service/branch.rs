@@ -319,29 +319,78 @@ impl BranchService {
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
             .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
 
-        let timeline_id = TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+        self.delete_branch(tenant_id, branch_id).await
+    }
 
-        let mut status_code = 0;
-        loop {
-            status_code = self
-                .pageserver_client
-                .timeline_delete(TenantShardId::unsharded(tenant_id), timeline_id)
-                .await
-                .map_err(|e| AppError::Internal(format!("Failed to delete timeline: {e}")))?
-                .as_u16();
-            if status_code != 500 && status_code != 503 && status_code != 409 {
-                break;
+    /// Deletes a branch and all its descendants from pageserver and the database.
+    /// Traverses the branch tree iteratively, deleting leaves first (post-order).
+    pub(crate) async fn delete_branch(&self, tenant_id: TenantId, branch_id: Uuid) -> Result<()> {
+        // Collect all branches in the subtree using DFS, then delete leaf-first.
+        let mut to_delete: Vec<Uuid> = Vec::new();
+        let mut stack = vec![branch_id];
+
+        while let Some(id) = stack.pop() {
+            let children = self.branch_repo.list_by_parent_id(id).await?;
+            for child in children {
+                stack.push(child.id);
             }
+            to_delete.push(id);
         }
 
-        if status_code != 200 && status_code != 404 {
-            return Err(AppError::Internal(format!(
-                "Unexpected status code from pageserver: {status_code}"
-            )));
+        // Reverse so leaves come before their parents.
+        to_delete.reverse();
+
+        for id in to_delete {
+            let branch = self
+                .branch_repo
+                .find_by_id(id)
+                .await?
+                .ok_or(AppError::NotFound)?;
+
+            let timeline_id =
+                TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+                    .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+            let mut status_code;
+            loop {
+                status_code = self
+                    .pageserver_client
+                    .timeline_delete(TenantShardId::unsharded(tenant_id), timeline_id)
+                    .await
+                    .map_err(|e| AppError::Internal(format!("Failed to delete timeline: {e}")))?
+                    .as_u16();
+                if status_code != 500 && status_code != 503 && status_code != 409 {
+                    break;
+                }
+            }
+
+            if status_code != 200 && status_code != 404 {
+                return Err(AppError::Internal(format!(
+                    "Unexpected status code from pageserver: {status_code}"
+                )));
+            }
+
+            self.branch_repo.delete(id).await?;
         }
 
-        self.branch_repo.delete(branch_id).await
+        Ok(())
+    }
+
+    pub(crate) async fn delete_all_for_project(
+        &self,
+        tenant_id: TenantId,
+        project_id: Uuid,
+    ) -> Result<()> {
+        let branches = self.branch_repo.list_by_project_id(project_id).await?;
+        let roots = branches
+            .into_iter()
+            .filter(|b| b.parent_branch_id.is_none());
+
+        for root in roots {
+            self.delete_branch(tenant_id, root.id).await?;
+        }
+
+        Ok(())
     }
 
     fn generate_password() -> String {

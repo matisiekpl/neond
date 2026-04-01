@@ -12,9 +12,9 @@ use std::sync::Arc;
 pub struct Services {
     user: UserService,
     organization: OrganizationService,
-    project: ProjectService,
+    project: Arc<ProjectService>,
     membership: MembershipService,
-    branch: BranchService,
+    branch: Arc<BranchService>,
     endpoint: Arc<EndpointService>,
 }
 
@@ -31,29 +31,36 @@ impl Services {
             Arc::new(repositories.project().clone()),
             Arc::new(membership.clone()),
         ));
+        let branch = BranchService::new(
+            Arc::new(repositories.branch().clone()),
+            Arc::new(repositories.project().clone()),
+            Arc::new(membership.clone()),
+            Arc::clone(&pageserver_client),
+            Arc::clone(&endpoint),
+            config.clone(),
+        );
+        let branch = Arc::new(branch);
+        let project = ProjectService::new(
+            Arc::new(repositories.project().clone()),
+            Arc::new(repositories.organization().clone()),
+            Arc::new(membership.clone()),
+            Arc::clone(&branch),
+            Arc::clone(&pageserver_client),
+            config.clone(),
+        );
+        let project = Arc::new(project);
         Self {
             user: UserService::new(Arc::new(repositories.user().clone()), config.server_secret.clone()),
             organization: OrganizationService::new(
                 Arc::new(repositories.organization().clone()),
+                Arc::new(repositories.project().clone()),
                 Arc::new(repositories.membership().clone()),
                 Arc::new(membership.clone()),
                 Arc::new(repositories.user().clone()),
+                Arc::clone(&project),
             ),
-            project: ProjectService::new(
-                Arc::new(repositories.project().clone()),
-                Arc::new(repositories.organization().clone()),
-                Arc::new(membership.clone()),
-                Arc::clone(&pageserver_client),
-                config.clone(),
-            ),
-            branch: BranchService::new(
-                Arc::new(repositories.branch().clone()),
-                Arc::new(repositories.project().clone()),
-                Arc::new(membership.clone()),
-                pageserver_client,
-                Arc::clone(&endpoint),
-                config.clone(),
-            ),
+            project,
+            branch,
             endpoint,
             membership,
         }
@@ -78,6 +85,7 @@ impl Services {
     pub fn branch(&self) -> &BranchService {
         &self.branch
     }
+
 
     pub fn endpoint(&self) -> &Arc<EndpointService> {
         &self.endpoint

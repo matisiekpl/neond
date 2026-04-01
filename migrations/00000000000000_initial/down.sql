@@ -1,8 +1,7 @@
-DROP TABLE IF EXISTS endpoints;
-DROP TABLE IF EXISTS branches;
-DROP TABLE IF EXISTS projects;
-DROP TABLE IF EXISTS memberships;
-DROP TABLE IF EXISTS organizations;
-DROP TABLE IF EXISTS users;
-DROP TYPE IF EXISTS endpoint_state;
-DROP TYPE IF EXISTS pg_version;
+DROP TABLE branches;
+DROP TABLE projects;
+DROP TABLE memberships;
+DROP TABLE organizations;
+DROP TABLE users;
+DROP TYPE pg_version;
+DROP TYPE compute_endpoint_status;

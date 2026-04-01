@@ -81,4 +81,14 @@ impl ProjectRepository {
             .map_err(|_| AppError::Internal("Failed to delete project".into()))?;
         Ok(())
     }
+
+    pub async fn delete_by_org_id(&self, org_id: Uuid) -> Result<()> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::delete(projects::table.filter(projects::organization_id.eq(org_id)))
+            .execute(conn)
+            .await
+            .map_err(|_| AppError::Internal("Failed to delete projects".into()))?;
+        Ok(())
+    }
 }

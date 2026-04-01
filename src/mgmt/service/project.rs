@@ -13,15 +13,17 @@ use crate::mgmt::dto::create_project_request::CreateProjectRequest;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::project_response::ProjectResponse;
 use crate::mgmt::dto::update_project_request::UpdateProjectRequest;
-use crate::mgmt::model::project::PgVersion;
+use crate::mgmt::model::project::{PgVersion, Project};
 use crate::mgmt::repository::organization::OrganizationRepository;
 use crate::mgmt::repository::project::ProjectRepository;
+use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::membership::MembershipService;
 
 pub struct ProjectService {
     project_repo: Arc<ProjectRepository>,
     org_repo: Arc<OrganizationRepository>,
     membership_service: Arc<MembershipService>,
+    branch_service: Arc<BranchService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     config: Config,
 }
@@ -31,6 +33,7 @@ impl ProjectService {
         project_repo: Arc<ProjectRepository>,
         org_repo: Arc<OrganizationRepository>,
         membership_service: Arc<MembershipService>,
+        branch_service: Arc<BranchService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         config: Config,
     ) -> Self {
@@ -38,6 +41,7 @@ impl ProjectService {
             project_repo,
             org_repo,
             membership_service,
+            branch_service,
             pageserver_client,
             config,
         }
@@ -312,11 +316,19 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
+        self.delete_project(project).await
+    }
+
+    pub(crate) async fn delete_project(&self, project: Project) -> Result<()> {
         let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
             .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
 
-        let mut status_code = 0;
-        while status_code != 200 {
+        self.branch_service
+            .delete_all_for_project(tenant_id, project.id)
+            .await?;
+
+        let mut status_code;
+        loop {
             status_code = self
                 .pageserver_client
                 .tenant_delete(TenantShardId::unsharded(tenant_id))
@@ -327,8 +339,13 @@ impl ProjectService {
                 break;
             }
         }
+        if status_code != 200 && status_code != 404 {
+            return Err(AppError::Internal(format!(
+                "Unexpected status code from pageserver when deleting tenant: {status_code}"
+            )));
+        }
 
-        self.project_repo.delete(id).await
+        self.project_repo.delete(project.id).await
     }
 
     fn validate_project_name(name: &str) -> Result<()> {

@@ -66,6 +66,16 @@ impl BranchRepository {
             .map_err(Into::into)
     }
 
+    pub async fn list_by_parent_id(&self, parent_id: Uuid) -> Result<Vec<Branch>> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        branches::table
+            .filter(branches::parent_branch_id.eq(parent_id))
+            .load::<Branch>(conn)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn list_by_project_id(&self, project_id: Uuid) -> Result<Vec<Branch>> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

@@ -8,28 +8,36 @@ use crate::mgmt::dto::update_organization_request::UpdateOrganizationRequest;
 use crate::mgmt::dto::user_response::UserResponse;
 use crate::mgmt::repository::membership::MembershipRepository;
 use crate::mgmt::repository::organization::OrganizationRepository;
+use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::repository::user::UserRepository;
 use crate::mgmt::service::membership::MembershipService;
+use crate::mgmt::service::project::ProjectService;
 
 pub struct OrganizationService {
     org_repo: Arc<OrganizationRepository>,
+    project_repo: Arc<ProjectRepository>,
     membership_repo: Arc<MembershipRepository>,
     membership_service: Arc<MembershipService>,
     user_repo: Arc<UserRepository>,
+    project_service: Arc<ProjectService>,
 }
 
 impl OrganizationService {
     pub fn new(
         org_repo: Arc<OrganizationRepository>,
+        project_repo: Arc<ProjectRepository>,
         membership_repo: Arc<MembershipRepository>,
         membership_service: Arc<MembershipService>,
         user_repo: Arc<UserRepository>,
+        project_service: Arc<ProjectService>,
     ) -> Self {
         Self {
             org_repo,
+            project_repo,
             membership_repo,
             membership_service,
             user_repo,
+            project_service,
         }
     }
 
@@ -128,6 +136,12 @@ impl OrganizationService {
             .verify_membership(user_id, id)
             .await?;
 
+        let projects = self.project_repo.list_by_org_id(id).await?;
+        for project in projects {
+            self.project_service.delete_project(project).await?;
+        }
+
+        self.membership_repo.delete_by_org_id(id).await?;
         self.org_repo.delete(id).await
     }
 
