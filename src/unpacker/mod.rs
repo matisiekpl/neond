@@ -9,12 +9,30 @@ pub struct Unpacker {
     pg_install_path: PathBuf,
 }
 
+#[cfg(debug_assertions)]
 const SAFEKEEPER_BINARY: &[u8] = include_bytes!("../../neon/target/debug/safekeeper");
+#[cfg(debug_assertions)]
 const PAGESERVER_BINARY: &[u8] = include_bytes!("../../neon/target/debug/pageserver");
+#[cfg(debug_assertions)]
 const COMPUTE_CTL_BINARY: &[u8] = include_bytes!("../../neon/target/debug/compute_ctl");
+#[cfg(debug_assertions)]
 const STORAGE_BROKER_BINARY: &[u8] = include_bytes!("../../neon/target/debug/storage_broker");
+#[cfg(debug_assertions)]
 const STORAGE_CONTROLLER_BINARY: &[u8] =
     include_bytes!("../../neon/target/debug/storage_controller");
+
+#[cfg(not(debug_assertions))]
+const SAFEKEEPER_BINARY: &[u8] = include_bytes!("../../neon/target/release/safekeeper");
+#[cfg(not(debug_assertions))]
+const PAGESERVER_BINARY: &[u8] = include_bytes!("../../neon/target/release/pageserver");
+#[cfg(not(debug_assertions))]
+const COMPUTE_CTL_BINARY: &[u8] = include_bytes!("../../neon/target/release/compute_ctl");
+#[cfg(not(debug_assertions))]
+const STORAGE_BROKER_BINARY: &[u8] = include_bytes!("../../neon/target/release/storage_broker");
+#[cfg(not(debug_assertions))]
+const STORAGE_CONTROLLER_BINARY: &[u8] =
+    include_bytes!("../../neon/target/release/storage_controller");
+
 const PG_INSTALL_TAR: &[u8] = include_bytes!("../../neon/target/pg_install.tar");
 
 impl Unpacker {
