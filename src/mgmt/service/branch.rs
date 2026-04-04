@@ -319,11 +319,6 @@ impl BranchService {
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
             .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
 
-        let _ = self
-            .endpoint_service
-            .stop(user_id, org_id, project_id, branch_id)
-            .await;
-
         let mut to_delete: Vec<Uuid> = Vec::new();
         let mut stack = vec![branch_id];
 
@@ -343,6 +338,11 @@ impl BranchService {
                 .find_by_id(id)
                 .await?
                 .ok_or(AppError::NotFound)?;
+
+            let _ = self
+                .endpoint_service
+                .stop(user_id, org_id, project_id, id)
+                .await;
 
             let timeline_id =
                 TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
