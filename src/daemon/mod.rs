@@ -88,7 +88,7 @@ impl Daemon {
                 "1",
                 "--timelines-onto-safekeepers",
                 "--control-plane-url",
-                "http://127.0.0.1:1235",
+                "http://127.0.0.1:4318",
                 "--jwt-token",
                 &pageserver_api_token,
                 "--peer-jwt-token",
