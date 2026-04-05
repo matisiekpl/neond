@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Link } from "react-router"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
 import { Loader2, MoreHorizontal } from "lucide-react"
@@ -42,6 +43,8 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Spinner } from "~/components/ui/spinner"
 
+type RenameFields = { name: string }
+
 export default function ProjectsIndexRoute() {
   const selectedOrganizationId = useOrganizationStore((s) => s.selectedOrganizationId)
   const { projects, loading, fetchProjects, updateProject, deleteProject } =
@@ -59,12 +62,12 @@ export default function ProjectsIndexRoute() {
 
   const [renameOpen, setRenameOpen] = React.useState(false)
   const [renameId, setRenameId] = React.useState<string | null>(null)
-  const [renameName, setRenameName] = React.useState("")
-  const [renameSubmitting, setRenameSubmitting] = React.useState(false)
 
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [deleteId, setDeleteId] = React.useState<string | null>(null)
   const [deleteSubmitting, setDeleteSubmitting] = React.useState(false)
+
+  const renameForm = useForm<RenameFields>({ defaultValues: { name: "" } })
 
   React.useEffect(() => {
     document.title = "Projects — neond"
@@ -76,9 +79,13 @@ export default function ProjectsIndexRoute() {
     }
   }, [selectedOrganizationId, fetchProjects])
 
+  React.useEffect(() => {
+    if (!renameOpen) renameForm.reset()
+  }, [renameOpen])
+
   function openRename(id: string, currentName: string) {
     setRenameId(id)
-    setRenameName(currentName)
+    renameForm.reset({ name: currentName })
     setRenameOpen(true)
   }
 
@@ -87,18 +94,15 @@ export default function ProjectsIndexRoute() {
     setDeleteOpen(true)
   }
 
-  async function submitRename() {
+  async function submitRename({ name }: RenameFields) {
     if (!selectedOrganizationId || !renameId) return
-    const trimmed = renameName.trim()
+    const trimmed = name.trim()
     if (!trimmed) return
-    setRenameSubmitting(true)
     try {
       await updateProject(selectedOrganizationId, renameId, { name: trimmed })
       setRenameOpen(false)
     } catch (e) {
       toast.error(getAppError(e))
-    } finally {
-      setRenameSubmitting(false)
     }
   }
 
@@ -113,6 +117,8 @@ export default function ProjectsIndexRoute() {
       setDeleteSubmitting(false)
     }
   }
+
+  const watchedName = renameForm.watch("name")
 
   return (
     <div className="space-y-6">
@@ -212,36 +218,30 @@ export default function ProjectsIndexRoute() {
           <DialogHeader>
             <DialogTitle>Rename project</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="rename-project-name">Name</Label>
-            <Input
-              id="rename-project-name"
-              value={renameName}
-              onChange={(e) => setRenameName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  void submitRename()
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => setRenameOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={renameSubmitting || !renameName.trim()}
-              onClick={() => void submitRename()}
-            >
-              Save
-            </Button>
-          </DialogFooter>
+          <form onSubmit={renameForm.handleSubmit(submitRename)}>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="rename-project-name">Name</Label>
+              <Input
+                id="rename-project-name"
+                {...renameForm.register("name")}
+              />
+            </div>
+            <DialogFooter className="mt-2">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setRenameOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={renameForm.formState.isSubmitting || !watchedName.trim()}
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

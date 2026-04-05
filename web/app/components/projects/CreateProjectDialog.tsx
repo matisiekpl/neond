@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { useProjectStore } from "~/stores/project-store"
 import { useOrganizationStore } from "~/stores/organization-store"
@@ -23,33 +24,34 @@ type CreateProjectDialogProps = {
   onOpenChange: (open: boolean) => void
 }
 
+type FormFields = {
+  name: string
+  pgVersion: string
+}
+
 export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
   const createProject = useProjectStore((s) => s.createProject)
   const selectedOrganizationId = useOrganizationStore((s) => s.selectedOrganizationId)
-  const [name, setName] = React.useState("")
-  const [pgVersion, setPgVersion] = React.useState<string>("V17")
-  const [creating, setCreating] = React.useState(false)
+  const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm<FormFields>({
+    defaultValues: { name: "", pgVersion: "V17" },
+  })
 
   React.useEffect(() => {
-    if (!open) {
-      setName("")
-      setPgVersion("V17")
-    }
-  }, [open])
+    if (!open) reset()
+  }, [open, reset])
 
-  async function submit() {
+  async function onSubmit({ name, pgVersion }: FormFields) {
     const trimmed = name.trim()
     if (!trimmed || !selectedOrganizationId) return
-    setCreating(true)
     try {
       await createProject(selectedOrganizationId, { name: trimmed, pg_version: pgVersion })
       onOpenChange(false)
     } catch (e) {
       toast.error(getAppError(e))
-    } finally {
-      setCreating(false)
     }
   }
+
+  const name = watch("name")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,52 +62,45 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
             A project contains branches and compute endpoints.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="create-project-name">Name</Label>
-            <Input
-              id="create-project-name"
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="my-project"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  void submit()
-                }
-              }}
-            />
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="create-project-name">Name</Label>
+              <Input
+                id="create-project-name"
+                autoFocus
+                {...register("name")}
+                placeholder="my-project"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="create-project-pg">PostgreSQL version</Label>
+              <select
+                id="create-project-pg"
+                {...register("pgVersion")}
+                className="flex h-9 w-full border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {PG_VERSIONS.map((v) => (
+                  <option key={v} value={v}>
+                    PostgreSQL {v.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="create-project-pg">PostgreSQL version</Label>
-            <select
-              id="create-project-pg"
-              value={pgVersion}
-              onChange={(e) => setPgVersion(e.target.value)}
-              className="flex h-9 w-full border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          <DialogFooter className="mt-4">
+            <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !name.trim()}
             >
-              {PG_VERSIONS.map((v) => (
-                <option key={v} value={v}>
-                  PostgreSQL {v.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={creating || !name.trim()}
-            onClick={() => void submit()}
-          >
-            {creating && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-            Create
-          </Button>
-        </DialogFooter>
+              {isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

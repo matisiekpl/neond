@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { useOrganizationStore } from "~/stores/organization-store"
 import { getAppError } from "~/lib/errors"
@@ -19,35 +20,35 @@ type CreateOrganizationDialogProps = {
   onOpenChange: (open: boolean) => void
 }
 
+type FormFields = {
+  name: string
+}
+
 export function CreateOrganizationDialog({
   open,
   onOpenChange,
 }: CreateOrganizationDialogProps) {
   const createOrganization = useOrganizationStore((s) => s.createOrganization)
-  const [name, setName] = React.useState("")
-  const [creating, setCreating] = React.useState(false)
+  const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm<FormFields>({
+    defaultValues: { name: "" },
+  })
 
   React.useEffect(() => {
-    if (!open) {
-      setName("")
-    }
-  }, [open])
+    if (!open) reset()
+  }, [open, reset])
 
-  async function submit() {
+  async function onSubmit({ name }: FormFields) {
     const trimmed = name.trim()
-    if (!trimmed) {
-      return
-    }
-    setCreating(true)
+    if (!trimmed) return
     try {
       await createOrganization(trimmed)
       onOpenChange(false)
     } catch (e) {
       toast.error(getAppError(e))
-    } finally {
-      setCreating(false)
     }
   }
+
+  const name = watch("name")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,34 +59,28 @@ export function CreateOrganizationDialog({
             Add a new organization. You will be added as a member automatically.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-2">
-          <Label htmlFor="create-org-name">Name</Label>
-          <Input
-            id="create-org-name"
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Organization name"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault()
-                void submit()
-              }
-            }}
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={creating || !name.trim()}
-            onClick={() => void submit()}
-          >
-            Create
-          </Button>
-        </DialogFooter>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <div className="grid gap-2">
+            <Label htmlFor="create-org-name">Name</Label>
+            <Input
+              id="create-org-name"
+              autoFocus
+              {...register("name")}
+              placeholder="Organization name"
+            />
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !name.trim()}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

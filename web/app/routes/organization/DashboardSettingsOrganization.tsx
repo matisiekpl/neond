@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
 import { useAuthStore } from "~/stores/auth-store"
@@ -42,6 +43,9 @@ import {
   TableRow,
 } from "~/components/ui/table"
 
+type OrganizationNameFields = { organizationName: string }
+type InviteFields = { inviteEmail: string }
+
 export default function OrganizationSettingsRoute() {
   const { user } = useAuthStore(useShallow((s) => ({ user: s.user })))
   const {
@@ -72,17 +76,17 @@ export default function OrganizationSettingsRoute() {
     })),
   )
 
-  const [organizationName, setOrganizationName] = React.useState("")
-  const [savingName, setSavingName] = React.useState(false)
+  const nameForm = useForm<OrganizationNameFields>({
+    defaultValues: { organizationName: "" },
+  })
+  const inviteForm = useForm<InviteFields>({
+    defaultValues: { inviteEmail: "" },
+  })
 
   const [inviteOpen, setInviteOpen] = React.useState(false)
-  const [inviteEmail, setInviteEmail] = React.useState("")
-  const [inviteSubmitting, setInviteSubmitting] = React.useState(false)
-
   const [removeOpen, setRemoveOpen] = React.useState(false)
   const [removeUserId, setRemoveUserId] = React.useState<string | null>(null)
   const [removeSubmitting, setRemoveSubmitting] = React.useState(false)
-
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [deleteSubmitting, setDeleteSubmitting] = React.useState(false)
 
@@ -92,7 +96,7 @@ export default function OrganizationSettingsRoute() {
 
   React.useEffect(() => {
     if (currentOrganization) {
-      setOrganizationName(currentOrganization.name)
+      nameForm.reset({ organizationName: currentOrganization.name })
     }
   }, [currentOrganization])
 
@@ -102,47 +106,35 @@ export default function OrganizationSettingsRoute() {
     }
   }, [selectedOrganizationId, fetchMembers])
 
-  async function saveOrganizationName() {
-    if (!selectedOrganizationId) {
-      return
-    }
+  React.useEffect(() => {
+    if (!inviteOpen) inviteForm.reset()
+  }, [inviteOpen])
+
+  async function saveOrganizationName({ organizationName }: OrganizationNameFields) {
+    if (!selectedOrganizationId) return
     const trimmed = organizationName.trim()
-    if (!trimmed) {
-      return
-    }
-    setSavingName(true)
+    if (!trimmed) return
     try {
       await updateOrganization(selectedOrganizationId, trimmed)
+      nameForm.reset({ organizationName: trimmed })
     } catch (err) {
       toast.error(getAppError(err))
-    } finally {
-      setSavingName(false)
     }
   }
 
-  async function submitInvite() {
-    if (!selectedOrganizationId) {
-      return
-    }
+  async function submitInvite({ inviteEmail }: InviteFields) {
+    if (!selectedOrganizationId) return
     const trimmed = inviteEmail.trim()
-    if (!trimmed) {
-      return
-    }
-    setInviteSubmitting(true)
+    if (!trimmed) return
     try {
       await addMemberByEmail(selectedOrganizationId, trimmed)
       setInviteOpen(false)
-      setInviteEmail("")
     } catch {
-    } finally {
-      setInviteSubmitting(false)
     }
   }
 
   async function confirmRemove() {
-    if (!selectedOrganizationId || !removeUserId) {
-      return
-    }
+    if (!selectedOrganizationId || !removeUserId) return
     setRemoveSubmitting(true)
     try {
       await removeMember(selectedOrganizationId, removeUserId)
@@ -155,9 +147,7 @@ export default function OrganizationSettingsRoute() {
   }
 
   async function confirmDelete() {
-    if (!selectedOrganizationId || !user) {
-      return
-    }
+    if (!selectedOrganizationId || !user) return
     setDeleteSubmitting(true)
     try {
       await deleteOrganization(selectedOrganizationId)
@@ -183,6 +173,9 @@ export default function OrganizationSettingsRoute() {
     )
   }
 
+  const watchedName = nameForm.watch("organizationName")
+  const watchedEmail = inviteForm.watch("inviteEmail")
+
   return (
     <div className="w-full space-y-6">
       <Card>
@@ -193,31 +186,24 @@ export default function OrganizationSettingsRoute() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="organization-name">Name</Label>
-            <Input
-              id="organization-name"
-              value={organizationName}
-              onChange={(e) => setOrganizationName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  if (!savingName && organizationName.trim()) {
-                    void saveOrganizationName()
-                  }
-                }
-              }}
-              className="w-full"
-            />
-          </div>
-          <Button
-            type="button"
-            disabled={savingName || !organizationName.trim()}
-            onClick={() => void saveOrganizationName()}
-          >
-            {savingName && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-            Save changes
-          </Button>
+          <form onSubmit={nameForm.handleSubmit(saveOrganizationName)}>
+            <div className="space-y-2">
+              <Label htmlFor="organization-name">Name</Label>
+              <Input
+                id="organization-name"
+                {...nameForm.register("organizationName")}
+                className="w-full"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="mt-4"
+              disabled={nameForm.formState.isSubmitting || !watchedName.trim() || !nameForm.formState.isDirty}
+            >
+              {nameForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+              Save changes
+            </Button>
+          </form>
         </CardContent>
       </Card>
 
@@ -310,49 +296,41 @@ export default function OrganizationSettingsRoute() {
       </Card>
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent
-          className="sm:max-w-md"
-        >
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add member</DialogTitle>
             <DialogDescription>
               Enter the email address of an existing user account.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="member-invitation-email">Email</Label>
-            <Input
-              id="member-invitation-email"
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              autoComplete="off"
-              placeholder="colleague@example.com"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  void submitInvite()
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => setInviteOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={inviteSubmitting || !inviteEmail.trim()}
-              onClick={() => void submitInvite()}
-            >
-              {inviteSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-              Add
-            </Button>
-          </DialogFooter>
+          <form onSubmit={inviteForm.handleSubmit(submitInvite)}>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="member-invitation-email">Email</Label>
+              <Input
+                id="member-invitation-email"
+                type="email"
+                {...inviteForm.register("inviteEmail")}
+                autoComplete="off"
+                placeholder="colleague@example.com"
+              />
+            </div>
+            <DialogFooter className="mt-2">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setInviteOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={inviteForm.formState.isSubmitting || !watchedEmail.trim()}
+              >
+                {inviteForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+                Add
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

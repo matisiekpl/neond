@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Link, Navigate, useSearchParams } from "react-router"
+import { useForm } from "react-hook-form"
 import { useShallow } from "zustand/react/shallow"
 import { useAuthStore } from "~/stores/auth-store"
 import { Button } from "~/components/ui/button"
@@ -7,20 +8,25 @@ import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Spinner } from "~/components/ui/spinner"
 
+type RegisterFields = {
+  name: string
+  email: string
+  password: string
+}
+
 export default function RegisterRoute() {
-  const { user, initialized, loading, register } = useAuthStore(
+  const { user, initialized, register: registerUser } = useAuthStore(
     useShallow((s) => ({
       user: s.user,
       initialized: s.initialized,
-      loading: s.loading,
       register: s.register,
     })),
   )
   const [searchParams] = useSearchParams()
   const emailLocked = Boolean(searchParams.get("email"))
-  const [name, setName] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [password, setPassword] = React.useState("")
+  const { register, handleSubmit, setValue, formState: { isSubmitting } } = useForm<RegisterFields>({
+    defaultValues: { name: "", email: "", password: "" },
+  })
 
   React.useEffect(() => {
     document.title = "Register — neond"
@@ -28,14 +34,11 @@ export default function RegisterRoute() {
 
   React.useEffect(() => {
     const q = searchParams.get("email")
-    if (q) {
-      setEmail(q)
-    }
-  }, [searchParams])
+    if (q) setValue("email", q)
+  }, [searchParams, setValue])
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    await register(name, email, password)
+  async function onSubmit({ name, email, password }: RegisterFields) {
+    await registerUser(name, email, password)
   }
 
   if (!initialized) {
@@ -55,14 +58,13 @@ export default function RegisterRoute() {
       <div className="m-auto flex w-[330px] flex-col gap-4">
         <Label className="text-3xl">Create an account</Label>
         <Label className="text-muted-foreground">Get started with neond</Label>
-        <form className="flex flex-col gap-4" onSubmit={(e) => void onSubmit(e)}>
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="register-name">Name</Label>
             <Input
               id="register-name"
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              {...register("name")}
               autoComplete="name"
               required
             />
@@ -72,8 +74,7 @@ export default function RegisterRoute() {
             <Input
               id="register-email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              {...register("email")}
               disabled={emailLocked}
               autoComplete="email"
               required
@@ -84,14 +85,13 @@ export default function RegisterRoute() {
             <Input
               id="register-password"
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              {...register("password")}
               autoComplete="new-password"
               required
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? <Spinner className="mr-2" /> : null}
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? <Spinner className="mr-2" /> : null}
             Sign up
           </Button>
           <span className="text-center text-sm text-muted-foreground">

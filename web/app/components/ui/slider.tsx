@@ -10,7 +10,7 @@ function SliderRoot({
   return (
     <Slider.Root
       data-slot="slider"
-      className={cn("relative flex w-full touch-none items-center", className)}
+      className={cn("relative flex w-full touch-none items-center cursor-pointer", className)}
       {...props}
     />
   )

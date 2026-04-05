@@ -1,5 +1,6 @@
 import * as React from "react"
 import {useParams, useNavigate} from "react-router"
+import {useForm, Controller} from "react-hook-form"
 import {useShallow} from "zustand/react/shallow"
 import {useProjectStore} from "~/stores/project-store"
 import {useOrganizationStore} from "~/stores/organization-store"
@@ -26,6 +27,7 @@ import {
     CardTitle,
 } from "~/components/ui/card"
 import {Input} from "~/components/ui/input"
+import {MegabytesInput} from "~/components/ui/megabytes-input"
 import {Label} from "~/components/ui/label"
 import {Spinner} from "~/components/ui/spinner"
 import {
@@ -119,6 +121,11 @@ function SliderField({
     )
 }
 
+type NameFields = { name: string }
+type GcFields = { gcPeriod: string; gcHorizon: string }
+type PitrFields = { pitrInterval: string }
+type CheckpointFields = { checkpointDistance: string; checkpointTimeout: string }
+
 export default function ProjectSettingsRoute() {
     const {projectId} = useParams<{ projectId: string }>()
     const navigate = useNavigate()
@@ -137,33 +144,14 @@ export default function ProjectSettingsRoute() {
 
     const project = projects.find((p) => p.id === projectId)
 
-    const [name, setName] = React.useState("")
-    const [savingName, setSavingName] = React.useState(false)
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [deleting, setDeleting] = React.useState(false)
-
-    const [gcPeriod, setGcPeriod] = React.useState("")
-    const [gcHorizon, setGcHorizon] = React.useState("")
-    const [pitrInterval, setPitrInterval] = React.useState("7days")
-    const [checkpointDistance, setCheckpointDistance] = React.useState("")
-    const [checkpointTimeout, setCheckpointTimeout] = React.useState("")
-    const [savedConfig, setSavedConfig] = React.useState({
-        gcPeriod: "",
-        gcHorizon: "",
-        pitrInterval: "7days",
-        checkpointDistance: "",
-        checkpointTimeout: "",
-    })
-    const [savingGc, setSavingGc] = React.useState(false)
-    const [savingPitr, setSavingPitr] = React.useState(false)
-    const [savingCheckpoint, setSavingCheckpoint] = React.useState(false)
     const [configLoading, setConfigLoading] = React.useState(false)
 
-    const gcDirty = gcPeriod !== savedConfig.gcPeriod || gcHorizon !== savedConfig.gcHorizon
-    const pitrDirty = pitrInterval !== savedConfig.pitrInterval
-    const checkpointDirty =
-        checkpointDistance !== savedConfig.checkpointDistance ||
-        checkpointTimeout !== savedConfig.checkpointTimeout
+    const nameForm = useForm<NameFields>({ defaultValues: { name: "" } })
+    const gcForm = useForm<GcFields>({ defaultValues: { gcPeriod: "", gcHorizon: "" } })
+    const pitrForm = useForm<PitrFields>({ defaultValues: { pitrInterval: "7days" } })
+    const checkpointForm = useForm<CheckpointFields>({ defaultValues: { checkpointDistance: "", checkpointTimeout: "" } })
 
     React.useEffect(() => {
         if (selectedOrganizationId) {
@@ -173,7 +161,7 @@ export default function ProjectSettingsRoute() {
 
     React.useEffect(() => {
         if (project) {
-            setName(project.name)
+            nameForm.reset({ name: project.name })
             document.title = `Settings — ${project.name} — neond`
         }
     }, [project?.id])
@@ -184,84 +172,69 @@ export default function ProjectSettingsRoute() {
         projectsApi
             .get(selectedOrganizationId, projectId)
             .then((p) => {
-                const fetched = {
+                gcForm.reset({
                     gcPeriod: p.gc_period ?? "",
                     gcHorizon: p.gc_horizon !== undefined ? String(p.gc_horizon) : "",
+                })
+                pitrForm.reset({
                     pitrInterval: p.pitr_interval ?? "7days",
+                })
+                checkpointForm.reset({
                     checkpointDistance: p.checkpoint_distance !== undefined ? String(p.checkpoint_distance) : "",
                     checkpointTimeout: p.checkpoint_timeout ?? "",
-                }
-                setGcPeriod(fetched.gcPeriod)
-                setGcHorizon(fetched.gcHorizon)
-                setPitrInterval(fetched.pitrInterval)
-                setCheckpointDistance(fetched.checkpointDistance)
-                setCheckpointTimeout(fetched.checkpointTimeout)
-                setSavedConfig(fetched)
+                })
             })
-            .catch(() => {
-                // config fields stay empty if fetch fails
-            })
+            .catch(() => {})
             .finally(() => setConfigLoading(false))
     }, [selectedOrganizationId, projectId])
 
-    async function saveName() {
+    async function saveName({ name }: NameFields) {
         if (!selectedOrganizationId || !projectId) return
         const trimmed = name.trim()
         if (!trimmed || trimmed === project?.name) return
-        setSavingName(true)
         try {
             await updateProject(selectedOrganizationId, projectId, {name: trimmed})
+            nameForm.reset({ name: trimmed })
         } catch (e) {
             toast.error(getAppError(e))
-        } finally {
-            setSavingName(false)
         }
     }
 
-    async function saveGc() {
+    async function saveGc({ gcPeriod, gcHorizon }: GcFields) {
         if (!selectedOrganizationId || !projectId || !project) return
-        setSavingGc(true)
         try {
             await updateProject(selectedOrganizationId, projectId, {
                 gc_period: gcPeriod.trim() || undefined,
                 gc_horizon: gcHorizon.trim() ? Number(gcHorizon) : undefined,
             })
-            setSavedConfig((prev) => ({...prev, gcPeriod, gcHorizon}))
+            gcForm.reset({ gcPeriod, gcHorizon })
         } catch (e) {
             toast.error(getAppError(e))
-        } finally {
-            setSavingGc(false)
         }
     }
 
-    async function savePitr() {
+    async function savePitr({ pitrInterval }: PitrFields) {
         if (!selectedOrganizationId || !projectId || !project) return
-        setSavingPitr(true)
         try {
             await updateProject(selectedOrganizationId, projectId, {
                 pitr_interval: pitrInterval.trim() || undefined,
             })
-            setSavedConfig((prev) => ({...prev, pitrInterval}))
+            pitrForm.reset({ pitrInterval })
         } catch (e) {
             toast.error(getAppError(e))
-        } finally {
-            setSavingPitr(false)
         }
     }
 
-    async function saveCheckpoint() {
+    async function saveCheckpoint({ checkpointDistance, checkpointTimeout }: CheckpointFields) {
         if (!selectedOrganizationId || !projectId || !project) return
-        setSavingCheckpoint(true)
         try {
             await updateProject(selectedOrganizationId, projectId, {
                 checkpoint_distance: checkpointDistance.trim() ? Number(checkpointDistance) : undefined,
                 checkpoint_timeout: checkpointTimeout.trim() || undefined,
             })
-            setSavedConfig((prev) => ({...prev, checkpointDistance, checkpointTimeout}))
+            checkpointForm.reset({ checkpointDistance, checkpointTimeout })
         } catch (e) {
             toast.error(getAppError(e))
-        } finally {
-            setSavingCheckpoint(false)
         }
     }
 
@@ -275,6 +248,8 @@ export default function ProjectSettingsRoute() {
             setDeleting(false)
         }
     }
+
+    const watchedName = nameForm.watch("name")
 
     if (loading) {
         return (
@@ -312,28 +287,23 @@ export default function ProjectSettingsRoute() {
                     <CardTitle>General</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="project-name">Name</Label>
-                        <Input
-                            id="project-name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault()
-                                    void saveName()
-                                }
-                            }}
-                        />
-                    </div>
-                    <Button
-                        type="button"
-                        disabled={savingName || !name.trim() || name.trim() === project.name}
-                        onClick={() => void saveName()}
-                    >
-                        {savingName && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
-                        Save changes
-                    </Button>
+                    <form onSubmit={nameForm.handleSubmit(saveName)}>
+                        <div className="grid gap-2">
+                            <Label htmlFor="project-name">Name</Label>
+                            <Input
+                                id="project-name"
+                                {...nameForm.register("name")}
+                            />
+                        </div>
+                        <Button
+                            type="submit"
+                            className="mt-4"
+                            disabled={nameForm.formState.isSubmitting || !watchedName.trim() || !nameForm.formState.isDirty}
+                        >
+                            {nameForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
+                            Save changes
+                        </Button>
+                    </form>
                 </CardContent>
             </Card>
 
@@ -350,44 +320,54 @@ export default function ProjectSettingsRoute() {
                             <Spinner className="size-5"/>
                         </div>
                     ) : (
-                        <>
-                            <div className="space-y-6">
-                                <div className="grid gap-3">
-                                    <Label>GC period</Label>
-                                    <SliderField
-                                        presets={GC_PERIOD_PRESETS}
-                                        value={gcPeriod}
-                                        onChange={setGcPeriod}
-                                        ariaLabel="GC period"
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        How often garbage collection runs.
-                                    </p>
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="gc-horizon">GC horizon (bytes)</Label>
-                                    <Input
-                                        id="gc-horizon"
-                                        type="number"
-                                        min={0}
-                                        placeholder="e.g. 67108864"
-                                        value={gcHorizon}
-                                        onChange={(e) => setGcHorizon(e.target.value)}
+                        <form onSubmit={gcForm.handleSubmit(saveGc)}>
+                            <div className="flex items-start gap-6">
+                                <div className="grid gap-2 w-36">
+                                    <Label htmlFor="gc-horizon">GC horizon</Label>
+                                    <Controller
+                                        name="gcHorizon"
+                                        control={gcForm.control}
+                                        render={({ field }) => (
+                                            <MegabytesInput
+                                                id="gc-horizon"
+                                                placeholder="64"
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
+                                        )}
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         WAL distance beyond which data can be GC'd.
                                     </p>
                                 </div>
+                                <div className="flex-1 grid gap-3">
+                                    <Label>GC period</Label>
+                                    <Controller
+                                        name="gcPeriod"
+                                        control={gcForm.control}
+                                        render={({ field }) => (
+                                            <SliderField
+                                                presets={GC_PERIOD_PRESETS}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                ariaLabel="GC period"
+                                            />
+                                        )}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        How often garbage collection runs.
+                                    </p>
+                                </div>
                             </div>
                             <Button
-                                type="button"
-                                disabled={savingGc || !gcDirty}
-                                onClick={() => void saveGc()}
+                                type="submit"
+                                className="mt-4"
+                                disabled={gcForm.formState.isSubmitting || !gcForm.formState.isDirty}
                             >
-                                {savingGc && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
+                                {gcForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
                                 Save
                             </Button>
-                        </>
+                        </form>
                     )}
                 </CardContent>
             </Card>
@@ -407,22 +387,28 @@ export default function ProjectSettingsRoute() {
                             <Spinner className="size-5"/>
                         </div>
                     ) : (
-                        <>
-                            <SliderField
-                                presets={PITR_PRESETS}
-                                value={pitrInterval}
-                                onChange={setPitrInterval}
-                                ariaLabel="PITR interval"
+                        <form onSubmit={pitrForm.handleSubmit(savePitr)}>
+                            <Controller
+                                name="pitrInterval"
+                                control={pitrForm.control}
+                                render={({ field }) => (
+                                    <SliderField
+                                        presets={PITR_PRESETS}
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                        ariaLabel="PITR interval"
+                                    />
+                                )}
                             />
                             <Button
-                                type="button"
-                                disabled={savingPitr || !pitrDirty}
-                                onClick={() => void savePitr()}
+                                type="submit"
+                                className="mt-4"
+                                disabled={pitrForm.formState.isSubmitting || !pitrForm.formState.isDirty}
                             >
-                                {savingPitr && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
+                                {pitrForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
                                 Save
                             </Button>
-                        </>
+                        </form>
                     )}
                 </CardContent>
             </Card>
@@ -440,29 +426,39 @@ export default function ProjectSettingsRoute() {
                             <Spinner className="size-5"/>
                         </div>
                     ) : (
-                        <>
-                            <div className="space-y-6">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="checkpoint-distance">Checkpoint distance (bytes)</Label>
-                                    <Input
-                                        id="checkpoint-distance"
-                                        type="number"
-                                        min={0}
-                                        placeholder="e.g. 268435456"
-                                        value={checkpointDistance}
-                                        onChange={(e) => setCheckpointDistance(e.target.value)}
+                        <form onSubmit={checkpointForm.handleSubmit(saveCheckpoint)}>
+                            <div className="flex items-start gap-6">
+                                <div className="grid gap-2 w-36">
+                                    <Label htmlFor="checkpoint-distance">Checkpoint distance</Label>
+                                    <Controller
+                                        name="checkpointDistance"
+                                        control={checkpointForm.control}
+                                        render={({ field }) => (
+                                            <MegabytesInput
+                                                id="checkpoint-distance"
+                                                placeholder="256"
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
+                                        )}
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         Amount of WAL data between checkpoints.
                                     </p>
                                 </div>
-                                <div className="grid gap-3">
+                                <div className="flex-1 grid gap-3">
                                     <Label>Checkpoint timeout</Label>
-                                    <SliderField
-                                        presets={CHECKPOINT_TIMEOUT_PRESETS}
-                                        value={checkpointTimeout}
-                                        onChange={setCheckpointTimeout}
-                                        ariaLabel="Checkpoint timeout"
+                                    <Controller
+                                        name="checkpointTimeout"
+                                        control={checkpointForm.control}
+                                        render={({ field }) => (
+                                            <SliderField
+                                                presets={CHECKPOINT_TIMEOUT_PRESETS}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                ariaLabel="Checkpoint timeout"
+                                            />
+                                        )}
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         Maximum time between forced checkpoints.
@@ -470,14 +466,14 @@ export default function ProjectSettingsRoute() {
                                 </div>
                             </div>
                             <Button
-                                type="button"
-                                disabled={savingCheckpoint || !checkpointDirty}
-                                onClick={() => void saveCheckpoint()}
+                                type="submit"
+                                className="mt-4"
+                                disabled={checkpointForm.formState.isSubmitting || !checkpointForm.formState.isDirty}
                             >
-                                {savingCheckpoint && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
+                                {checkpointForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin"/>}
                                 Save
                             </Button>
-                        </>
+                        </form>
                     )}
                 </CardContent>
             </Card>

@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router"
+import { useForm } from "react-hook-form"
 import { useShallow } from "zustand/react/shallow"
 import { useProjectStore } from "~/stores/project-store"
 import { useOrganizationStore } from "~/stores/organization-store"
@@ -86,6 +87,8 @@ function flattenTree(nodes: BranchNode[], depth = 0): { branch: BranchNode; dept
   return result
 }
 
+type BranchNameFields = { name: string }
+
 export default function ProjectViewRoute() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -112,12 +115,19 @@ export default function ProjectViewRoute() {
   )
 
   const [createOpen, setCreateOpen] = React.useState(false)
-  const [newBranchName, setNewBranchName] = React.useState("")
-  const [creating, setCreating] = React.useState(false)
-
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [deleteId, setDeleteId] = React.useState<string | null>(null)
   const [deleting, setDeleting] = React.useState(false)
+
+  const [branchFromOpen, setBranchFromOpen] = React.useState(false)
+  const [branchFromParent, setBranchFromParent] = React.useState<Branch | null>(null)
+
+  const [renameOpen, setRenameOpen] = React.useState(false)
+  const [renameBranch_, setRenameBranch_] = React.useState<Branch | null>(null)
+
+  const createForm = useForm<BranchNameFields>({ defaultValues: { name: "" } })
+  const branchFromForm = useForm<BranchNameFields>({ defaultValues: { name: "" } })
+  const renameForm = useForm<BranchNameFields>({ defaultValues: { name: "" } })
 
   function openDelete(branchId: string) {
     setDeleteId(branchId)
@@ -136,59 +146,59 @@ export default function ProjectViewRoute() {
   }
 
   function openCreate() {
-    setNewBranchName(branches.length === 0 ? "production" : "")
+    createForm.reset({ name: branches.length === 0 ? "production" : "" })
     setCreateOpen(true)
   }
 
-  const [branchFromOpen, setBranchFromOpen] = React.useState(false)
-  const [branchFromParent, setBranchFromParent] = React.useState<Branch | null>(null)
-  const [branchFromName, setBranchFromName] = React.useState("")
-  const [branchFromCreating, setBranchFromCreating] = React.useState(false)
-
   function openBranchFrom(parent: Branch) {
     setBranchFromParent(parent)
-    setBranchFromName("")
+    branchFromForm.reset({ name: "" })
     setBranchFromOpen(true)
   }
 
-  async function submitBranchFrom() {
-    if (!selectedOrganizationId || !projectId || !branchFromParent) return
-    const trimmed = branchFromName.trim()
+  function openRename(branch: Branch) {
+    setRenameBranch_(branch)
+    renameForm.reset({ name: branch.name })
+    setRenameOpen(true)
+  }
+
+  React.useEffect(() => {
+    if (!createOpen) createForm.reset()
+  }, [createOpen])
+
+  async function submitCreateBranch({ name }: BranchNameFields) {
+    if (!selectedOrganizationId || !projectId) return
+    const trimmed = name.trim()
     if (!trimmed) return
-    setBranchFromCreating(true)
+    try {
+      await createBranch(selectedOrganizationId, projectId, trimmed)
+      setCreateOpen(false)
+    } catch (e) {
+      toast.error(getAppError(e))
+    }
+  }
+
+  async function submitBranchFrom({ name }: BranchNameFields) {
+    if (!selectedOrganizationId || !projectId || !branchFromParent) return
+    const trimmed = name.trim()
+    if (!trimmed) return
     try {
       await createBranch(selectedOrganizationId, projectId, trimmed, branchFromParent.id)
       setBranchFromOpen(false)
     } catch (e) {
       toast.error(getAppError(e))
-    } finally {
-      setBranchFromCreating(false)
     }
   }
 
-  const [renameOpen, setRenameOpen] = React.useState(false)
-  const [renameBranch_, setRenameBranch_] = React.useState<Branch | null>(null)
-  const [renameName, setRenameName] = React.useState("")
-  const [renaming, setRenaming] = React.useState(false)
-
-  function openRename(branch: Branch) {
-    setRenameBranch_(branch)
-    setRenameName(branch.name)
-    setRenameOpen(true)
-  }
-
-  async function submitRename() {
+  async function submitRename({ name }: BranchNameFields) {
     if (!selectedOrganizationId || !projectId || !renameBranch_) return
-    const trimmed = renameName.trim()
+    const trimmed = name.trim()
     if (!trimmed || trimmed === renameBranch_.name) return
-    setRenaming(true)
     try {
       await renameBranch(selectedOrganizationId, projectId, renameBranch_.id, trimmed)
       setRenameOpen(false)
     } catch (e) {
       toast.error(getAppError(e))
-    } finally {
-      setRenaming(false)
     }
   }
 
@@ -215,24 +225,9 @@ export default function ProjectViewRoute() {
     }
   }, [project])
 
-  React.useEffect(() => {
-    if (!createOpen) setNewBranchName("")
-  }, [createOpen])
-
-  async function submitCreateBranch() {
-    if (!selectedOrganizationId || !projectId) return
-    const trimmed = newBranchName.trim()
-    if (!trimmed) return
-    setCreating(true)
-    try {
-      await createBranch(selectedOrganizationId, projectId, trimmed)
-      setCreateOpen(false)
-    } catch (e) {
-      toast.error(getAppError(e))
-    } finally {
-      setCreating(false)
-    }
-  }
+  const watchedCreateName = createForm.watch("name")
+  const watchedBranchFromName = branchFromForm.watch("name")
+  const watchedRenameName = renameForm.watch("name")
 
   if (projectsLoading) {
     return (
@@ -301,8 +296,8 @@ export default function ProjectViewRoute() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Branches</h2>
-          <Button type="button" size="sm" onClick={openCreate} disabled={creating}>
-            {creating && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+          <Button type="button" size="sm" onClick={openCreate} disabled={createForm.formState.isSubmitting}>
+            {createForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
             New branch
           </Button>
         </div>
@@ -507,33 +502,27 @@ export default function ProjectViewRoute() {
           <DialogHeader>
             <DialogTitle>Rename branch</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="rename-branch-name">Name</Label>
-            <Input
-              id="rename-branch-name"
-              value={renameName}
-              onChange={(e) => setRenameName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  void submitRename()
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" onClick={() => setRenameOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={renaming || !renameName.trim() || renameName.trim() === renameBranch_?.name}
-              onClick={() => void submitRename()}
-            >
-              {renaming && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-              Save
-            </Button>
-          </DialogFooter>
+          <form onSubmit={renameForm.handleSubmit(submitRename)}>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="rename-branch-name">Name</Label>
+              <Input
+                id="rename-branch-name"
+                {...renameForm.register("name")}
+              />
+            </div>
+            <DialogFooter className="mt-2">
+              <Button variant="outline" type="button" onClick={() => setRenameOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={renameForm.formState.isSubmitting || !watchedRenameName.trim() || watchedRenameName.trim() === renameBranch_?.name}
+              >
+                {renameForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -542,34 +531,28 @@ export default function ProjectViewRoute() {
           <DialogHeader>
             <DialogTitle>Branch from {branchFromParent?.name}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="branch-from-name">New branch name</Label>
-            <Input
-              id="branch-from-name"
-              value={branchFromName}
-              onChange={(e) => setBranchFromName(e.target.value)}
-              placeholder="my-branch"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  void submitBranchFrom()
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" onClick={() => setBranchFromOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={branchFromCreating || !branchFromName.trim()}
-              onClick={() => void submitBranchFrom()}
-            >
-              {branchFromCreating && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-              Create branch
-            </Button>
-          </DialogFooter>
+          <form onSubmit={branchFromForm.handleSubmit(submitBranchFrom)}>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="branch-from-name">New branch name</Label>
+              <Input
+                id="branch-from-name"
+                {...branchFromForm.register("name")}
+                placeholder="my-branch"
+              />
+            </div>
+            <DialogFooter className="mt-2">
+              <Button variant="outline" type="button" onClick={() => setBranchFromOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={branchFromForm.formState.isSubmitting || !watchedBranchFromName.trim()}
+              >
+                {branchFromForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+                Create branch
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -578,34 +561,28 @@ export default function ProjectViewRoute() {
           <DialogHeader>
             <DialogTitle>New branch</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="new-branch-name">Name</Label>
-            <Input
-              id="new-branch-name"
-              value={newBranchName}
-              onChange={(e) => setNewBranchName(e.target.value)}
-              placeholder="my-branch"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  void submitCreateBranch()
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={creating || !newBranchName.trim()}
-              onClick={() => void submitCreateBranch()}
-            >
-              {creating && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-              Create
-            </Button>
-          </DialogFooter>
+          <form onSubmit={createForm.handleSubmit(submitCreateBranch)}>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="new-branch-name">Name</Label>
+              <Input
+                id="new-branch-name"
+                {...createForm.register("name")}
+                placeholder="my-branch"
+              />
+            </div>
+            <DialogFooter className="mt-2">
+              <Button variant="outline" type="button" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createForm.formState.isSubmitting || !watchedCreateName.trim()}
+              >
+                {createForm.formState.isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

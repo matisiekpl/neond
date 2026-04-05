@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { useOrganizationStore } from "~/stores/organization-store"
 import { getAppError } from "~/lib/errors"
@@ -7,35 +8,36 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 
+type FormFields = {
+  name: string
+}
+
 export default function DashboardSetupOrganizationRoute() {
   const createOrganization = useOrganizationStore((s) => s.createOrganization)
-  const [name, setName] = React.useState("")
-  const [creating, setCreating] = React.useState(false)
+  const { register, handleSubmit, watch, formState: { isSubmitting } } = useForm<FormFields>({
+    defaultValues: { name: "" },
+  })
 
   React.useEffect(() => {
     document.title = "Create organization — neond"
   }, [])
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
+  async function onSubmit({ name }: FormFields) {
     const trimmed = name.trim()
-    if (!trimmed) {
-      return
-    }
-    setCreating(true)
+    if (!trimmed) return
     try {
       await createOrganization(trimmed)
     } catch (err) {
       toast.error(getAppError(err))
-    } finally {
-      setCreating(false)
     }
   }
+
+  const name = watch("name")
 
   return (
     <main className="flex min-h-svh w-full flex-col items-center justify-center bg-background px-4">
       <form
-        onSubmit={(e) => void submit(e)}
+        onSubmit={handleSubmit(onSubmit)}
         className="w-full max-w-sm space-y-6"
       >
         <div className="space-y-2 text-center">
@@ -50,8 +52,7 @@ export default function DashboardSetupOrganizationRoute() {
           <Label htmlFor="setup-org-name">Organization name</Label>
           <Input
             id="setup-org-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            {...register("name")}
             placeholder="Acme Inc."
             autoComplete="organization"
             autoFocus
@@ -60,9 +61,9 @@ export default function DashboardSetupOrganizationRoute() {
         <Button
           type="submit"
           className="w-full"
-          disabled={creating || !name.trim()}
+          disabled={isSubmitting || !name.trim()}
         >
-          {creating && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+          {isSubmitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
           Continue
         </Button>
       </form>
