@@ -1,4 +1,5 @@
 pub mod branch;
+pub mod daemon;
 pub mod endpoint;
 pub mod services;
 pub mod membership;

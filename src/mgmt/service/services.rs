@@ -1,12 +1,12 @@
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::repository::Repositories;
 use crate::mgmt::service::branch::BranchService;
+use crate::mgmt::service::daemon::DaemonService;
 use crate::mgmt::service::endpoint::EndpointService;
 use crate::mgmt::service::membership::MembershipService;
 use crate::mgmt::service::organization::OrganizationService;
 use crate::mgmt::service::project::ProjectService;
 use crate::mgmt::service::user::UserService;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct Services {
@@ -16,6 +16,7 @@ pub struct Services {
     membership: MembershipService,
     branch: Arc<BranchService>,
     endpoint: Arc<EndpointService>,
+    daemon: DaemonService,
 }
 
 impl Services {
@@ -49,6 +50,13 @@ impl Services {
             config.clone(),
         );
         let project = Arc::new(project);
+        let daemon = DaemonService::new(
+            config.clone(),
+            Arc::clone(&endpoint),
+            Arc::new(repositories.branch().clone()),
+            Arc::new(repositories.project().clone()),
+            Arc::new(repositories.organization().clone()),
+        );
         Self {
             user: UserService::new(Arc::new(repositories.user().clone()), config.server_secret.clone()),
             organization: OrganizationService::new(
@@ -63,6 +71,7 @@ impl Services {
             branch,
             endpoint,
             membership,
+            daemon,
         }
     }
 
@@ -89,5 +98,9 @@ impl Services {
 
     pub fn endpoint(&self) -> &Arc<EndpointService> {
         &self.endpoint
+    }
+
+    pub fn daemon(&self) -> &DaemonService {
+        &self.daemon
     }
 }

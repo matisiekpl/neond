@@ -8,7 +8,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
 use crate::mgmt::handler::AppState;
-use crate::mgmt::handler::{branch, endpoint, organization, project, user};
+use crate::mgmt::handler::{branch, daemon, endpoint, organization, project, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): integrate React hosting into app
@@ -67,6 +67,7 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
                 .delete(endpoint::stop)
                 .get(endpoint::status),
         )
+        .route("/daemon", get(daemon::get))
         .with_state(state);
 
     let app = Router::new()

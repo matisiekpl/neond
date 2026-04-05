@@ -412,6 +412,15 @@ impl EndpointService {
         }
     }
 
+    pub async fn get_all_active(&self) -> Vec<(Uuid, String, u16)> {
+        let endpoints = self.endpoints.lock().await;
+        endpoints
+            .iter()
+            .filter(|(_, e)| e.get_status() == ComputeEndpointStatus::Running)
+            .map(|(id, e)| (*id, e.get_branch().slug.clone(), e.get_port()))
+            .collect()
+    }
+
     pub async fn listen(&self) -> std::result::Result<(), anyhow::Error> {
         if self.config.hostname.is_some() {
             let listener =

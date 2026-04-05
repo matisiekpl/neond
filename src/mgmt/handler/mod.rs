@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod branch;
+pub mod daemon;
 pub mod endpoint;
 pub mod organization;
 pub mod project;

@@ -17,3 +17,4 @@ pub mod update_organization_request;
 pub mod update_project_request;
 pub mod user_response;
 pub mod config;
+pub mod daemon_response;
