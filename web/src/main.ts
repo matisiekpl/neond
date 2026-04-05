@@ -1,5 +1,8 @@
-import { createApp } from 'vue'
+import {createApp} from 'vue'
 import './style.css'
 import App from './App.vue'
+import {router} from '@/router'
+import {createPinia} from 'pinia'
+import 'vue-sonner/style.css';
 
-createApp(App).mount('#app')
+createApp(App).use(router).use(createPinia()).mount('#app')
