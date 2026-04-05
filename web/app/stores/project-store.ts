@@ -10,10 +10,10 @@ type ProjectState = {
   projects: Project[]
   loading: boolean
   reset: () => void
-  fetchProjects: (orgId: string) => Promise<void>
-  createProject: (orgId: string, dto: CreateProjectRequest) => Promise<Project>
-  updateProject: (orgId: string, projectId: string, dto: UpdateProjectRequest) => Promise<void>
-  deleteProject: (orgId: string, projectId: string) => Promise<void>
+  fetchProjects: (organizationId: string, skipLoading?: boolean) => Promise<void>
+  createProject: (organizationId: string, payload: CreateProjectRequest) => Promise<Project>
+  updateProject: (organizationId: string, projectId: string, payload: UpdateProjectRequest) => Promise<void>
+  deleteProject: (organizationId: string, projectId: string) => Promise<void>
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -22,21 +22,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   reset: () => set({ projects: [], loading: false }),
 
-  fetchProjects: async (orgId) => {
-    set({ loading: true })
+  fetchProjects: async (organizationId, skipLoading = false) => {
+    if (!skipLoading) set({ loading: true })
     try {
-      const list = await projectsApi.list(orgId)
+      const list = await projectsApi.list(organizationId)
       set({ projects: list })
     } finally {
-      set({ loading: false })
+      if (!skipLoading) set({ loading: false })
     }
   },
 
-  createProject: async (orgId, dto) => {
+  createProject: async (organizationId, payload:CreateProjectRequest) => {
     try {
-      const project = await projectsApi.create(orgId, dto)
-      await branchesApi.create(orgId, project.id, "production")
-      await get().fetchProjects(orgId)
+      const project = await projectsApi.create(organizationId, payload)
+      await branchesApi.create(organizationId, project.id, "production")
+      await get().fetchProjects(organizationId)
       toast.success("Project created")
       return project
     } catch (e) {
@@ -45,10 +45,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  updateProject: async (orgId, projectId, dto) => {
+  updateProject: async (organizationId, projectId, payload) => {
     try {
-      await projectsApi.update(orgId, projectId, dto)
-      await get().fetchProjects(orgId)
+      await projectsApi.update(organizationId, projectId, payload)
+      await get().fetchProjects(organizationId, true)
       toast.success("Project updated")
     } catch (e) {
       toast.error(getAppError(e))
@@ -56,10 +56,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  deleteProject: async (orgId, projectId) => {
+  deleteProject: async (organizationId, projectId) => {
     try {
-      await projectsApi.remove(orgId, projectId)
-      await get().fetchProjects(orgId)
+      await projectsApi.remove(organizationId, projectId)
+      await get().fetchProjects(organizationId)
       toast.success("Project deleted")
     } catch (e) {
       toast.error(getAppError(e))

@@ -12,14 +12,14 @@ export const organizationsApi = {
     return response.data
   },
 
-  async update(orgId: string, name: string): Promise<Organization> {
-    const response = await api.put<Organization>(`organizations/${orgId}`, {
+  async update(organizationId: string, name: string): Promise<Organization> {
+    const response = await api.put<Organization>(`organizations/${organizationId}`, {
       name,
     })
     return response.data
   },
 
-  async remove(orgId: string): Promise<void> {
-    await api.delete(`organizations/${orgId}`)
+  async remove(organizationId: string): Promise<void> {
+    await api.delete(`organizations/${organizationId}`)
   },
 }

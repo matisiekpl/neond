@@ -8,12 +8,12 @@ type BranchState = {
   branches: Branch[]
   loading: boolean
   reset: () => void
-  fetchBranches: (orgId: string, projectId: string, silent?: boolean) => Promise<void>
-  createBranch: (orgId: string, projectId: string, name: string, parentBranchId?: string) => Promise<Branch>
-  renameBranch: (orgId: string, projectId: string, branchId: string, name: string) => Promise<void>
-  startEndpoint: (orgId: string, projectId: string, branchId: string) => Promise<void>
-  stopEndpoint: (orgId: string, projectId: string, branchId: string) => Promise<void>
-  deleteBranch: (orgId: string, projectId: string, branchId: string) => Promise<void>
+  fetchBranches: (organizationId: string, projectId: string, silent?: boolean) => Promise<void>
+  createBranch: (organizationId: string, projectId: string, name: string, parentBranchId?: string) => Promise<Branch>
+  renameBranch: (organizationId: string, projectId: string, branchId: string, name: string) => Promise<void>
+  startEndpoint: (organizationId: string, projectId: string, branchId: string) => Promise<void>
+  stopEndpoint: (organizationId: string, projectId: string, branchId: string) => Promise<void>
+  deleteBranch: (organizationId: string, projectId: string, branchId: string) => Promise<void>
 }
 
 export const useBranchStore = create<BranchState>((set, get) => ({
@@ -22,20 +22,20 @@ export const useBranchStore = create<BranchState>((set, get) => ({
 
   reset: () => set({ branches: [], loading: false }),
 
-  fetchBranches: async (orgId, projectId, silent = false) => {
+  fetchBranches: async (organizationId, projectId, silent = false) => {
     if (!silent) set({ loading: true })
     try {
-      const list = await branchesApi.list(orgId, projectId)
+      const list = await branchesApi.list(organizationId, projectId)
       set({ branches: list })
     } finally {
       if (!silent) set({ loading: false })
     }
   },
 
-  createBranch: async (orgId, projectId, name, parentBranchId?) => {
+  createBranch: async (organizationId, projectId, name, parentBranchId?) => {
     try {
-      const branch = await branchesApi.create(orgId, projectId, name, parentBranchId)
-      await get().fetchBranches(orgId, projectId)
+      const branch = await branchesApi.create(organizationId, projectId, name, parentBranchId)
+      await get().fetchBranches(organizationId, projectId)
       toast.success("Branch created")
       return branch
     } catch (e) {
@@ -44,10 +44,10 @@ export const useBranchStore = create<BranchState>((set, get) => ({
     }
   },
 
-  renameBranch: async (orgId, projectId, branchId, name) => {
+  renameBranch: async (organizationId, projectId, branchId, name) => {
     try {
-      await branchesApi.rename(orgId, projectId, branchId, name)
-      await get().fetchBranches(orgId, projectId)
+      await branchesApi.rename(organizationId, projectId, branchId, name)
+      await get().fetchBranches(organizationId, projectId)
       toast.success("Branch renamed")
     } catch (e) {
       toast.error(getAppError(e))
@@ -55,10 +55,10 @@ export const useBranchStore = create<BranchState>((set, get) => ({
     }
   },
 
-  startEndpoint: async (orgId, projectId, branchId) => {
+  startEndpoint: async (organizationId, projectId, branchId) => {
     try {
-      await branchesApi.launch(orgId, projectId, branchId)
-      await get().fetchBranches(orgId, projectId)
+      await branchesApi.launch(organizationId, projectId, branchId)
+      await get().fetchBranches(organizationId, projectId)
       toast.success("Endpoint started")
     } catch (e) {
       toast.error(getAppError(e))
@@ -66,10 +66,10 @@ export const useBranchStore = create<BranchState>((set, get) => ({
     }
   },
 
-  stopEndpoint: async (orgId, projectId, branchId) => {
+  stopEndpoint: async (organizationId, projectId, branchId) => {
     try {
-      await branchesApi.shutdown(orgId, projectId, branchId)
-      await get().fetchBranches(orgId, projectId)
+      await branchesApi.shutdown(organizationId, projectId, branchId)
+      await get().fetchBranches(organizationId, projectId)
       toast.success("Endpoint stopped")
     } catch (e) {
       toast.error(getAppError(e))
@@ -77,10 +77,10 @@ export const useBranchStore = create<BranchState>((set, get) => ({
     }
   },
 
-  deleteBranch: async (orgId, projectId, branchId) => {
+  deleteBranch: async (organizationId, projectId, branchId) => {
     try {
-      await branchesApi.remove(orgId, projectId, branchId)
-      await get().fetchBranches(orgId, projectId)
+      await branchesApi.remove(organizationId, projectId, branchId)
+      await get().fetchBranches(organizationId, projectId)
       toast.success("Branch deleted")
     } catch (e) {
       toast.error(getAppError(e))

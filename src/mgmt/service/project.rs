@@ -235,7 +235,9 @@ impl ProjectService {
         id: Uuid,
         req: UpdateProjectRequest,
     ) -> Result<ProjectResponse> {
-        Self::validate_project_name(&req.name)?;
+        if let Some(ref name) = req.name {
+            Self::validate_project_name(name)?;
+        }
 
         self.membership_service
             .verify_membership(user_id, org_id)
@@ -251,7 +253,9 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
-        let updated = self.project_repo.update(id, &req.name).await?;
+        if let Some(ref name) = req.name {
+            self.project_repo.update(id, name).await?;
+        }
 
         let has_config = req.gc_period.is_some()
             || req.gc_horizon.is_some()
@@ -264,18 +268,11 @@ impl ProjectService {
                 .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
 
             let config = TenantConfigPatch {
-                gc_period: req.gc_period.clone().map(FieldPatch::Upsert).unwrap_or_default(),
+                gc_period: req.gc_period.map(FieldPatch::Upsert).unwrap_or_default(),
                 gc_horizon: req.gc_horizon.map(FieldPatch::Upsert).unwrap_or_default(),
-                pitr_interval: req.pitr_interval.clone().map(FieldPatch::Upsert).unwrap_or_default(),
-                checkpoint_distance: req
-                    .checkpoint_distance
-                    .map(FieldPatch::Upsert)
-                    .unwrap_or_default(),
-                checkpoint_timeout: req
-                    .checkpoint_timeout
-                    .clone()
-                    .map(FieldPatch::Upsert)
-                    .unwrap_or_default(),
+                pitr_interval: req.pitr_interval.map(FieldPatch::Upsert).unwrap_or_default(),
+                checkpoint_distance: req.checkpoint_distance.map(FieldPatch::Upsert).unwrap_or_default(),
+                checkpoint_timeout: req.checkpoint_timeout.map(FieldPatch::Upsert).unwrap_or_default(),
                 ..Default::default()
             };
 
@@ -286,19 +283,7 @@ impl ProjectService {
                 .map_err(|e| AppError::Internal(format!("Failed to update tenant config: {e}")))?;
         }
 
-        Ok(ProjectResponse {
-            id: updated.id,
-            organization_id: updated.organization_id,
-            name: updated.name,
-            pg_version: updated.pg_version,
-            created_at: updated.created_at,
-            updated_at: updated.updated_at,
-            gc_period: req.gc_period,
-            gc_horizon: req.gc_horizon,
-            pitr_interval: req.pitr_interval,
-            checkpoint_distance: req.checkpoint_distance,
-            checkpoint_timeout: req.checkpoint_timeout,
-        })
+        self.get(user_id, org_id, id).await
     }
 
     pub async fn delete(&self, user_id: Uuid, org_id: Uuid, id: Uuid) -> Result<()> {

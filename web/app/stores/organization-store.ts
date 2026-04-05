@@ -19,11 +19,11 @@ type OrganizationState = {
   fetchOrganizations: () => Promise<Organization[]>
   loadOrganizations: () => Promise<void>
   createOrganization: (name: string) => Promise<Organization>
-  updateOrganization: (orgId: string, name: string) => Promise<Organization>
-  deleteOrganization: (orgId: string) => Promise<void>
-  fetchMembers: (orgId: string) => Promise<void>
-  addMemberByEmail: (orgId: string, email: string) => Promise<void>
-  removeMember: (orgId: string, userId: string) => Promise<void>
+  updateOrganization: (organizationId: string, name: string) => Promise<Organization>
+  deleteOrganization: (organizationId: string) => Promise<void>
+  fetchMembers: (organizationId: string) => Promise<void>
+  addMemberByEmail: (organizationId: string, email: string) => Promise<void>
+  removeMember: (organizationId: string, userId: string) => Promise<void>
 }
 
 export const useOrganizationStore = create<OrganizationState>((set, get) => ({
@@ -92,34 +92,34 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     return org
   },
 
-  updateOrganization: async (orgId, name) => {
-    const org = await organizationsApi.update(orgId, name)
+  updateOrganization: async (organizationId, name) => {
+    const org = await organizationsApi.update(organizationId, name)
     await get().fetchOrganizations()
     toast.success("Organization updated")
     return org
   },
 
-  deleteOrganization: async (orgId) => {
-    await organizationsApi.remove(orgId)
+  deleteOrganization: async (organizationId) => {
+    await organizationsApi.remove(organizationId)
     const orgs = await get().fetchOrganizations()
     get().initSelection(orgs)
     toast.success("Organization deleted")
   },
 
-  fetchMembers: async (orgId) => {
+  fetchMembers: async (organizationId) => {
     set({ membersLoading: true })
     try {
-      const list = await membersApi.list(orgId)
+      const list = await membersApi.list(organizationId)
       set({ members: list })
     } finally {
       set({ membersLoading: false })
     }
   },
 
-  addMemberByEmail: async (orgId, email) => {
+  addMemberByEmail: async (organizationId, email) => {
     try {
-      await membersApi.addByEmail(orgId, email)
-      await get().fetchMembers(orgId)
+      await membersApi.addByEmail(organizationId, email)
+      await get().fetchMembers(organizationId)
       toast.success("Member added")
     } catch (e) {
       toast.error(getAppError(e))
@@ -127,10 +127,10 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     }
   },
 
-  removeMember: async (orgId, userId) => {
+  removeMember: async (organizationId, userId) => {
     try {
-      await membersApi.remove(orgId, userId)
-      await get().fetchMembers(orgId)
+      await membersApi.remove(organizationId, userId)
+      await get().fetchMembers(organizationId)
       toast.success("Member removed")
     } catch (e) {
       toast.error(getAppError(e))

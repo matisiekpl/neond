@@ -3,30 +3,30 @@ import type { CreateProjectRequest, UpdateProjectRequest } from "~/types/dto/pro
 import api from "./client"
 
 export const projectsApi = {
-  async list(orgId: string): Promise<Project[]> {
-    const response = await api.get<Project[]>(`organizations/${orgId}/projects`)
+  async list(organizationId: string): Promise<Project[]> {
+    const response = await api.get<Project[]>(`organizations/${organizationId}/projects`)
     return response.data
   },
 
-  async get(orgId: string, projectId: string): Promise<Project> {
-    const response = await api.get<Project>(`organizations/${orgId}/projects/${projectId}`)
+  async get(organizationId: string, projectId: string): Promise<Project> {
+    const response = await api.get<Project>(`organizations/${organizationId}/projects/${projectId}`)
     return response.data
   },
 
-  async create(orgId: string, dto: CreateProjectRequest): Promise<Project> {
-    const response = await api.post<Project>(`organizations/${orgId}/projects`, dto)
+  async create(organizationId: string, payload: CreateProjectRequest): Promise<Project> {
+    const response = await api.post<Project>(`organizations/${organizationId}/projects`, payload)
     return response.data
   },
 
-  async update(orgId: string, projectId: string, dto: UpdateProjectRequest): Promise<Project> {
+  async update(organizationId: string, projectId: string, payload: UpdateProjectRequest): Promise<Project> {
     const response = await api.put<Project>(
-      `organizations/${orgId}/projects/${projectId}`,
-      dto,
+      `organizations/${organizationId}/projects/${projectId}`,
+      payload,
     )
     return response.data
   },
 
-  async remove(orgId: string, projectId: string): Promise<void> {
-    await api.delete(`organizations/${orgId}/projects/${projectId}`)
+  async remove(organizationId: string, projectId: string): Promise<void> {
+    await api.delete(`organizations/${organizationId}/projects/${projectId}`)
   },
 }

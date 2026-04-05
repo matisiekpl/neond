@@ -4,7 +4,7 @@ export interface CreateProjectRequest {
 }
 
 export interface UpdateProjectRequest {
-  name: string
+  name?: string
   gc_period?: string
   gc_horizon?: number
   pitr_interval?: string
