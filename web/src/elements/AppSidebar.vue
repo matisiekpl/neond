@@ -12,6 +12,7 @@ import {
   LogOut,
   Plus,
   Settings,
+  Terminal,
 } from 'lucide-vue-next'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { useProjectStore } from '@/stores/project.store'
@@ -114,6 +115,18 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               <RouterLink to="/dashboard/settings/organization">
                 <Settings />
                 <span>Organization</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="route.path === '/dashboard/daemon'"
+              tooltip="Daemon"
+            >
+              <RouterLink to="/dashboard/daemon">
+                <Terminal />
+                <span>Daemon</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

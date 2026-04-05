@@ -8,6 +8,7 @@ import ProjectView from '@/views/Dashboard/ProjectView.vue'
 import ProjectSettingsView from '@/views/Dashboard/ProjectSettingsView.vue'
 import SetupOrganizationView from '@/views/Dashboard/SetupOrganizationView.vue'
 import OrganizationSettingsView from '@/views/Dashboard/OrganizationSettingsView.vue'
+import DaemonView from '@/views/Dashboard/DaemonView.vue'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -24,6 +25,7 @@ const routes = [
       { path: 'projects/:projectId/settings', component: ProjectSettingsView, name: 'projects.settings' },
       { path: 'setup-organization', component: SetupOrganizationView, name: 'setup-organization' },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },
+      { path: 'daemon', component: DaemonView, name: 'daemon' },
     ],
   },
 ]
