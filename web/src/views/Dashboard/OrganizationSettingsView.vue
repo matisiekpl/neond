@@ -18,13 +18,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -155,36 +148,32 @@ async function confirmDelete() {
     <p class="text-sm text-muted-foreground">No organization selected.</p>
   </section>
 
-  <div v-else class="w-full space-y-6">
-    <Card>
-      <CardHeader>
-        <CardTitle>General</CardTitle>
-        <CardDescription>Update your organization display name.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form @submit.prevent="saveName">
-          <div class="space-y-2">
-            <Label for="organization-name">Name</Label>
-            <Input id="organization-name" v-model="orgName" class="w-full" />
-          </div>
-          <Button
-            type="submit"
-            class="mt-4 cursor-pointer"
-            :disabled="nameSubmitting || !orgName.trim() || !nameIsDirty"
-          >
-            <Loader2 v-if="nameSubmitting" class="mr-1.5 size-3.5 animate-spin" />
-            Save changes
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+  <div v-else class="w-full divide-y">
+    <section class="flex flex-col gap-4 py-8 first:pt-0 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium">General</h3>
+        <p class="mt-1 text-sm text-muted-foreground">Update your organization display name.</p>
+      </div>
+      <form @submit.prevent="saveName" class="space-y-2 max-w-sm">
+        <Label for="organization-name">Name</Label>
+        <Input id="organization-name" v-model="orgName" class="w-full" />
+        <Button
+          type="submit"
+          class="mt-2 cursor-pointer"
+          :disabled="nameSubmitting || !orgName.trim() || !nameIsDirty"
+        >
+          <Loader2 v-if="nameSubmitting" class="mr-1.5 size-3.5 animate-spin" />
+          Save
+        </Button>
+      </form>
+    </section>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Members</CardTitle>
-        <CardDescription>People with access to this organization.</CardDescription>
-      </CardHeader>
-      <CardContent class="space-y-4">
+    <section class="flex flex-col gap-4 py-8 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium">Members</h3>
+        <p class="mt-1 text-sm text-muted-foreground">People with access to this organization.</p>
+      </div>
+      <div class="space-y-4">
         <Button variant="outline" size="sm" type="button" class="cursor-pointer" @click="inviteOpen = true">
           Add member
         </Button>
@@ -202,10 +191,10 @@ async function confirmDelete() {
             </TableHeader>
             <TableBody>
               <TableRow v-for="member in organizationStore.members" :key="member.id">
-                <TableCell class="max-w-[200px] font-medium">
+                <TableCell class="max-w-50 font-medium">
                   <span class="block truncate">{{ member.name }}</span>
                 </TableCell>
-                <TableCell class="max-w-[280px] text-muted-foreground">
+                <TableCell class="max-w-70 text-muted-foreground">
                   <span class="block truncate">{{ member.email }}</span>
                 </TableCell>
                 <TableCell class="text-right">
@@ -229,22 +218,20 @@ async function confirmDelete() {
         <p v-if="!organizationStore.membersLoading && organizationStore.members.length === 0" class="text-sm text-muted-foreground">
           No other members yet. Invite someone by email.
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
-    <Card>
-      <CardHeader>
-        <CardTitle class="text-destructive">Danger zone</CardTitle>
-        <CardDescription>
-          Permanently delete this organization and related data. This cannot be undone.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section class="flex flex-col gap-4 py-8 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium text-destructive">Danger zone</h3>
+        <p class="mt-1 text-sm text-muted-foreground">Permanently delete this organization and related data. This cannot be undone.</p>
+      </div>
+      <div>
         <Button variant="destructive" type="button" class="cursor-pointer" @click="deleteOpen = true">
           Delete organization
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
     <Dialog v-model:open="inviteOpen">
       <DialogContent class="sm:max-w-md">
@@ -259,7 +246,7 @@ async function confirmDelete() {
               id="member-invitation-email"
               type="email"
               v-model="inviteEmail"
-              autocomplete="off"
+              autocomplete="email"
               placeholder="colleague@example.com"
             />
           </div>
