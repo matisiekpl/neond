@@ -271,36 +271,13 @@ function copyConnectionString(branch: Branch) {
   <div v-else class="space-y-6">
     <div>
       <h1 class="text-lg font-semibold">{{ project.name }}</h1>
-      <p class="text-sm text-muted-foreground">PostgreSQL {{ project.pg_version.replace(/^V/i, '') }}</p>
-    </div>
-
-    <div class="border bg-card p-6">
-      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <dt class="text-xs font-medium text-muted-foreground">Name</dt>
-          <dd class="mt-1 text-sm">{{ project.name }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-muted-foreground">PostgreSQL version</dt>
-          <dd class="mt-1 text-sm">{{ project.pg_version.replace(/^V/i, '') }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-muted-foreground">Created</dt>
-          <dd class="mt-1 text-sm">
-            {{
-              new Date(project.created_at).toLocaleDateString(undefined, {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })
-            }}
-          </dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium text-muted-foreground">Project ID</dt>
-          <dd class="mt-1 font-mono text-xs text-muted-foreground">{{ project.id }}</dd>
-        </div>
-      </dl>
+      <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+        <span>PostgreSQL {{ project.pg_version.replace(/^V/i, '') }}</span>
+        <span>·</span>
+        <span>Created {{ new Date(project.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
+        <span>·</span>
+        <span class="font-mono text-xs">{{ project.id }}</span>
+      </div>
     </div>
 
     <div class="space-y-3">
