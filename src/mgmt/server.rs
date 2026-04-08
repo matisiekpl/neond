@@ -19,6 +19,7 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): in daemon settings show used remote storage
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
+    // TODO(matisiekpl): use organization id in route path
     let state = Arc::new(state);
 
     let api = Router::new()

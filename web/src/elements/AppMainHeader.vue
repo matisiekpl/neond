@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { useProjectStore } from '@/stores/project.store'
-import { SidebarTrigger } from '@/components/ui/sidebar'
-import { Button } from '@/components/ui/button'
-import { useDark, useToggle } from '@vueuse/core'
-import { Sun, Moon } from 'lucide-vue-next'
+import {computed} from 'vue'
+import {useRoute} from 'vue-router'
+import {useProjectStore} from '@/stores/project.store'
+import {SidebarTrigger} from '@/components/ui/sidebar'
+import {Button} from '@/components/ui/button'
+import {useDark, useToggle} from '@vueuse/core'
+import {Sun, Moon} from 'lucide-vue-next'
 
 const route = useRoute()
 const projectStore = useProjectStore()
@@ -14,6 +14,7 @@ const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/dashboard/projects': 'Projects',
   '/dashboard/settings/organization': 'Organization settings',
+  '/dashboard/daemon': 'Daemon',
 }
 
 const title = computed(() => {

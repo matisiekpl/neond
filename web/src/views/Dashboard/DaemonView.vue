@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-import { useTitle } from '@vueuse/core'
-import { useDaemonStore } from '@/stores/daemon.store'
-import { formatBytes } from '@/lib/utils'
+import {onMounted, onUnmounted, ref} from 'vue'
+import {useTitle} from '@vueuse/core'
+import {useDaemonStore} from '@/stores/daemon.store'
 import {
   Card,
-  CardContent,
+  CardContent, CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -17,12 +16,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import CodeSnippet from "@/elements/CodeSnippet.vue";
+import {Progress} from "@/components/ui/progress";
+import {Button} from "@/components/ui/button";
+import {Badge} from "@/components/ui/badge";
 
 useTitle('Daemon — neond')
-const daemonStore = useDaemonStore()
+const daemonStore = useDaemonStore();
 
-onMounted(() => daemonStore.startPolling())
-onUnmounted(() => daemonStore.stopPolling())
+onMounted(() => daemonStore.startPolling());
+onUnmounted(() => daemonStore.stopPolling());
 </script>
 
 <template>
@@ -32,93 +35,152 @@ onUnmounted(() => daemonStore.stopPolling())
     </div>
 
     <template v-if="daemonStore.state">
-      <Card>
-        <CardHeader>
-          <CardTitle>Storage</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <template v-if="daemonStore.state.storage.type === 'local'">
-            <div class="space-y-3">
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">Type</span>
-                <span class="font-medium">Local</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">Used</span>
-                <span class="font-medium">{{ formatBytes(daemonStore.state.storage.used_bytes) }}</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">Free</span>
-                <span class="font-medium">{{ formatBytes(daemonStore.state.storage.free_bytes) }}</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">Used %</span>
-                <span class="font-medium">{{ daemonStore.state.storage.used_percent.toFixed(1) }}%</span>
-              </div>
-              <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  class="h-full bg-primary transition-all"
-                  :style="{ width: `${Math.min(daemonStore.state.storage.used_percent, 100)}%` }"
-                />
-              </div>
-            </div>
-          </template>
+      <div class="grid md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Storage</CardTitle>
+            <CardDescription>Connected to S3 bucket</CardDescription>
+          </CardHeader>
+          <CardContent class="flex flex-col gap-3">
 
-          <template v-else-if="daemonStore.state.storage.type === 'remote'">
-            <div class="space-y-3">
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">Type</span>
-                <span class="font-medium">S3 Bucket</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">Bucket</span>
-                <span class="font-medium font-mono">{{ daemonStore.state.storage.bucket }}</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">Region</span>
-                <span class="font-medium font-mono">{{ daemonStore.state.storage.region }}</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-muted-foreground">AWS Access Key ID</span>
-                <span class="font-medium font-mono">{{ daemonStore.state.storage.aws_access_key_id }}</span>
-              </div>
-            </div>
-          </template>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Active mappings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p v-if="daemonStore.state.mappings.length === 0" class="text-sm text-muted-foreground">
-            No active endpoints.
-          </p>
-          <div v-else class="overflow-hidden border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Port</TableHead>
-                  <TableHead>SNI</TableHead>
-                </TableRow>
-              </TableHeader>
+            <Table class="rounded-md border">
               <TableBody>
-                <TableRow v-for="(mapping, i) in daemonStore.state.mappings" :key="i">
-                  <TableCell>{{ mapping.organization_name }}</TableCell>
-                  <TableCell>{{ mapping.project_name }}</TableCell>
-                  <TableCell>{{ mapping.branch_name }}</TableCell>
-                  <TableCell class="font-mono">{{ mapping.port }}</TableCell>
-                  <TableCell class="font-mono text-muted-foreground">{{ mapping.sni ?? '—' }}</TableCell>
+                <TableRow>
+                  <TableCell>AWS Access Key ID</TableCell>
+                  <TableCell>
+                    <CodeSnippet>uszdhguisrf</CodeSnippet>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>AWS Bucket</TableCell>
+                  <TableCell>
+                    <CodeSnippet>pg-data</CodeSnippet>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>AWS Region</TableCell>
+                  <TableCell>
+                    <CodeSnippet>us-east-1</CodeSnippet>
+                  </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
-          </div>
-        </CardContent>
-      </Card>
+
+            <p class="text-sm text-muted-foreground">
+              To configure different data storage, relaunch daemon with appropriate config.
+            </p>
+
+            <!--            <div class="flex justify-between">-->
+            <!--              <p class="text-sm">-->
+            <!--                Available 37GB out of 512GB-->
+            <!--              </p>-->
+            <!--              <p class="text-sm text-muted-foreground">-->
+            <!--                65% used-->
+            <!--              </p>-->
+            <!--            </div>-->
+
+            <!--            <Progress :model-value="30" class="w-full"/>-->
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Durability</CardTitle>
+            <CardDescription>
+              Neon stores data in layer files on pageservers, which receive the Postgres Write-Ahead Log (WAL) and
+              provide high durability. Checkpoints — the process of flushing data to durable storage — don't happen
+              instantly; Neon automatically determines the optimal time to run them. If needed, administrators can set a
+              maximum interval between checkpoints via the Checkpoint timeout setting in branch settings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="flex flex-col gap-3">
+
+            <div class="flex justify-between text-sm">
+              <p class="text-green-600 font-semibold">37 branches in sync</p>
+              <p class="text-red-600">37 branches not checkpointed</p>
+            </div>
+
+            <Progress :model-value="30" class="bg-red-600" indicator-class="bg-green-600"></Progress>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Maintenance</CardTitle>
+            <CardDescription>
+              Perform maintenance operations in graceful manner.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="flex flex-col gap-3">
+
+            <Table class="rounded-md border">
+              <TableRow>
+                <TableCell>
+                  Server hostname
+                </TableCell>
+                <TableCell>
+                  <CodeSnippet>{}.bazy.local</CodeSnippet>
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>
+                  Build Version
+                </TableCell>
+                <TableCell>
+                  <CodeSnippet>6407dbc19</CodeSnippet>
+                </TableCell>
+              </TableRow>
+
+            </Table>
+
+            <p class="text-sm">
+              3 branches checkpoints are not in sync with last received WAL record. Shutdown does not guarantee
+              durability of data.
+            </p>
+            <Button class="w-full bg-orange-500">
+              Shutdown
+            </Button>
+
+          </CardContent>
+        </Card>
+      </div>
+
+      <h2 class="text-sm font-semibold">Branches</h2>
+      <Table class="rounded-md border">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Organization</TableHead>
+            <TableHead>Project</TableHead>
+            <TableHead>Branch</TableHead>
+            <TableHead>Size</TableHead>
+            <TableHead>Last Received LSN</TableHead>
+            <TableHead>Checkpointed LSN</TableHead>
+            <TableHead>Sync Status</TableHead>
+            <TableHead>TLS SNI Prefix</TableHead>
+            <TableHead>Compute Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell>First org</TableCell>
+            <TableCell>Subtracker</TableCell>
+            <TableCell>production</TableCell>
+            <TableCell>22MB</TableCell>
+            <TableCell>
+              <CodeSnippet>0/15EEC10</CodeSnippet>
+            </TableCell>
+            <TableCell>
+              <CodeSnippet>0/15EEC10</CodeSnippet>
+            </TableCell>
+            <TableCell>Checkpointed</TableCell>
+            <TableCell>
+              <CodeSnippet>slug.</CodeSnippet>
+            </TableCell>
+            <TableCell>Running</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+
     </template>
   </div>
 </template>
