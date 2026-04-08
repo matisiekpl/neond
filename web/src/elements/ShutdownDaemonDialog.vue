@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useDaemonStore } from '@/stores/daemon.store'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2, TriangleAlert } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog,
   DialogContent,
@@ -45,9 +46,12 @@ async function onConfirm() {
       </DialogHeader>
 
       <div class="flex flex-col gap-3">
-        <p v-if="awaitingCount > 0" class="text-sm text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2">
-          {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch is' : 'branches are' }} not checkpointed against the last received WAL record. Shutdown may not guarantee durability of data.
-        </p>
+        <Alert v-if="awaitingCount > 0">
+          <TriangleAlert class="size-4 text-amber-600" />
+          <AlertDescription>
+            {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch is' : 'branches are' }} not checkpointed against the last received WAL record. Shutdown may not guarantee durability of data.
+          </AlertDescription>
+        </Alert>
 
         <label v-if="awaitingCount > 0" class="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" v-model="waitForCheckpoints" class="cursor-pointer" />

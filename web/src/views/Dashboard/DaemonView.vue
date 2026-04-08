@@ -23,6 +23,8 @@ import {formatBytes} from '@/lib/utils'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
 import ShutdownDaemonDialog from '@/elements/ShutdownDaemonDialog.vue'
+import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert'
+import {TriangleAlert} from 'lucide-vue-next'
 
 useTitle('Daemon — neond')
 const daemonStore = useDaemonStore();
@@ -57,16 +59,14 @@ onUnmounted(() => daemonStore.stopPolling());
     </div>
 
     <template v-if="daemonStore.state">
-      <div
-        v-if="pendingShutdown"
-        class="border border-red-300 bg-red-50 text-red-800 px-4 py-3 flex items-center justify-between gap-4"
-      >
-        <div class="text-sm">
-          <p class="font-semibold">Daemon shutdown in progress</p>
-          <p v-if="pendingShutdown.wait_for_checkpoints && awaitingCount > 0">
+      <Alert v-if="pendingShutdown" variant="destructive" class="flex items-center justify-between gap-4">
+        <TriangleAlert class="size-4" />
+        <div class="flex-1">
+          <AlertTitle>Daemon shutdown in progress</AlertTitle>
+          <AlertDescription v-if="pendingShutdown.wait_for_checkpoints && awaitingCount > 0">
             Server is waiting for branches to checkpoint. Maximum checkpoint time is estimated to {{ checkpointTimeoutMinutes }} min.
-          </p>
-          <p v-else>Compute endpoints are being stopped.</p>
+          </AlertDescription>
+          <AlertDescription v-else>Compute endpoints are being stopped.</AlertDescription>
         </div>
         <Button
           variant="outline"
@@ -76,7 +76,7 @@ onUnmounted(() => daemonStore.stopPolling());
         >
           Cancel shutdown
         </Button>
-      </div>
+      </Alert>
 
       <div class="grid md:grid-cols-3 gap-6">
         <Card>
