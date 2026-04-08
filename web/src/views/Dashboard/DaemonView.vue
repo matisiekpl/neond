@@ -43,6 +43,8 @@ const awaitingCount = computed(() => totalCount.value - inSyncCount.value)
 
 const pendingShutdown = computed(() => daemonStore.state?.pending_shutdown ?? null)
 
+const hostnameRoutingEnabled = computed(() => !!daemonStore.state?.hostname)
+
 const checkpointTimeoutMinutes = computed(() => {
   const secs = daemonStore.state?.max_checkpoint_timeout?.secs ?? 0
   return Math.ceil(secs / 60)
@@ -204,7 +206,8 @@ onUnmounted(() => daemonStore.stopPolling());
             <TableHead>Last Received LSN</TableHead>
             <TableHead>Checkpointed LSN</TableHead>
             <TableHead>Sync Status</TableHead>
-            <TableHead>TLS SNI Prefix</TableHead>
+            <TableHead v-if="hostnameRoutingEnabled">TLS SNI Prefix</TableHead>
+            <TableHead v-else>Port</TableHead>
             <TableHead>Compute Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -243,8 +246,12 @@ onUnmounted(() => daemonStore.stopPolling());
                 :remote-consistent-lsn="mapping.remote_consistent_lsn_visible"
               />
             </TableCell>
-            <TableCell>
+            <TableCell v-if="hostnameRoutingEnabled">
               <CodeSnippet v-if="mapping.sni">{{ mapping.slug }}.</CodeSnippet>
+              <span v-else class="text-xs text-muted-foreground">—</span>
+            </TableCell>
+            <TableCell v-else>
+              <CodeSnippet v-if="mapping.port">{{ mapping.port }}</CodeSnippet>
               <span v-else class="text-xs text-muted-foreground">—</span>
             </TableCell>
             <TableCell>

@@ -3,6 +3,8 @@ import { ref, watch } from 'vue'
 import { useDaemonStore } from '@/stores/daemon.store'
 import { Loader2, TriangleAlert } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog,
@@ -53,10 +55,10 @@ async function onConfirm() {
           </AlertDescription>
         </Alert>
 
-        <label v-if="awaitingCount > 0" class="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" v-model="waitForCheckpoints" class="cursor-pointer" />
-          Wait for checkpoints before stopping
-        </label>
+        <div v-if="awaitingCount > 0" class="flex items-center gap-2">
+          <Checkbox id="wait-for-checkpoints" v-model:checked="waitForCheckpoints" />
+          <Label for="wait-for-checkpoints" class="cursor-pointer">Wait for checkpoints before stopping</Label>
+        </div>
       </div>
 
       <DialogFooter class="mt-4">
