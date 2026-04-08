@@ -114,7 +114,9 @@ impl DaemonService {
 
                     mappings.push(MappingInfo {
                         branch_id: branch.id,
+                        organization_id: organization.id,
                         organization_name: organization.name.clone(),
+                        project_id: project.id,
                         project_name: project.name.clone(),
                         branch_name: branch.name.clone(),
                         slug: branch.slug.clone(),
@@ -129,6 +131,11 @@ impl DaemonService {
             }
         }
 
-        Ok(DaemonResponse { storage, mappings })
+        Ok(DaemonResponse {
+            hostname: self.config.hostname.clone(),
+            build_version: env!("GIT_COMMIT_HASH").to_string(),
+            storage,
+            mappings,
+        })
     }
 }

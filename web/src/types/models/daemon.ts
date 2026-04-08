@@ -18,7 +18,9 @@ export type StorageInfo = LocalStorageInfo | RemoteStorageInfo
 
 export interface MappingInfo {
   branch_id: string
+  organization_id: string
   organization_name: string
+  project_id: string
   project_name: string
   branch_name: string
   slug: string
@@ -31,6 +33,8 @@ export interface MappingInfo {
 }
 
 export interface DaemonState {
+  hostname: string | null
+  build_version: string
   storage: StorageInfo
   mappings: MappingInfo[]
 }

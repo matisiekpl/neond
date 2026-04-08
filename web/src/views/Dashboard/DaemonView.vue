@@ -108,7 +108,8 @@ onUnmounted(() => daemonStore.stopPolling());
           </CardHeader>
           <CardContent class="flex flex-col gap-3">
             <div class="flex justify-between text-sm">
-              <p class="text-green-600 font-semibold">{{ inSyncCount }} {{ inSyncCount === 1 ? 'branch' : 'branches' }} in sync</p>
+              <p class="text-green-600 font-semibold">{{ inSyncCount }} {{ inSyncCount === 1 ? 'branch' : 'branches' }}
+                in sync</p>
               <p class="text-amber-600">{{ awaitingCount }} awaiting checkpoint</p>
             </div>
             <Progress
@@ -127,8 +128,26 @@ onUnmounted(() => daemonStore.stopPolling());
             </CardDescription>
           </CardHeader>
           <CardContent class="flex flex-col gap-3">
+            <Table class="rounded-md border">
+              <TableBody>
+                <TableRow>
+                  <TableCell>Server hostname</TableCell>
+                  <TableCell>
+                    <CodeSnippet>{{ daemonStore.state.hostname ?? '-' }}</CodeSnippet>
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Build Version</TableCell>
+                  <TableCell>
+                    <CodeSnippet>{{ daemonStore.state.build_version }}</CodeSnippet>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+
             <p class="text-sm">
-              {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch' : 'branches' }} not checkpointed against last received WAL record. Shutdown does not guarantee durability of data.
+              {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch' : 'branches' }} not checkpointed against last
+              received WAL record. Shutdown does not guarantee durability of data.
             </p>
             <Button class="w-full bg-orange-500 cursor-pointer">
               Shutdown
@@ -154,9 +173,24 @@ onUnmounted(() => daemonStore.stopPolling());
         </TableHeader>
         <TableBody>
           <TableRow v-for="mapping in daemonStore.state.mappings" :key="mapping.branch_id">
-            <TableCell>{{ mapping.organization_name }}</TableCell>
-            <TableCell>{{ mapping.project_name }}</TableCell>
-            <TableCell>{{ mapping.branch_name }}</TableCell>
+            <TableCell>
+              <RouterLink
+                :to="{ name: 'projects.list', params: { organizationId: mapping.organization_id } }"
+                class="underline underline-offset-2 hover:text-foreground text-muted-foreground"
+              >{{ mapping.organization_name }}</RouterLink>
+            </TableCell>
+            <TableCell>
+              <RouterLink
+                :to="{ name: 'projects.show', params: { organizationId: mapping.organization_id, projectId: mapping.project_id } }"
+                class="underline underline-offset-2 hover:text-foreground text-muted-foreground"
+              >{{ mapping.project_name }}</RouterLink>
+            </TableCell>
+            <TableCell>
+              <RouterLink
+                :to="{ name: 'projects.show', params: { organizationId: mapping.organization_id, projectId: mapping.project_id } }"
+                class="underline underline-offset-2 hover:text-foreground text-muted-foreground"
+              >{{ mapping.branch_name }}</RouterLink>
+            </TableCell>
             <TableCell class="text-xs text-muted-foreground">
               {{ formatBytes(mapping.current_logical_size) }}
             </TableCell>

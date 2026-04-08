@@ -28,7 +28,9 @@ pub enum StorageInfo {
 #[derive(Serialize)]
 pub struct MappingInfo {
     pub branch_id: Uuid,
+    pub organization_id: Uuid,
     pub organization_name: String,
+    pub project_id: Uuid,
     pub project_name: String,
     pub branch_name: String,
     pub slug: String,
@@ -42,6 +44,8 @@ pub struct MappingInfo {
 
 #[derive(Serialize)]
 pub struct DaemonResponse {
+    pub hostname: Option<String>,
+    pub build_version: String,
     pub storage: StorageInfo,
     pub mappings: Vec<MappingInfo>,
 }
