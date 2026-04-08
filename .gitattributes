@@ -1,4 +1,5 @@
 *.ts -linguist-detectable
 *.tsx -linguist-detectable
 *.css -linguist-detectable
+*.html -linguist-detectable
 Makefile -linguist-detectable
