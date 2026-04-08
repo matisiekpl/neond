@@ -32,9 +32,16 @@ export interface MappingInfo {
   current_logical_size: number
 }
 
+export interface PendingShutdownInfo {
+  wait_for_checkpoints: boolean
+  requested_at: string
+}
+
 export interface DaemonState {
   hostname: string | null
   build_version: string
   storage: StorageInfo
   mappings: MappingInfo[]
+  pending_shutdown: PendingShutdownInfo | null
+  max_checkpoint_timeout: { secs: number; nanos: number } | null
 }

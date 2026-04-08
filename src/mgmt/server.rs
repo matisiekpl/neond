@@ -2,7 +2,6 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-use neon_utils::shard::TenantShardId;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -15,10 +14,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add PITR restoration
     // TODO(matisiekpl): add configurable PITR horizon
     // TODO(matisiekpl): add daemon settings - list mappings, active branches, durability of them
-    // TODO(matisiekpl): add button to shutdown daemon
     // TODO(matisiekpl): in daemon settings show used remote storage
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
+    let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
     let api = Router::new()
@@ -68,6 +67,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
                 .get(endpoint::status),
         )
         .route("/daemon", get(daemon::get))
+        .route(
+            "/daemon/shutdown",
+            post(daemon::shutdown).delete(daemon::cancel_shutdown),
+        )
         .with_state(state);
 
     let app = Router::new()
@@ -77,6 +80,8 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     let listener = TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("Listening on 0.0.0.0:{}", port);
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move { shutdown_token.cancelled().await })
+        .await?;
     Ok(())
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onMounted, onUnmounted} from 'vue'
+import {computed, onMounted, onUnmounted, ref} from 'vue'
 import {useTitle} from '@vueuse/core'
 import {useDaemonStore} from '@/stores/daemon.store'
 import {
@@ -22,9 +22,11 @@ import {Button} from "@/components/ui/button";
 import {formatBytes} from '@/lib/utils'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
+import ShutdownDaemonDialog from '@/elements/ShutdownDaemonDialog.vue'
 
 useTitle('Daemon — neond')
 const daemonStore = useDaemonStore();
+const shutdownDialogOpen = ref(false)
 
 const inSyncCount = computed(() => {
   if (!daemonStore.state) return 0
@@ -37,6 +39,13 @@ const totalCount = computed(() => daemonStore.state?.mappings.length ?? 0)
 
 const awaitingCount = computed(() => totalCount.value - inSyncCount.value)
 
+const pendingShutdown = computed(() => daemonStore.state?.pending_shutdown ?? null)
+
+const checkpointTimeoutMinutes = computed(() => {
+  const secs = daemonStore.state?.max_checkpoint_timeout?.secs ?? 0
+  return Math.ceil(secs / 60)
+})
+
 onMounted(() => daemonStore.startPolling());
 onUnmounted(() => daemonStore.stopPolling());
 </script>
@@ -48,6 +57,27 @@ onUnmounted(() => daemonStore.stopPolling());
     </div>
 
     <template v-if="daemonStore.state">
+      <div
+        v-if="pendingShutdown"
+        class="border border-red-300 bg-red-50 text-red-800 px-4 py-3 flex items-center justify-between gap-4"
+      >
+        <div class="text-sm">
+          <p class="font-semibold">Daemon shutdown in progress</p>
+          <p v-if="pendingShutdown.wait_for_checkpoints && awaitingCount > 0">
+            Server is waiting for branches to checkpoint. Maximum checkpoint time is estimated to {{ checkpointTimeoutMinutes }} min.
+          </p>
+          <p v-else>Compute endpoints are being stopped.</p>
+        </div>
+        <Button
+          variant="outline"
+          class="cursor-pointer shrink-0"
+          :disabled="daemonStore.cancellingSubmitting"
+          @click="daemonStore.cancelShutdown()"
+        >
+          Cancel shutdown
+        </Button>
+      </div>
+
       <div class="grid md:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
@@ -145,11 +175,18 @@ onUnmounted(() => daemonStore.stopPolling());
               </TableBody>
             </Table>
 
-            <p class="text-sm">
-              {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch' : 'branches' }} not checkpointed against last
-              received WAL record. Shutdown does not guarantee durability of data.
+            <p v-if="awaitingCount > 0" class="text-sm">
+              {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch' : 'branches' }} not checkpointed against last received WAL record. Shutdown does not guarantee durability of data.
             </p>
-            <Button class="w-full bg-orange-500 cursor-pointer">
+            <p v-else class="text-sm text-green-700">
+              All branches had been checkpointed - shutdown guarantees durability in remote storage. Server migration is safe.
+            </p>
+
+            <Button
+              class="w-full bg-orange-500 cursor-pointer"
+              :disabled="!!pendingShutdown"
+              @click="shutdownDialogOpen = true"
+            >
               Shutdown
             </Button>
           </CardContent>
@@ -218,5 +255,10 @@ onUnmounted(() => daemonStore.stopPolling());
       </Table>
 
     </template>
+
+    <ShutdownDaemonDialog
+      v-model:open="shutdownDialogOpen"
+      :awaiting-count="awaitingCount"
+    />
   </div>
 </template>

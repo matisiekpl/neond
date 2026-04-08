@@ -4,9 +4,8 @@ use crate::mgmt::repository::Repositories;
 use crate::mgmt::repository::db::{init_pool, run_migrations};
 use crate::mgmt::server::serve;
 use crate::mgmt::service::Services;
-use std::process;
 use std::sync::Arc;
-use tokio::runtime::Handle;
+use tokio_util::sync::CancellationToken;
 use tracing_panic::panic_hook;
 use tracing_subscriber::EnvFilter;
 
@@ -51,27 +50,35 @@ pub async fn run() -> Result<(), anyhow::Error> {
         Some(pageserver_api_token.as_str()),
     );
 
+    let shutdown_token = CancellationToken::new();
+
     let repositories = Repositories::new().await;
-    let services = Services::new(&repositories, Arc::new(pageserver_client), config.clone());
+    let services = Arc::new(Services::new(
+        &repositories,
+        Arc::new(pageserver_client),
+        config.clone(),
+        shutdown_token.clone(),
+    ));
     let state = AppState {
-        services: Arc::new(services),
+        services: Arc::clone(&services),
     };
 
-    let shutdown_services = Arc::clone(&state.services);
-    let rt_handle = Handle::current();
+    let ctrlc_shutdown_token = shutdown_token.clone();
     ctrlc::set_handler(move || {
-        rt_handle.block_on(shutdown_services.endpoint().shutdown_all());
-        daemon.stop().unwrap();
-        process::exit(0);
+        ctrlc_shutdown_token.cancel();
     })?;
 
-    state.services.endpoint().recover_running().await;
+    services.endpoint().recover_running().await;
 
-    let listen_services = Arc::clone(&state.services);
+    let listen_services = Arc::clone(&services);
     tokio::spawn(async move {
         listen_services.endpoint().listen().await.unwrap();
     });
 
     serve(config.port, state).await?;
+
+    services.endpoint().shutdown_all().await;
+    daemon.stop()?;
+
     Ok(())
 }

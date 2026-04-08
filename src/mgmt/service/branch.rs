@@ -1,5 +1,6 @@
 use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::branch_response::BranchResponse;
+use crate::mgmt::dto::checkpoint_status::CheckpointStatus;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::error::{AppError, Result};
@@ -16,7 +17,10 @@ use neon_utils::shard::TenantShardId;
 use rand::Rng;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use uuid::Uuid;
+use humantime;
+use reqwest;
 
 pub struct BranchService {
     branch_repo: Arc<BranchRepository>,
@@ -371,6 +375,78 @@ impl BranchService {
         }
 
         Ok(())
+    }
+
+    pub async fn check_branches_durability(&self) -> Result<CheckpointStatus> {
+        let projects = self.project_repo.list_all().await?;
+        let mut all_in_sync = true;
+        let mut max_checkpoint_timeout: Option<Duration> = None;
+
+        for project in projects {
+            let tenant_id =
+                TenantId::from_str(project.id.as_simple().to_string().as_str())
+                    .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+            let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+
+            let token = self
+                .config
+                .component_auth
+                .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+            let config_response = reqwest::Client::new()
+                .get(format!(
+                    "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/config"
+                ))
+                .header("Authorization", format!("Bearer {}", token))
+                .send()
+                .await
+                .ok();
+
+            if let Some(response) = config_response {
+                let value: serde_json::Value = response.json().await.unwrap_or_default();
+                let overrides = value
+                    .get("tenant_specific_overrides")
+                    .cloned()
+                    .unwrap_or_default();
+
+                if let Some(timeout_str) = overrides
+                    .get("checkpoint_timeout")
+                    .and_then(|v| v.as_str())
+                {
+                    if let Ok(duration) = humantime::parse_duration(timeout_str) {
+                        max_checkpoint_timeout = Some(
+                            max_checkpoint_timeout
+                                .map_or(duration, |current| current.max(duration)),
+                        );
+                    }
+                }
+            }
+
+            let branches = self.branch_repo.list_by_project_id(project.id).await?;
+            for branch in branches {
+                let timeline_id =
+                    TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+                        .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+                let timeline_info = self
+                    .pageserver_client
+                    .timeline_info(
+                        tenant_shard_id,
+                        timeline_id,
+                        ForceAwaitLogicalSize::Yes,
+                    )
+                    .await
+                    .unwrap();
+
+                if timeline_info.remote_consistent_lsn_visible != timeline_info.last_record_lsn {
+                    all_in_sync = false;
+                }
+            }
+        }
+
+        Ok(CheckpointStatus {
+            all_in_sync,
+            max_checkpoint_timeout,
+        })
     }
 
     fn generate_password() -> String {

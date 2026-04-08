@@ -54,6 +54,8 @@ pg-sni-muxer = "0.1.0"
 pem = "3.0.3"
 openssl = "0.10"
 tower-http = { version = "0.6.8", features = ["cors"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+humantime = "2.2"
 
 [build-dependencies]
 tar = "0.4"

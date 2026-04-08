@@ -1,5 +1,7 @@
+use chrono::{DateTime, Utc};
 use neon_utils::lsn::Lsn;
 use serde::Serialize;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::mgmt::compute::ComputeEndpointStatus;
@@ -42,10 +44,18 @@ pub struct MappingInfo {
     pub current_logical_size: u64,
 }
 
+#[derive(Serialize, Clone)]
+pub struct PendingShutdownInfo {
+    pub wait_for_checkpoints: bool,
+    pub requested_at: DateTime<Utc>,
+}
+
 #[derive(Serialize)]
 pub struct DaemonResponse {
     pub hostname: Option<String>,
     pub build_version: String,
     pub storage: StorageInfo,
     pub mappings: Vec<MappingInfo>,
+    pub pending_shutdown: Option<PendingShutdownInfo>,
+    pub max_checkpoint_timeout: Option<Duration>,
 }

@@ -1,28 +1,45 @@
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
+use chrono::Utc;
 use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
 use neon_pageserver_api::shard::TenantShardId;
 use neon_utils::id::{TenantId, TimelineId};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::daemon_response::{
-    DaemonResponse, LocalStorageInfo, MappingInfo, RemoteStorageInfo, StorageInfo,
+    DaemonResponse, LocalStorageInfo, MappingInfo, PendingShutdownInfo, RemoteStorageInfo,
+    StorageInfo,
 };
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::organization::OrganizationRepository;
 use crate::mgmt::repository::project::ProjectRepository;
+use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::endpoint::EndpointService;
+
+#[derive(Clone)]
+struct PendingShutdown {
+    wait_for_checkpoints: bool,
+    requested_at: chrono::DateTime<Utc>,
+}
 
 pub struct DaemonService {
     config: Config,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     endpoint_service: Arc<EndpointService>,
+    branch_service: Arc<BranchService>,
     branch_repo: Arc<BranchRepository>,
     project_repo: Arc<ProjectRepository>,
     org_repo: Arc<OrganizationRepository>,
+    pending_shutdown: Arc<Mutex<Option<PendingShutdown>>>,
+    shutdown_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+    shutdown_token: CancellationToken,
 }
 
 impl DaemonService {
@@ -30,17 +47,73 @@ impl DaemonService {
         config: Config,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         endpoint_service: Arc<EndpointService>,
+        branch_service: Arc<BranchService>,
         branch_repo: Arc<BranchRepository>,
         project_repo: Arc<ProjectRepository>,
         org_repo: Arc<OrganizationRepository>,
+        shutdown_token: CancellationToken,
     ) -> Self {
         Self {
             config,
             pageserver_client,
             endpoint_service,
+            branch_service,
             branch_repo,
             project_repo,
             org_repo,
+            pending_shutdown: Arc::new(Mutex::new(None)),
+            shutdown_task: Arc::new(Mutex::new(None)),
+            shutdown_token,
+        }
+    }
+
+    pub fn shutdown_token(&self) -> CancellationToken {
+        self.shutdown_token.clone()
+    }
+
+    pub async fn request_shutdown(self: Arc<Self>, wait_for_checkpoints: bool) -> Result<()> {
+        let mut pending = self.pending_shutdown.lock().await;
+        if pending.is_some() {
+            return Err(AppError::Internal("Shutdown already pending".into()));
+        }
+        *pending = Some(PendingShutdown {
+            wait_for_checkpoints,
+            requested_at: Utc::now(),
+        });
+        drop(pending);
+
+        let service = Arc::clone(&self);
+        let handle = tokio::spawn(async move {
+            if wait_for_checkpoints {
+                loop {
+                    match service.branch_service.check_branches_durability().await {
+                        Ok(status) if status.all_in_sync => break,
+                        _ => {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                    }
+                }
+            }
+            service.endpoint_service.shutdown_all().await;
+            service.shutdown_token.cancel();
+        });
+
+        let mut task = self.shutdown_task.lock().await;
+        *task = Some(handle);
+
+        Ok(())
+    }
+
+    pub async fn cancel_shutdown(&self) -> Result<()> {
+        let mut task = self.shutdown_task.lock().await;
+        match task.take() {
+            None => Err(AppError::Internal("No pending shutdown".into())),
+            Some(handle) => {
+                handle.abort();
+                let mut pending = self.pending_shutdown.lock().await;
+                *pending = None;
+                Ok(())
+            }
         }
     }
 
@@ -131,11 +204,28 @@ impl DaemonService {
             }
         }
 
+        let pending_shutdown = {
+            let pending = self.pending_shutdown.lock().await;
+            pending.as_ref().map(|p| PendingShutdownInfo {
+                wait_for_checkpoints: p.wait_for_checkpoints,
+                requested_at: p.requested_at,
+            })
+        };
+
+        let max_checkpoint_timeout = self
+            .branch_service
+            .check_branches_durability()
+            .await
+            .ok()
+            .and_then(|s| s.max_checkpoint_timeout);
+
         Ok(DaemonResponse {
             hostname: self.config.hostname.clone(),
             build_version: env!("GIT_COMMIT_HASH").to_string(),
             storage,
             mappings,
+            pending_shutdown,
+            max_checkpoint_timeout,
         })
     }
 }
