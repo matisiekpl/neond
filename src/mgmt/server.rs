@@ -12,9 +12,6 @@ use crate::mgmt::handler::{branch, daemon, endpoint, organization, project, user
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): integrate React hosting into app
     // TODO(matisiekpl): add PITR restoration
-    // TODO(matisiekpl): add configurable PITR horizon
-    // TODO(matisiekpl): add daemon settings - list mappings, active branches, durability of them
-    // TODO(matisiekpl): in daemon settings show used remote storage
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
     let shutdown_token = state.services.daemon().shutdown_token();
