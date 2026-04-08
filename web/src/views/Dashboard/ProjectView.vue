@@ -225,7 +225,7 @@ watch(
     if (pollInterval) clearInterval(pollInterval)
     pollInterval = setInterval(() => {
       branchStore.fetchBranches(orgId, pid, true)
-    }, 3000)
+    }, 500)
   },
   {immediate: true},
 )
@@ -401,7 +401,7 @@ function copyConnectionString(branch: Branch) {
                       <span class="sr-only">Open menu</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" class="w-44">
+                  <DropdownMenuContent align="end" class="w-64">
                     <DropdownMenuItem
                       v-if="branch.endpoint_status === 'stopped' || branch.endpoint_status === 'failed'"
                       @click="branchStore.startEndpoint(organizationStore.selectedOrganizationId!, projectId, branch.id)"
