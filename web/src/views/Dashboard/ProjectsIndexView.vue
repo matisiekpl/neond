@@ -129,7 +129,7 @@ function formatDate(d: string) {
 
     <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <div v-for="project in projectStore.projects" :key="project.id" class="relative">
-        <RouterLink :to="`/dashboard/projects/${project.id}`" class="block">
+        <RouterLink :to="{ name: 'projects.show', params: { organizationId: organizationStore.selectedOrganizationId, projectId: project.id } }" class="block">
           <Card class="transition-colors hover:bg-accent/50">
             <CardHeader class="pb-2 pr-10">
               <CardTitle class="truncate text-base">{{ project.name }}</CardTitle>

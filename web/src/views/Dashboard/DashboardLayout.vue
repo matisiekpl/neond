@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watchEffect } from 'vue'
+import { computed, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import { useOrganizationStore } from '@/stores/organization.store'
@@ -13,40 +13,41 @@ const organizationStore = useOrganizationStore()
 const route = useRoute()
 const router = useRouter()
 
-const onSetupRoute = computed(() => route.path === '/dashboard/setup-organization')
-
 const isLoading = computed(() =>
   !authStore.initialized || (!!authStore.user && !organizationStore.loaded),
+)
+
+watch(
+  () => route.params.organizationId as string,
+  (organizationId) => {
+    if (organizationId) organizationStore.saveSelectedOrganization(organizationId)
+  },
+  { immediate: true },
 )
 
 watchEffect(() => {
   if (isLoading.value) return
   if (!authStore.user) {
-    router.replace('/login')
+    router.replace({ name: 'login' })
     return
   }
-  if (!onSetupRoute.value && organizationStore.organizations.length === 0) {
-    router.replace('/dashboard/setup-organization')
+  if (organizationStore.organizations.length === 0) {
+    router.replace({ name: 'setup-organization' })
     return
   }
-  if (onSetupRoute.value && organizationStore.organizations.length > 0) {
-    router.replace('/dashboard')
+  const organizationId = route.params.organizationId as string
+  const valid = organizationStore.organizations.some((o) => o.id === organizationId)
+  if (!valid) {
+    router.replace({ name: 'projects.list', params: { organizationId: organizationStore.organizations[0].id } })
   }
 })
 
-const showLayout = computed(() =>
-  !isLoading.value &&
-  !!authStore.user &&
-  !(!onSetupRoute.value && organizationStore.organizations.length === 0) &&
-  !(onSetupRoute.value && organizationStore.organizations.length > 0),
-)
-
-const showSetupOutlet = computed(() =>
-  showLayout.value && onSetupRoute.value,
-)
-
-const showFullLayout = computed(() =>
-  showLayout.value && !onSetupRoute.value,
+const showLayout = computed(
+  () =>
+    !isLoading.value &&
+    !!authStore.user &&
+    organizationStore.organizations.length > 0 &&
+    organizationStore.organizations.some((o) => o.id === route.params.organizationId),
 )
 </script>
 
@@ -55,11 +56,7 @@ const showFullLayout = computed(() =>
     <Loader2 class="size-8 animate-spin" />
   </div>
 
-  <template v-else-if="showSetupOutlet">
-    <RouterView />
-  </template>
-
-  <template v-else-if="showFullLayout">
+  <template v-else-if="showLayout">
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>

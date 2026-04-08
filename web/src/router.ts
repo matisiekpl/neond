@@ -11,19 +11,25 @@ import OrganizationSettingsView from '@/views/Dashboard/OrganizationSettingsView
 import DaemonView from '@/views/Dashboard/DaemonView.vue'
 
 const routes = [
-  { path: '/', redirect: '/dashboard' },
+  { path: '/', redirect: '/login' },
   { path: '/login', component: LoginView, name: 'login' },
   { path: '/register', component: RegisterView, name: 'register' },
   { path: '/logout', component: LogoutView, name: 'logout' },
+  { path: '/setup-organization', component: SetupOrganizationView, name: 'setup-organization' },
   {
-    path: '/dashboard',
+    path: '/organizations/:organizationId',
     component: DashboardLayout,
     children: [
-      { path: '', redirect: '/dashboard/projects' },
+      {
+        path: '',
+        redirect: (to: { params: { organizationId: string } }) => ({
+          name: 'projects.list',
+          params: { organizationId: to.params.organizationId },
+        }),
+      },
       { path: 'projects', component: ProjectsIndexView, name: 'projects.list' },
       { path: 'projects/:projectId', component: ProjectView, name: 'projects.show' },
       { path: 'projects/:projectId/settings', component: ProjectSettingsView, name: 'projects.settings' },
-      { path: 'setup-organization', component: SetupOrganizationView, name: 'setup-organization' },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },
       { path: 'daemon', component: DaemonView, name: 'daemon' },
     ],

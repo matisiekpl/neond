@@ -250,7 +250,7 @@ function copyConnectionString(branch: Branch) {
     <button
       type="button"
       class="mt-4 text-sm underline underline-offset-4"
-      @click="router.push('/dashboard/projects')"
+      @click="router.push({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })"
     >
       Back to projects
     </button>

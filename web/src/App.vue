@@ -18,8 +18,9 @@ watch(() => authStore.user?.id, async (userId) => {
     organizationStore.reset()
     return
   }
-  organizationStore.loaded = false
-  await organizationStore.loadOrganizations()
+  if (!organizationStore.loaded) {
+    await organizationStore.loadOrganizations()
+  }
 })
 </script>
 

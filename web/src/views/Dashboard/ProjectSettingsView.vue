@@ -211,7 +211,7 @@ async function confirmDelete() {
   deleting.value = true
   try {
     await projectStore.deleteProject(organizationStore.selectedOrganizationId, projectId.value)
-    await router.push('/dashboard/projects')
+    await router.push({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })
   } catch {
     deleting.value = false
   }
@@ -231,7 +231,7 @@ async function confirmDelete() {
     <button
       type="button"
       class="mt-4 text-sm underline underline-offset-4"
-      @click="router.push('/dashboard/projects')"
+      @click="router.push({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })"
     >
       Back to projects
     </button>
