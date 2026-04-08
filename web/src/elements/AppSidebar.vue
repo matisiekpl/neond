@@ -45,9 +45,10 @@ const projectStore = useProjectStore()
 
 const createOpen = ref(false)
 
+const organizationId = computed(() => route.params.organizationId as string)
 const projectId = computed(() => route.params.projectId as string | undefined)
 const currentProject = computed(() => projectStore.projects.find((p) => p.id === projectId.value))
-const displayOrg = computed(() => organizationStore.organizations.find((o) => o.id === organizationStore.selectedOrganizationId))
+const displayOrg = computed(() => organizationStore.organizations.find((o) => o.id === organizationId.value))
 </script>
 
 <template>
@@ -73,11 +74,11 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               <DropdownMenuItem
                 v-for="org in organizationStore.organizations"
                 :key="org.id"
-                @click="organizationStore.saveSelectedOrganization(org.id)"
+                @click="router.push({ name: 'projects.list', params: { organizationId: org.id } })"
               >
                 <Building2 />
                 <span class="flex-1">{{ org.name }}</span>
-                <Check v-if="organizationStore.selectedOrganizationId === org.id" class="size-4" />
+                <Check v-if="organizationId === org.id" class="size-4" />
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem @click.prevent="createOpen = true">
@@ -97,10 +98,10 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
           <SidebarMenuItem>
             <SidebarMenuButton
               as-child
-              :is-active="route.path === '/dashboard/projects'"
+              :is-active="route.name === 'projects.list'"
               tooltip="Projects"
             >
-              <RouterLink to="/dashboard/projects">
+              <RouterLink :to="{ name: 'projects.list', params: { organizationId } }">
                 <LayoutDashboard />
                 <span>Projects</span>
               </RouterLink>
@@ -109,10 +110,10 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
           <SidebarMenuItem>
             <SidebarMenuButton
               as-child
-              :is-active="route.path === '/dashboard/settings/organization'"
+              :is-active="route.name === 'settings.organization'"
               tooltip="Organization"
             >
-              <RouterLink to="/dashboard/settings/organization">
+              <RouterLink :to="{ name: 'settings.organization', params: { organizationId } }">
                 <Settings />
                 <span>Organization</span>
               </RouterLink>
@@ -121,10 +122,10 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
           <SidebarMenuItem>
             <SidebarMenuButton
               as-child
-              :is-active="route.path === '/dashboard/daemon'"
+              :is-active="route.name === 'daemon'"
               tooltip="Daemon"
             >
-              <RouterLink to="/dashboard/daemon">
+              <RouterLink :to="{ name: 'daemon', params: { organizationId } }">
                 <Terminal />
                 <span>Daemon</span>
               </RouterLink>
@@ -153,13 +154,13 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
                 <DropdownMenuItem
                   v-for="project in projectStore.projects"
                   :key="project.id"
-                  @click="router.push(`/dashboard/projects/${project.id}`)"
+                  @click="router.push({ name: 'projects.show', params: { organizationId, projectId: project.id } })"
                 >
                   <span class="flex-1">{{ project.name }}</span>
                   <Check v-if="projectId === project.id" class="size-4" />
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem @click="router.push('/dashboard/projects')">
+                <DropdownMenuItem @click="router.push({ name: 'projects.list', params: { organizationId } })">
                   <LayoutDashboard />
                   All projects
                 </DropdownMenuItem>
@@ -170,10 +171,10 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
           <SidebarMenuItem class="mt-1">
             <SidebarMenuButton
               as-child
-              :is-active="route.path === `/dashboard/projects/${projectId}`"
+              :is-active="route.name === 'projects.show'"
               tooltip="Details"
             >
-              <RouterLink :to="`/dashboard/projects/${projectId}`">
+              <RouterLink :to="{ name: 'projects.show', params: { organizationId, projectId } }">
                 <Info />
                 <span>Details</span>
               </RouterLink>
@@ -183,10 +184,10 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
           <SidebarMenuItem>
             <SidebarMenuButton
               as-child
-              :is-active="route.path === `/dashboard/projects/${projectId}/settings`"
+              :is-active="route.name === 'projects.settings'"
               tooltip="Settings"
             >
-              <RouterLink :to="`/dashboard/projects/${projectId}/settings`">
+              <RouterLink :to="{ name: 'projects.settings', params: { organizationId, projectId } }">
                 <Settings />
                 <span>Settings</span>
               </RouterLink>

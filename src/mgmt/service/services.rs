@@ -8,6 +8,7 @@ use crate::mgmt::service::organization::OrganizationService;
 use crate::mgmt::service::project::ProjectService;
 use crate::mgmt::service::user::UserService;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 pub struct Services {
     user: UserService,
@@ -16,7 +17,7 @@ pub struct Services {
     membership: MembershipService,
     branch: Arc<BranchService>,
     endpoint: Arc<EndpointService>,
-    daemon: DaemonService,
+    daemon: Arc<DaemonService>,
 }
 
 impl Services {
@@ -24,6 +25,7 @@ impl Services {
         repositories: &Repositories,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         config: Config,
+        shutdown_token: CancellationToken,
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
         let endpoint = Arc::new(EndpointService::new(
@@ -50,13 +52,16 @@ impl Services {
             config.clone(),
         );
         let project = Arc::new(project);
-        let daemon = DaemonService::new(
+        let daemon = Arc::new(DaemonService::new(
             config.clone(),
+            Arc::clone(&pageserver_client),
             Arc::clone(&endpoint),
+            Arc::clone(&branch),
             Arc::new(repositories.branch().clone()),
             Arc::new(repositories.project().clone()),
             Arc::new(repositories.organization().clone()),
-        );
+            shutdown_token,
+        ));
         Self {
             user: UserService::new(Arc::new(repositories.user().clone()), config.server_secret.clone()),
             organization: OrganizationService::new(
@@ -100,7 +105,7 @@ impl Services {
         &self.endpoint
     }
 
-    pub fn daemon(&self) -> &DaemonService {
+    pub fn daemon(&self) -> &Arc<DaemonService> {
         &self.daemon
     }
 }

@@ -3,6 +3,7 @@ import { ref, onMounted, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTitle } from '@vueuse/core'
 import { useAuthStore } from '@/stores/auth.store'
+import { useOrganizationStore } from '@/stores/organization.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +11,7 @@ import { Loader2 } from 'lucide-vue-next'
 
 useTitle('Login — neond')
 const authStore = useAuthStore()
+const organizationStore = useOrganizationStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -22,8 +24,8 @@ onMounted(() => {
 })
 
 watchEffect(() => {
-  if (authStore.initialized && authStore.user) {
-    router.replace('/dashboard')
+  if (authStore.initialized && authStore.user && organizationStore.selectedOrganizationId) {
+    router.replace({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })
   }
 })
 

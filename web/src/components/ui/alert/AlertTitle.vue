@@ -9,8 +9,8 @@ const props = defineProps<{
 
 <template>
   <div
-    data-slot="card-header"
-    :class="cn('@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-4 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6', props.class)"
+    data-slot="alert-title"
+    :class="cn('col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight', props.class)"
   >
     <slot />
   </div>

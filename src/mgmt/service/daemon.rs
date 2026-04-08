@@ -1,37 +1,119 @@
+use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
+use chrono::Utc;
+use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
+use neon_pageserver_api::shard::TenantShardId;
+use neon_utils::id::{TenantId, TimelineId};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+
+use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::daemon_response::{
-    DaemonResponse, LocalStorageInfo, MappingInfo, RemoteStorageInfo, StorageInfo,
+    DaemonResponse, LocalStorageInfo, MappingInfo, PendingShutdownInfo, RemoteStorageInfo,
+    StorageInfo,
 };
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::organization::OrganizationRepository;
 use crate::mgmt::repository::project::ProjectRepository;
+use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::endpoint::EndpointService;
+
+#[derive(Clone)]
+struct PendingShutdown {
+    wait_for_checkpoints: bool,
+    requested_at: chrono::DateTime<Utc>,
+}
 
 pub struct DaemonService {
     config: Config,
+    pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     endpoint_service: Arc<EndpointService>,
+    branch_service: Arc<BranchService>,
     branch_repo: Arc<BranchRepository>,
     project_repo: Arc<ProjectRepository>,
     org_repo: Arc<OrganizationRepository>,
+    pending_shutdown: Arc<Mutex<Option<PendingShutdown>>>,
+    shutdown_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+    shutdown_token: CancellationToken,
 }
 
 impl DaemonService {
     pub fn new(
         config: Config,
+        pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         endpoint_service: Arc<EndpointService>,
+        branch_service: Arc<BranchService>,
         branch_repo: Arc<BranchRepository>,
         project_repo: Arc<ProjectRepository>,
         org_repo: Arc<OrganizationRepository>,
+        shutdown_token: CancellationToken,
     ) -> Self {
         Self {
             config,
+            pageserver_client,
             endpoint_service,
+            branch_service,
             branch_repo,
             project_repo,
             org_repo,
+            pending_shutdown: Arc::new(Mutex::new(None)),
+            shutdown_task: Arc::new(Mutex::new(None)),
+            shutdown_token,
+        }
+    }
+
+    pub fn shutdown_token(&self) -> CancellationToken {
+        self.shutdown_token.clone()
+    }
+
+    pub async fn request_shutdown(self: Arc<Self>, wait_for_checkpoints: bool) -> Result<()> {
+        let mut pending = self.pending_shutdown.lock().await;
+        if pending.is_some() {
+            return Err(AppError::Internal("Shutdown already pending".into()));
+        }
+        *pending = Some(PendingShutdown {
+            wait_for_checkpoints,
+            requested_at: Utc::now(),
+        });
+        drop(pending);
+
+        let service = Arc::clone(&self);
+        let handle = tokio::spawn(async move {
+            if wait_for_checkpoints {
+                loop {
+                    match service.branch_service.check_branches_durability().await {
+                        Ok(status) if status.all_in_sync => break,
+                        _ => {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                    }
+                }
+            }
+            service.endpoint_service.shutdown_all().await;
+            service.shutdown_token.cancel();
+        });
+
+        let mut task = self.shutdown_task.lock().await;
+        *task = Some(handle);
+
+        Ok(())
+    }
+
+    pub async fn cancel_shutdown(&self) -> Result<()> {
+        let mut task = self.shutdown_task.lock().await;
+        match task.take() {
+            None => Err(AppError::Internal("No pending shutdown".into())),
+            Some(handle) => {
+                handle.abort();
+                let mut pending = self.pending_shutdown.lock().await;
+                *pending = None;
+                Ok(())
+            }
         }
     }
 
@@ -64,38 +146,86 @@ impl DaemonService {
             }
         };
 
-        let active = self.endpoint_service.get_all_active().await;
-        let mut mappings = Vec::with_capacity(active.len());
-        for (branch_id, branch_slug, port) in active {
-            let branch = self
-                .branch_repo
-                .find_by_id(branch_id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            let project = self
-                .project_repo
-                .find_by_id(branch.project_id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            let org = self
-                .org_repo
-                .find_by_id(project.organization_id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            let sni = self
-                .config
-                .hostname
-                .as_ref()
-                .map(|h| format!("{}.{}", branch_slug, h));
-            mappings.push(MappingInfo {
-                organization_name: org.name,
-                project_name: project.name,
-                branch_name: branch.name,
-                port,
-                sni,
-            });
+        let organizations = self.org_repo.list_all().await?;
+        let mut mappings = Vec::new();
+
+        for organization in organizations {
+            let projects = self.project_repo.list_by_org_id(organization.id).await?;
+            for project in projects {
+                let tenant_id =
+                    TenantId::from_str(project.id.as_simple().to_string().as_str())
+                        .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+
+                let branches = self.branch_repo.list_by_project_id(project.id).await?;
+                for branch in branches {
+                    let timeline_id =
+                        TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+                            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+                    let timeline_info = self
+                        .pageserver_client
+                        .timeline_info(
+                            TenantShardId::unsharded(tenant_id),
+                            timeline_id,
+                            ForceAwaitLogicalSize::Yes,
+                        )
+                        .await
+                        .unwrap();
+
+                    let endpoint_info =
+                        self.endpoint_service.get_endpoint_info(branch.id).await;
+                    let endpoint_status = endpoint_info
+                        .as_ref()
+                        .map(|info| info.status.clone())
+                        .unwrap_or(ComputeEndpointStatus::Stopped);
+                    let port = endpoint_info.as_ref().map(|info| info.port);
+                    let sni = self
+                        .config
+                        .hostname
+                        .as_ref()
+                        .map(|host| format!("{}.{}", branch.slug, host));
+
+                    mappings.push(MappingInfo {
+                        branch_id: branch.id,
+                        organization_id: organization.id,
+                        organization_name: organization.name.clone(),
+                        project_id: project.id,
+                        project_name: project.name.clone(),
+                        branch_name: branch.name.clone(),
+                        slug: branch.slug.clone(),
+                        endpoint_status,
+                        port,
+                        sni,
+                        last_record_lsn: timeline_info.last_record_lsn,
+                        remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
+                        current_logical_size: timeline_info.current_logical_size,
+                    });
+                }
+            }
         }
 
-        Ok(DaemonResponse { storage, mappings })
+        let pending_shutdown = {
+            let pending = self.pending_shutdown.lock().await;
+            pending.as_ref().map(|p| PendingShutdownInfo {
+                wait_for_checkpoints: p.wait_for_checkpoints,
+                requested_at: p.requested_at,
+            })
+        };
+
+        let max_checkpoint_timeout = self
+            .branch_service
+            .check_branches_durability()
+            .await
+            .ok()
+            .and_then(|s| s.max_checkpoint_timeout);
+
+        Ok(DaemonResponse {
+            hostname: self.config.hostname.clone(),
+            build_version: env!("GIT_COMMIT_HASH").to_string(),
+            storage,
+            mappings,
+            pending_shutdown,
+            max_checkpoint_timeout,
+        })
     }
 }

@@ -17,4 +17,6 @@ pub mod update_organization_request;
 pub mod update_project_request;
 pub mod user_response;
 pub mod config;
+pub mod checkpoint_status;
 pub mod daemon_response;
+pub mod shutdown_daemon_request;

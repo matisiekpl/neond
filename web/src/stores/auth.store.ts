@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { authApi } from '@/api/auth'
 import { getAppError } from '@/api/utils'
+import { useOrganizationStore } from '@/stores/organization.store'
 import type { User } from '@/types/models/user'
 
 export const ACCESS_TOKEN = 'ACCESS_TOKEN'
@@ -39,7 +40,14 @@ export const useAuthStore = defineStore('auth', () => {
       const token = await authApi.login(email, password)
       localStorage.setItem(ACCESS_TOKEN, token)
       await refreshUser()
-      await router.push('/dashboard')
+      const organizationStore = useOrganizationStore()
+      await organizationStore.loadOrganizations()
+      const organizationId = organizationStore.selectedOrganizationId
+      if (organizationId) {
+        await router.push({ name: 'projects.list', params: { organizationId } })
+      } else {
+        await router.push({ name: 'setup-organization' })
+      }
     } catch (err) {
       toast.error(getAppError(err))
     } finally {
@@ -53,7 +61,14 @@ export const useAuthStore = defineStore('auth', () => {
       const token = await authApi.register(name, email, password)
       localStorage.setItem(ACCESS_TOKEN, token)
       await refreshUser()
-      await router.push('/dashboard')
+      const organizationStore = useOrganizationStore()
+      await organizationStore.loadOrganizations()
+      const organizationId = organizationStore.selectedOrganizationId
+      if (organizationId) {
+        await router.push({ name: 'projects.list', params: { organizationId } })
+      } else {
+        await router.push({ name: 'setup-organization' })
+      }
     } catch (err) {
       toast.error(getAppError(err))
     } finally {

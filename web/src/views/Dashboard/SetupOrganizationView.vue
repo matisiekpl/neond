@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { useTitle } from '@vueuse/core'
+import { useRouter } from 'vue-router'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { getAppError } from '@/api/utils'
 import { Loader2 } from 'lucide-vue-next'
@@ -10,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 useTitle('Create organization — neond')
+const router = useRouter()
 const organizationStore = useOrganizationStore()
 
 const name = ref('')
@@ -20,7 +22,8 @@ async function onSubmit() {
   if (!trimmed) return
   submitting.value = true
   try {
-    await organizationStore.createOrganization(trimmed)
+    const organization = await organizationStore.createOrganization(trimmed)
+    router.push({ name: 'projects.list', params: { organizationId: organization.id } })
   } catch (err) {
     toast.error(getAppError(err))
   } finally {

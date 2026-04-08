@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
+import { useRouter } from 'vue-router'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { getAppError } from '@/api/utils'
 import { Loader2 } from 'lucide-vue-next'
@@ -24,6 +25,7 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
 
+const router = useRouter()
 const organizationStore = useOrganizationStore()
 
 const name = ref('')
@@ -38,8 +40,9 @@ async function onSubmit() {
   if (!trimmed) return
   submitting.value = true
   try {
-    await organizationStore.createOrganization(trimmed)
+    const organization = await organizationStore.createOrganization(trimmed)
     emit('update:open', false)
+    router.push({ name: 'projects.list', params: { organizationId: organization.id } })
   } catch (e) {
     toast.error(getAppError(e))
   } finally {

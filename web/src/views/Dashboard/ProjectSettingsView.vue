@@ -20,13 +20,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
@@ -218,7 +211,7 @@ async function confirmDelete() {
   deleting.value = true
   try {
     await projectStore.deleteProject(organizationStore.selectedOrganizationId, projectId.value)
-    await router.push('/dashboard/projects')
+    await router.push({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })
   } catch {
     deleting.value = false
   }
@@ -238,42 +231,34 @@ async function confirmDelete() {
     <button
       type="button"
       class="mt-4 text-sm underline underline-offset-4"
-      @click="router.push('/dashboard/projects')"
+      @click="router.push({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })"
     >
       Back to projects
     </button>
   </div>
 
-  <div v-else class="space-y-6">
-    <div>
-      <h1 class="text-lg font-semibold">Project settings</h1>
-      <p class="text-sm text-muted-foreground">Manage your project configuration.</p>
-    </div>
+  <div v-else class="w-full divide-y">
+    <section class="flex flex-col gap-4 py-8 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium">General</h3>
+        <p class="mt-1 text-sm text-muted-foreground">Update your project name.</p>
+      </div>
+      <form @submit.prevent="saveName" class="space-y-2 max-w-sm">
+        <Label for="project-name">Name</Label>
+        <Input id="project-name" v-model="form.name" />
+        <Button type="submit" class="mt-2 cursor-pointer" :disabled="nameSubmitting || !form.name.trim() || !nameIsDirty">
+          <Loader2 v-if="nameSubmitting" class="mr-1.5 size-3.5 animate-spin" />
+          Save
+        </Button>
+      </form>
+    </section>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>General</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form @submit.prevent="saveName">
-          <div class="grid gap-2">
-            <Label for="project-name">Name</Label>
-            <Input id="project-name" v-model="form.name" />
-          </div>
-          <Button type="submit" class="mt-4 cursor-pointer" :disabled="nameSubmitting || !form.name.trim() || !nameIsDirty">
-            <Loader2 v-if="nameSubmitting" class="mr-1.5 size-3.5 animate-spin" />
-            Save changes
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-
-    <Card>
-      <CardHeader>
-        <CardTitle>Garbage collection</CardTitle>
-        <CardDescription>Control when old data versions are removed.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section class="flex flex-col gap-4 py-8 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium">Garbage collection</h3>
+        <p class="mt-1 text-sm text-muted-foreground">Control when old data versions are removed.</p>
+      </div>
+      <div>
         <div v-if="configLoading" class="flex justify-center py-4">
           <Loader2 class="size-5 animate-spin" />
         </div>
@@ -308,18 +293,18 @@ async function confirmDelete() {
             Save
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Point-in-time recovery</CardTitle>
-        <CardDescription>
-          Choose the length of your restore window. This setting enables
+    <section class="flex flex-col gap-4 py-8 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium">Point-in-time recovery</h3>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Choose the length of your restore window. Enables
           <strong>instant restore</strong> for point-in-time recovery, time travel queries, and branching from past states.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </p>
+      </div>
+      <div>
         <div v-if="configLoading" class="flex justify-center py-4">
           <Loader2 class="size-5 animate-spin" />
         </div>
@@ -343,15 +328,15 @@ async function confirmDelete() {
             Save
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Checkpointing</CardTitle>
-        <CardDescription>Tune how frequently the pageserver flushes data to disk.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section class="flex flex-col gap-4 py-8 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium">Checkpointing</h3>
+        <p class="mt-1 text-sm text-muted-foreground">Tune how frequently the pageserver flushes data to disk.</p>
+      </div>
+      <div>
         <div v-if="configLoading" class="flex justify-center py-4">
           <Loader2 class="size-5 animate-spin" />
         </div>
@@ -386,26 +371,24 @@ async function confirmDelete() {
             Save
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
-    <Card class="border-destructive">
-      <CardHeader>
-        <CardTitle class="text-destructive">Danger zone</CardTitle>
-        <CardDescription>Irreversible actions that affect this project.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium">Delete project</p>
-            <p class="text-sm text-muted-foreground">Permanently remove this project and all its data.</p>
-          </div>
-          <Button variant="destructive" type="button" class="cursor-pointer" @click="deleteOpen = true">
-            Delete project
-          </Button>
+    <section class="flex flex-col gap-4 py-8 md:grid md:grid-cols-[280px_1fr] md:gap-8">
+      <div>
+        <h3 class="text-sm font-medium text-destructive">Danger zone</h3>
+        <p class="mt-1 text-sm text-muted-foreground">Irreversible actions that affect this project.</p>
+      </div>
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium">Delete project</p>
+          <p class="text-sm text-muted-foreground">Permanently remove this project and all its data.</p>
         </div>
-      </CardContent>
-    </Card>
+        <Button variant="destructive" type="button" class="cursor-pointer" @click="deleteOpen = true">
+          Delete project
+        </Button>
+      </div>
+    </section>
 
     <AlertDialog v-model:open="deleteOpen">
       <AlertDialogContent>
