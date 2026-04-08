@@ -1,5 +1,11 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
+use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
+use neon_pageserver_api::shard::TenantShardId;
+use neon_utils::id::{TenantId, TimelineId};
+
+use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::daemon_response::{
     DaemonResponse, LocalStorageInfo, MappingInfo, RemoteStorageInfo, StorageInfo,
@@ -12,6 +18,7 @@ use crate::mgmt::service::endpoint::EndpointService;
 
 pub struct DaemonService {
     config: Config,
+    pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     endpoint_service: Arc<EndpointService>,
     branch_repo: Arc<BranchRepository>,
     project_repo: Arc<ProjectRepository>,
@@ -21,6 +28,7 @@ pub struct DaemonService {
 impl DaemonService {
     pub fn new(
         config: Config,
+        pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         endpoint_service: Arc<EndpointService>,
         branch_repo: Arc<BranchRepository>,
         project_repo: Arc<ProjectRepository>,
@@ -28,6 +36,7 @@ impl DaemonService {
     ) -> Self {
         Self {
             config,
+            pageserver_client,
             endpoint_service,
             branch_repo,
             project_repo,
@@ -64,36 +73,60 @@ impl DaemonService {
             }
         };
 
-        let active = self.endpoint_service.get_all_active().await;
-        let mut mappings = Vec::with_capacity(active.len());
-        for (branch_id, branch_slug, port) in active {
-            let branch = self
-                .branch_repo
-                .find_by_id(branch_id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            let project = self
-                .project_repo
-                .find_by_id(branch.project_id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            let org = self
-                .org_repo
-                .find_by_id(project.organization_id)
-                .await?
-                .ok_or(AppError::NotFound)?;
-            let sni = self
-                .config
-                .hostname
-                .as_ref()
-                .map(|h| format!("{}.{}", branch_slug, h));
-            mappings.push(MappingInfo {
-                organization_name: org.name,
-                project_name: project.name,
-                branch_name: branch.name,
-                port,
-                sni,
-            });
+        let organizations = self.org_repo.list_all().await?;
+        let mut mappings = Vec::new();
+
+        for organization in organizations {
+            let projects = self.project_repo.list_by_org_id(organization.id).await?;
+            for project in projects {
+                let tenant_id =
+                    TenantId::from_str(project.id.as_simple().to_string().as_str())
+                        .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+
+                let branches = self.branch_repo.list_by_project_id(project.id).await?;
+                for branch in branches {
+                    let timeline_id =
+                        TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+                            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+                    let timeline_info = self
+                        .pageserver_client
+                        .timeline_info(
+                            TenantShardId::unsharded(tenant_id),
+                            timeline_id,
+                            ForceAwaitLogicalSize::Yes,
+                        )
+                        .await
+                        .unwrap();
+
+                    let endpoint_info =
+                        self.endpoint_service.get_endpoint_info(branch.id).await;
+                    let endpoint_status = endpoint_info
+                        .as_ref()
+                        .map(|info| info.status.clone())
+                        .unwrap_or(ComputeEndpointStatus::Stopped);
+                    let port = endpoint_info.as_ref().map(|info| info.port);
+                    let sni = self
+                        .config
+                        .hostname
+                        .as_ref()
+                        .map(|host| format!("{}.{}", branch.slug, host));
+
+                    mappings.push(MappingInfo {
+                        branch_id: branch.id,
+                        organization_name: organization.name.clone(),
+                        project_name: project.name.clone(),
+                        branch_name: branch.name.clone(),
+                        slug: branch.slug.clone(),
+                        endpoint_status,
+                        port,
+                        sni,
+                        last_record_lsn: timeline_info.last_record_lsn,
+                        remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
+                        current_logical_size: timeline_info.current_logical_size,
+                    });
+                }
+            }
         }
 
         Ok(DaemonResponse { storage, mappings })

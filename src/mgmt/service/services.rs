@@ -52,6 +52,7 @@ impl Services {
         let project = Arc::new(project);
         let daemon = DaemonService::new(
             config.clone(),
+            Arc::clone(&pageserver_client),
             Arc::clone(&endpoint),
             Arc::new(repositories.branch().clone()),
             Arc::new(repositories.project().clone()),

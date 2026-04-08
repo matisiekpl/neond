@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onMounted, onUnmounted, ref} from 'vue'
+import {computed, onMounted, onUnmounted} from 'vue'
 import {useTitle} from '@vueuse/core'
 import {useDaemonStore} from '@/stores/daemon.store'
 import {
@@ -19,10 +19,23 @@ import {
 import CodeSnippet from "@/elements/CodeSnippet.vue";
 import {Progress} from "@/components/ui/progress";
 import {Button} from "@/components/ui/button";
-import {Badge} from "@/components/ui/badge";
+import {formatBytes} from '@/lib/utils'
+import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
+import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
 
 useTitle('Daemon — neond')
 const daemonStore = useDaemonStore();
+
+const inSyncCount = computed(() => {
+  if (!daemonStore.state) return 0
+  return daemonStore.state.mappings.filter(
+    (m) => m.remote_consistent_lsn_visible === m.last_record_lsn
+  ).length
+})
+
+const totalCount = computed(() => daemonStore.state?.mappings.length ?? 0)
+
+const awaitingCount = computed(() => totalCount.value - inSyncCount.value)
 
 onMounted(() => daemonStore.startPolling());
 onUnmounted(() => daemonStore.stopPolling());
@@ -39,47 +52,47 @@ onUnmounted(() => daemonStore.stopPolling());
         <Card>
           <CardHeader>
             <CardTitle>Storage</CardTitle>
-            <CardDescription>Connected to S3 bucket</CardDescription>
+            <CardDescription v-if="daemonStore.state.storage.type === 'remote'">Connected to S3 bucket</CardDescription>
+            <CardDescription v-else>Local disk storage</CardDescription>
           </CardHeader>
           <CardContent class="flex flex-col gap-3">
 
-            <Table class="rounded-md border">
-              <TableBody>
-                <TableRow>
-                  <TableCell>AWS Access Key ID</TableCell>
-                  <TableCell>
-                    <CodeSnippet>uszdhguisrf</CodeSnippet>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>AWS Bucket</TableCell>
-                  <TableCell>
-                    <CodeSnippet>pg-data</CodeSnippet>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>AWS Region</TableCell>
-                  <TableCell>
-                    <CodeSnippet>us-east-1</CodeSnippet>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+            <template v-if="daemonStore.state.storage.type === 'remote'">
+              <Table class="rounded-md border">
+                <TableBody>
+                  <TableRow>
+                    <TableCell>AWS Access Key ID</TableCell>
+                    <TableCell>
+                      <CodeSnippet>{{ daemonStore.state.storage.aws_access_key_id }}</CodeSnippet>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>AWS Bucket</TableCell>
+                    <TableCell>
+                      <CodeSnippet>{{ daemonStore.state.storage.bucket }}</CodeSnippet>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>AWS Region</TableCell>
+                    <TableCell>
+                      <CodeSnippet>{{ daemonStore.state.storage.region }}</CodeSnippet>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </template>
+
+            <template v-else-if="daemonStore.state.storage.type === 'local'">
+              <div class="flex justify-between text-sm">
+                <p>{{ formatBytes(daemonStore.state.storage.used_bytes) }} used</p>
+                <p class="text-muted-foreground">{{ formatBytes(daemonStore.state.storage.free_bytes) }} free</p>
+              </div>
+              <Progress :model-value="daemonStore.state.storage.used_percent" class="w-full"/>
+            </template>
 
             <p class="text-sm text-muted-foreground">
               To configure different data storage, relaunch daemon with appropriate config.
             </p>
-
-            <!--            <div class="flex justify-between">-->
-            <!--              <p class="text-sm">-->
-            <!--                Available 37GB out of 512GB-->
-            <!--              </p>-->
-            <!--              <p class="text-sm text-muted-foreground">-->
-            <!--                65% used-->
-            <!--              </p>-->
-            <!--            </div>-->
-
-            <!--            <Progress :model-value="30" class="w-full"/>-->
           </CardContent>
         </Card>
 
@@ -94,13 +107,15 @@ onUnmounted(() => daemonStore.stopPolling());
             </CardDescription>
           </CardHeader>
           <CardContent class="flex flex-col gap-3">
-
             <div class="flex justify-between text-sm">
-              <p class="text-green-600 font-semibold">37 branches in sync</p>
-              <p class="text-red-600">37 branches not checkpointed</p>
+              <p class="text-green-600 font-semibold">{{ inSyncCount }} {{ inSyncCount === 1 ? 'branch' : 'branches' }} in sync</p>
+              <p class="text-amber-600">{{ awaitingCount }} awaiting checkpoint</p>
             </div>
-
-            <Progress :model-value="30" class="bg-red-600" indicator-class="bg-green-600"></Progress>
+            <Progress
+              :model-value="totalCount > 0 ? (inSyncCount / totalCount) * 100 : 0"
+              class="bg-amber-500/30"
+              indicator-class="bg-green-600"
+            />
           </CardContent>
         </Card>
 
@@ -112,35 +127,12 @@ onUnmounted(() => daemonStore.stopPolling());
             </CardDescription>
           </CardHeader>
           <CardContent class="flex flex-col gap-3">
-
-            <Table class="rounded-md border">
-              <TableRow>
-                <TableCell>
-                  Server hostname
-                </TableCell>
-                <TableCell>
-                  <CodeSnippet>{}.bazy.local</CodeSnippet>
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>
-                  Build Version
-                </TableCell>
-                <TableCell>
-                  <CodeSnippet>6407dbc19</CodeSnippet>
-                </TableCell>
-              </TableRow>
-
-            </Table>
-
             <p class="text-sm">
-              3 branches checkpoints are not in sync with last received WAL record. Shutdown does not guarantee
-              durability of data.
+              {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch' : 'branches' }} not checkpointed against last received WAL record. Shutdown does not guarantee durability of data.
             </p>
-            <Button class="w-full bg-orange-500">
+            <Button class="w-full bg-orange-500 cursor-pointer">
               Shutdown
             </Button>
-
           </CardContent>
         </Card>
       </div>
@@ -161,22 +153,32 @@ onUnmounted(() => daemonStore.stopPolling());
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableRow>
-            <TableCell>First org</TableCell>
-            <TableCell>Subtracker</TableCell>
-            <TableCell>production</TableCell>
-            <TableCell>22MB</TableCell>
-            <TableCell>
-              <CodeSnippet>0/15EEC10</CodeSnippet>
+          <TableRow v-for="mapping in daemonStore.state.mappings" :key="mapping.branch_id">
+            <TableCell>{{ mapping.organization_name }}</TableCell>
+            <TableCell>{{ mapping.project_name }}</TableCell>
+            <TableCell>{{ mapping.branch_name }}</TableCell>
+            <TableCell class="text-xs text-muted-foreground">
+              {{ formatBytes(mapping.current_logical_size) }}
             </TableCell>
             <TableCell>
-              <CodeSnippet>0/15EEC10</CodeSnippet>
+              <CodeSnippet>{{ mapping.last_record_lsn }}</CodeSnippet>
             </TableCell>
-            <TableCell>Checkpointed</TableCell>
             <TableCell>
-              <CodeSnippet>slug.</CodeSnippet>
+              <CodeSnippet>{{ mapping.remote_consistent_lsn_visible }}</CodeSnippet>
             </TableCell>
-            <TableCell>Running</TableCell>
+            <TableCell>
+              <DurabilityStatusBadge
+                :last-record-lsn="mapping.last_record_lsn"
+                :remote-consistent-lsn="mapping.remote_consistent_lsn_visible"
+              />
+            </TableCell>
+            <TableCell>
+              <CodeSnippet v-if="mapping.sni">{{ mapping.slug }}.</CodeSnippet>
+              <span v-else class="text-xs text-muted-foreground">—</span>
+            </TableCell>
+            <TableCell>
+              <EndpointStatusBadge :status="mapping.endpoint_status"/>
+            </TableCell>
           </TableRow>
         </TableBody>
       </Table>

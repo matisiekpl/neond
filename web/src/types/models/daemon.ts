@@ -1,3 +1,5 @@
+import type { BranchStatus } from '@/types/models/branch'
+
 export interface LocalStorageInfo {
   type: 'local'
   used_bytes: number
@@ -15,11 +17,17 @@ export interface RemoteStorageInfo {
 export type StorageInfo = LocalStorageInfo | RemoteStorageInfo
 
 export interface MappingInfo {
+  branch_id: string
   organization_name: string
   project_name: string
   branch_name: string
-  port: number
+  slug: string
+  endpoint_status: BranchStatus
+  port: number | null
   sni: string | null
+  last_record_lsn: string
+  remote_consistent_lsn_visible: string
+  current_logical_size: number
 }
 
 export interface DaemonState {

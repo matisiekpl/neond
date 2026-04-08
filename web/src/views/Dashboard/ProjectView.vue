@@ -10,7 +10,9 @@ import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
 import {useBranchStore} from '@/stores/branch.store'
 import {getAppError} from '@/api/utils'
-import type {Branch, BranchStatus} from '@/types/models/branch'
+import type {Branch} from '@/types/models/branch'
+import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
+import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,14 +65,6 @@ const projectId = computed(() => route.params.projectId as string)
 const project = computed(() => projectStore.projects.find((p) => p.id === projectId.value))
 
 useTitle(computed(() => project.value ? `${project.value.name} — neond` : 'neond'))
-
-const STATUS_CONFIG: Record<BranchStatus, { label: string; className: string }> = {
-  running: {label: 'Running', className: 'bg-green-500'},
-  starting: {label: 'Starting', className: 'bg-amber-400'},
-  stopping: {label: 'Stopping', className: 'bg-amber-400'},
-  stopped: {label: 'Stopped', className: 'bg-muted-foreground'},
-  failed: {label: 'Failed', className: 'bg-destructive'},
-}
 
 type BranchNode = Branch & { children: BranchNode[] }
 
@@ -321,11 +315,7 @@ function copyConnectionString(branch: Branch) {
                 </span>
               </TableCell>
               <TableCell class="w-28">
-                <span class="flex items-center gap-1.5">
-                  <span
-                    :class="`inline-block size-2 shrink-0 rounded-full ${STATUS_CONFIG[branch.endpoint_status].className}`"/>
-                  <span class="text-xs text-muted-foreground">{{ STATUS_CONFIG[branch.endpoint_status].label }}</span>
-                </span>
+                <EndpointStatusBadge :status="branch.endpoint_status"/>
               </TableCell>
               <TableCell class="w-24 text-xs text-muted-foreground">
                 {{ formatBytes(branch.current_logical_size) }}
@@ -333,17 +323,10 @@ function copyConnectionString(branch: Branch) {
               <TableCell class="w-44">
                 <HoverCard :open-delay="0" :close-delay="500">
                   <HoverCardTrigger as-child>
-                    <span
-                      :class="`inline-flex cursor-default items-center rounded border px-1.5 py-0.5 text-xs font-medium ${
-                        branch.remote_consistent_lsn_visible === branch.last_record_lsn
-                          ? 'border-green-500/30 bg-green-500/10 text-green-600'
-                          : 'border-amber-500/30 bg-amber-500/10 text-amber-600'
-                      }`"
-                    >
-                      {{
-                        branch.remote_consistent_lsn_visible === branch.last_record_lsn ? 'checkpointed' : 'awaiting checkpoint'
-                      }}
-                    </span>
+                    <DurabilityStatusBadge
+                      :last-record-lsn="branch.last_record_lsn"
+                      :remote-consistent-lsn="branch.remote_consistent_lsn_visible"
+                    />
                   </HoverCardTrigger>
                   <HoverCardContent class="w-72">
                     <div class="flex flex-col gap-4">

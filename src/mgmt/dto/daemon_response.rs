@@ -1,4 +1,8 @@
+use neon_utils::lsn::Lsn;
 use serde::Serialize;
+use uuid::Uuid;
+
+use crate::mgmt::compute::ComputeEndpointStatus;
 
 #[derive(Serialize)]
 pub struct LocalStorageInfo {
@@ -23,11 +27,17 @@ pub enum StorageInfo {
 
 #[derive(Serialize)]
 pub struct MappingInfo {
+    pub branch_id: Uuid,
     pub organization_name: String,
     pub project_name: String,
     pub branch_name: String,
-    pub port: u16,
+    pub slug: String,
+    pub endpoint_status: ComputeEndpointStatus,
+    pub port: Option<u16>,
     pub sni: Option<String>,
+    pub last_record_lsn: Lsn,
+    pub remote_consistent_lsn_visible: Lsn,
+    pub current_logical_size: u64,
 }
 
 #[derive(Serialize)]
