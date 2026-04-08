@@ -178,7 +178,7 @@ onUnmounted(() => daemonStore.stopPolling());
             <p v-if="awaitingCount > 0" class="text-sm">
               {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch' : 'branches' }} not checkpointed against last received WAL record. Shutdown does not guarantee durability of data.
             </p>
-            <p v-else class="text-sm text-green-700">
+            <p v-else class="text-sm">
               All branches had been checkpointed - shutdown guarantees durability in remote storage. Server migration is safe.
             </p>
 
