@@ -17,6 +17,8 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): make Dockerfile and docker compose
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
+    // TODO(matisiekpl): optimize postgres parameters
+    // TODO(matisiekpl): handle unwrap and expect
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
