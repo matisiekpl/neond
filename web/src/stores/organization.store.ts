@@ -25,7 +25,7 @@ export const useOrganizationStore = defineStore('organization', () => {
     membersLoading.value = false
   }
 
-  function saveSelectedOrganization(id: string | null): void {
+  function saveSelected(id: string | null): void {
     if (id) {
       localStorage.setItem(CURRENT_ORG_STORAGE_KEY, id)
     } else {
@@ -43,13 +43,13 @@ export const useOrganizationStore = defineStore('organization', () => {
     }
     const first = orgs[0]
     if (first) {
-      saveSelectedOrganization(first.id)
+      saveSelected(first.id)
     } else {
-      saveSelectedOrganization(null)
+      saveSelected(null)
     }
   }
 
-  async function fetchOrganizations(): Promise<Organization[]> {
+  async function fetch(): Promise<Organization[]> {
     loading.value = true
     try {
       const list = await organizationsApi.list()
@@ -60,30 +60,30 @@ export const useOrganizationStore = defineStore('organization', () => {
     }
   }
 
-  async function loadOrganizations(): Promise<void> {
-    const orgs = await fetchOrganizations()
+  async function load(): Promise<void> {
+    const orgs = await fetch()
     initSelection(orgs)
     loaded.value = true
   }
 
-  async function createOrganization(name: string): Promise<Organization> {
+  async function create(name: string): Promise<Organization> {
     const org = await organizationsApi.create(name)
-    await fetchOrganizations()
-    saveSelectedOrganization(org.id)
+    await fetch()
+    saveSelected(org.id)
     toast.success('Organization created')
     return org
   }
 
-  async function updateOrganization(organizationId: string, name: string): Promise<Organization> {
+  async function update(organizationId: string, name: string): Promise<Organization> {
     const org = await organizationsApi.update(organizationId, name)
-    await fetchOrganizations()
+    await fetch()
     toast.success('Organization updated')
     return org
   }
 
-  async function deleteOrganization(organizationId: string): Promise<void> {
+  async function remove(organizationId: string): Promise<void> {
     await organizationsApi.remove(organizationId)
-    const orgs = await fetchOrganizations()
+    const orgs = await fetch()
     initSelection(orgs)
     toast.success('Organization deleted')
   }
@@ -97,9 +97,9 @@ export const useOrganizationStore = defineStore('organization', () => {
     }
   }
 
-  async function addMemberByEmail(organizationId: string, email: string): Promise<void> {
+  async function assignMemberByEmail(organizationId: string, email: string): Promise<void> {
     try {
-      await membersApi.addByEmail(organizationId, email)
+      await membersApi.assignByEmail(organizationId, email)
       await fetchMembers(organizationId)
       toast.success('Member added')
     } catch (e) {
@@ -108,7 +108,7 @@ export const useOrganizationStore = defineStore('organization', () => {
     }
   }
 
-  async function removeMember(organizationId: string, userId: string): Promise<void> {
+  async function revokeMember(organizationId: string, userId: string): Promise<void> {
     try {
       await membersApi.remove(organizationId, userId)
       await fetchMembers(organizationId)
@@ -127,15 +127,15 @@ export const useOrganizationStore = defineStore('organization', () => {
     members,
     membersLoading,
     reset,
-    saveSelectedOrganization,
+    saveSelected,
     initSelection,
-    fetchOrganizations,
-    loadOrganizations,
-    createOrganization,
-    updateOrganization,
-    deleteOrganization,
+    fetch,
+    load,
+    create,
+    update,
+    remove,
     fetchMembers,
-    addMemberByEmail,
-    removeMember,
+    assignMemberByEmail,
+    revokeMember,
   }
 })

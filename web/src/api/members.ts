@@ -7,7 +7,7 @@ export const membersApi = {
     return response.data
   },
 
-  async addByEmail(organizationId: string, email: string): Promise<void> {
+  async assignByEmail(organizationId: string, email: string): Promise<void> {
     await api.post(`organizations/${organizationId}/members`, { email })
   },
 

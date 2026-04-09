@@ -84,7 +84,7 @@ async function saveName() {
   if (!trimmed) return
   nameSubmitting.value = true
   try {
-    await organizationStore.updateOrganization(organizationStore.selectedOrganizationId, trimmed)
+    await organizationStore.update(organizationStore.selectedOrganizationId, trimmed)
     orgNameOriginal.value = trimmed
   } catch (err) {
     toast.error(getAppError(err))
@@ -99,7 +99,7 @@ async function submitInvite() {
   if (!trimmed) return
   inviteSubmitting.value = true
   try {
-    await organizationStore.addMemberByEmail(organizationStore.selectedOrganizationId, trimmed)
+    await organizationStore.assignMemberByEmail(organizationStore.selectedOrganizationId, trimmed)
     inviteOpen.value = false
   } catch {}
   finally {
@@ -116,7 +116,7 @@ async function confirmRemove() {
   if (!organizationStore.selectedOrganizationId || !removeUserId.value) return
   removeSubmitting.value = true
   try {
-    await organizationStore.removeMember(organizationStore.selectedOrganizationId, removeUserId.value)
+    await organizationStore.revokeMember(organizationStore.selectedOrganizationId, removeUserId.value)
     removeOpen.value = false
     removeUserId.value = null
   } catch {}
@@ -129,9 +129,9 @@ async function confirmDelete() {
   if (!organizationStore.selectedOrganizationId) return
   deleteSubmitting.value = true
   try {
-    await organizationStore.deleteOrganization(organizationStore.selectedOrganizationId)
+    await organizationStore.remove(organizationStore.selectedOrganizationId)
     deleteOpen.value = false
-    await organizationStore.loadOrganizations()
+    await organizationStore.load()
   } catch (err) {
     toast.error(getAppError(err))
   } finally {

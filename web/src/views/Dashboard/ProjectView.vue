@@ -153,7 +153,7 @@ async function submitCreate() {
   if (!trimmed) return
   createSubmitting.value = true
   try {
-    await branchStore.createBranch(organizationStore.selectedOrganizationId, projectId.value, trimmed)
+    await branchStore.create(organizationStore.selectedOrganizationId, projectId.value, trimmed)
     createOpen.value = false
   } catch (e) {
     toast.error(getAppError(e))
@@ -168,7 +168,7 @@ async function submitBranchFrom() {
   if (!trimmed) return
   branchFromSubmitting.value = true
   try {
-    await branchStore.createBranch(organizationStore.selectedOrganizationId, projectId.value, trimmed, branchFromParent.value.id)
+    await branchStore.create(organizationStore.selectedOrganizationId, projectId.value, trimmed, branchFromParent.value.id)
     branchFromOpen.value = false
   } catch (e) {
     toast.error(getAppError(e))
@@ -183,7 +183,7 @@ async function submitRename() {
   if (!trimmed || trimmed === renameBranch.value.name) return
   renameSubmitting.value = true
   try {
-    await branchStore.renameBranch(organizationStore.selectedOrganizationId, projectId.value, renameBranch.value.id, trimmed)
+    await branchStore.update(organizationStore.selectedOrganizationId, projectId.value, renameBranch.value.id, trimmed)
     renameOpen.value = false
   } catch (e) {
     toast.error(getAppError(e))
@@ -196,7 +196,7 @@ async function confirmDelete() {
   if (!organizationStore.selectedOrganizationId || !projectId.value || !deleteId.value) return
   deleting.value = true
   try {
-    await branchStore.deleteBranch(organizationStore.selectedOrganizationId, projectId.value, deleteId.value)
+    await branchStore.remove(organizationStore.selectedOrganizationId, projectId.value, deleteId.value)
     deleteOpen.value = false
   } finally {
     deleting.value = false
@@ -209,17 +209,17 @@ watch(
   [() => organizationStore.selectedOrganizationId, projectId],
   ([orgId, pid]) => {
     if (!orgId || !pid) return
-    branchStore.fetchBranches(orgId, pid)
+    branchStore.fetch(orgId, pid)
     if (pollInterval) clearInterval(pollInterval)
     pollInterval = setInterval(() => {
-      branchStore.fetchBranches(orgId, pid, true)
+      branchStore.fetch(orgId, pid, true)
     }, 500)
   },
   {immediate: true},
 )
 
 watch(() => organizationStore.selectedOrganizationId, (orgId) => {
-  if (orgId) projectStore.fetchProjects(orgId)
+  if (orgId) projectStore.fetch(orgId)
 }, {immediate: true})
 
 onUnmounted(() => {
@@ -381,14 +381,14 @@ function copyConnectionString(branch: Branch) {
                   <DropdownMenuContent align="end" class="w-64">
                     <DropdownMenuItem
                       v-if="branch.endpoint_status === 'stopped' || branch.endpoint_status === 'failed'"
-                      @click="branchStore.startEndpoint(organizationStore.selectedOrganizationId!, projectId, branch.id)"
+                      @click="branchStore.launchEndpoint(organizationStore.selectedOrganizationId!, projectId, branch.id)"
                     >
                       <Play class="size-4"/>
                       Start
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       v-if="branch.endpoint_status === 'running'"
-                      @click="branchStore.stopEndpoint(organizationStore.selectedOrganizationId!, projectId, branch.id)"
+                      @click="branchStore.shutdownEndpoint(organizationStore.selectedOrganizationId!, projectId, branch.id)"
                     >
                       <Square class="size-4"/>
                       Stop

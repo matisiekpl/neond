@@ -40,7 +40,7 @@ async function onSubmit() {
   if (!trimmed) return
   submitting.value = true
   try {
-    const organization = await organizationStore.createOrganization(trimmed)
+    const organization = await organizationStore.create(trimmed)
     emit('update:open', false)
     router.push({ name: 'projects.list', params: { organizationId: organization.id } })
   } catch (e) {

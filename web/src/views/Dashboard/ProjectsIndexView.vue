@@ -55,7 +55,7 @@ const deleteId = ref<string | null>(null)
 const deleteSubmitting = ref(false)
 
 watch(() => organizationStore.selectedOrganizationId, (id) => {
-  if (id) projectStore.fetchProjects(id)
+  if (id) projectStore.fetch(id)
 }, { immediate: true })
 
 watch(renameOpen, (val) => {
@@ -79,7 +79,7 @@ async function submitRename() {
   if (!trimmed) return
   renameSubmitting.value = true
   try {
-    await projectStore.updateProject(organizationStore.selectedOrganizationId, renameId.value, { name: trimmed })
+    await projectStore.update(organizationStore.selectedOrganizationId, renameId.value, { name: trimmed })
     renameOpen.value = false
   } catch (e) {
     toast.error(getAppError(e))
@@ -92,7 +92,7 @@ async function confirmDelete() {
   if (!organizationStore.selectedOrganizationId || !deleteId.value) return
   deleteSubmitting.value = true
   try {
-    await projectStore.deleteProject(organizationStore.selectedOrganizationId, deleteId.value)
+    await projectStore.remove(organizationStore.selectedOrganizationId, deleteId.value)
     deleteOpen.value = false
   } finally {
     deleteSubmitting.value = false

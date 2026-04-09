@@ -15,7 +15,7 @@ export const branchesApi = {
     return response.data
   },
 
-  async rename(organizationId: string, projectId: string, branchId: string, name: string): Promise<Branch> {
+  async update(organizationId: string, projectId: string, branchId: string, name: string): Promise<Branch> {
     const response = await api.put<Branch>(
       `organizations/${organizationId}/projects/${projectId}/branches/${branchId}`,
       { name },
