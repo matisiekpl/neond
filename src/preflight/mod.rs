@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
+use crate::mgmt::dto::config::RemoteStorageConfig;
+
 mod network;
+mod s3;
 
 const STORAGE_BROKER_PORT: u16 = 50051;
 const STORAGE_CONTROLLER_PORT: u16 = 1234;
@@ -14,10 +17,11 @@ const TRACER_PORT: u16 = 4318;
 
 const MINIMUM_FREE_SPACE_GB: u64 = 3;
 
-pub fn check(
+pub async fn check(
     daemon_directory: PathBuf,
     binaries_directory: PathBuf,
     pg_proxy_port: u16,
+    remote_storage_config: Option<RemoteStorageConfig>,
 ) -> Result<(), PreflightError> {
     if !network::is_port_open(STORAGE_BROKER_PORT) {
         return Err(PreflightError::PortAlreadyReserved(STORAGE_BROKER_PORT));
@@ -73,6 +77,14 @@ pub fn check(
         return Err(PreflightError::NotEnoughSpace);
     }
 
+    if let Some(ref storage_config) = remote_storage_config {
+        s3::check_s3_write_access(storage_config).await?;
+        tracing::info!(
+            "S3 write access verified for bucket '{}'",
+            storage_config.bucket
+        );
+    }
+
     tracing::info!(
         "Preflight check completed successfully. Available {} MBs.",
         available_space / 1_000_000
@@ -86,6 +98,7 @@ pub enum PreflightError {
     PortAlreadyReserved(u16),
     NotEnoughSpace,
     DaemonDirectoryInitializedFailed,
+    S3WriteCheckFailed(String),
 }
 
 impl std::fmt::Display for PreflightError {
@@ -101,6 +114,9 @@ impl std::fmt::Display for PreflightError {
             ),
             PreflightError::DaemonDirectoryInitializedFailed => {
                 write!(f, "Failed to initialize daemon directory")
+            }
+            PreflightError::S3WriteCheckFailed(message) => {
+                write!(f, "S3 connectivity check failed: {}", message)
             }
         }
     }

@@ -27,7 +27,9 @@ pub async fn run() -> Result<(), anyhow::Error> {
         config.daemon_directory.clone(),
         config.binaries_directory.clone(),
         config.pg_proxy_port,
-    )?;
+        config.remote_storage_config.clone(),
+    )
+    .await?;
     crate::unpacker::Unpacker::new(config.binaries_directory.clone())?.unpack()?;
     let mut daemon = crate::daemon::Daemon::new(config.clone());
 
