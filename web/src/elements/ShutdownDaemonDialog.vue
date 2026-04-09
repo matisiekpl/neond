@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useDaemonStore } from '@/stores/daemon.store'
-import { Loader2, TriangleAlert } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import {onMounted, ref} from 'vue'
+import {useDaemonStore} from '@/stores/daemon.store'
+import {Loader2, TriangleAlert} from 'lucide-vue-next'
+import {Button} from '@/components/ui/button'
+import {Checkbox} from '@/components/ui/checkbox'
+import {Label} from '@/components/ui/label'
+import {Alert, AlertDescription} from '@/components/ui/alert'
 import {
   Dialog,
   DialogContent,
@@ -25,16 +25,16 @@ const emit = defineEmits<{
 }>()
 
 const daemonStore = useDaemonStore()
-const waitForCheckpoints = ref(true)
-
-watch(() => props.open, (val) => {
-  if (val) waitForCheckpoints.value = props.awaitingCount > 0
-})
+const waitForCheckpoints = ref(false);
 
 async function onConfirm() {
   await daemonStore.shutdown(waitForCheckpoints.value)
   emit('update:open', false)
 }
+
+onMounted(() => {
+  if (props.awaitingCount > 0) waitForCheckpoints.value = true;
+})
 </script>
 
 <template>
@@ -49,14 +49,15 @@ async function onConfirm() {
 
       <div class="flex flex-col gap-3">
         <Alert v-if="awaitingCount > 0">
-          <TriangleAlert class="size-4 text-amber-600" />
+          <TriangleAlert class="size-4 text-amber-600"/>
           <AlertDescription>
-            {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch is' : 'branches are' }} not checkpointed against the last received WAL record. Shutdown may not guarantee durability of data.
+            {{ awaitingCount }} {{ awaitingCount === 1 ? 'branch is' : 'branches are' }} not checkpointed against the
+            last received WAL record. Shutdown may not guarantee durability of data.
           </AlertDescription>
         </Alert>
 
         <div v-if="awaitingCount > 0" class="flex items-center gap-2">
-          <Checkbox id="wait-for-checkpoints" v-model:checked="waitForCheckpoints" />
+          <Checkbox id="wait-for-checkpoints" v-model="waitForCheckpoints" class="size-4"/>
           <Label for="wait-for-checkpoints" class="cursor-pointer">Wait for checkpoints before stopping</Label>
         </div>
       </div>
@@ -71,7 +72,7 @@ async function onConfirm() {
           :disabled="daemonStore.shuttingDownSubmitting"
           @click="onConfirm"
         >
-          <Loader2 v-if="daemonStore.shuttingDownSubmitting" class="mr-1.5 size-3.5 animate-spin" />
+          <Loader2 v-if="daemonStore.shuttingDownSubmitting" class="mr-1.5 size-3.5 animate-spin"/>
           Shutdown
         </Button>
       </DialogFooter>
