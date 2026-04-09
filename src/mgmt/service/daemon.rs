@@ -156,6 +156,30 @@ impl DaemonService {
                     TenantId::from_str(project.id.as_simple().to_string().as_str())
                         .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
 
+                let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+                let token = self
+                    .config
+                    .component_auth
+                    .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+                let pageserver_http_client = reqwest::Client::new();
+                let config_resp = pageserver_http_client
+                    .get(format!(
+                        "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/config"
+                    ))
+                    .header("Authorization", format!("Bearer {}", token))
+                    .send()
+                    .await
+                    .ok();
+                let checkpoint_timeout = if let Some(resp) = config_resp {
+                    let val: serde_json::Value = resp.json().await.unwrap_or_default();
+                    val.get("tenant_specific_overrides")
+                        .and_then(|overrides| overrides.get("checkpoint_timeout"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| humantime::parse_duration(s).ok())
+                } else {
+                    None
+                };
+
                 let branches = self.branch_repo.list_by_project_id(project.id).await?;
                 for branch in branches {
                     let timeline_id =
@@ -199,6 +223,7 @@ impl DaemonService {
                         last_record_lsn: timeline_info.last_record_lsn,
                         remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
                         current_logical_size: timeline_info.current_logical_size,
+                        checkpoint_timeout,
                     });
                 }
             }

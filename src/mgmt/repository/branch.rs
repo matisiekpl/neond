@@ -81,6 +81,7 @@ impl BranchRepository {
             .map_err(|e| AppError::Internal(e.to_string()))?;
         branches::table
             .filter(branches::project_id.eq(project_id))
+            .order(branches::created_at.asc())
             .load::<Branch>(conn)
             .await
             .map_err(Into::into)

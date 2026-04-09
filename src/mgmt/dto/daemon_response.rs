@@ -42,6 +42,7 @@ pub struct MappingInfo {
     pub last_record_lsn: Lsn,
     pub remote_consistent_lsn_visible: Lsn,
     pub current_logical_size: u64,
+    pub checkpoint_timeout: Option<Duration>,
 }
 
 #[derive(Serialize, Clone)]

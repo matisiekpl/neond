@@ -206,6 +206,7 @@ onUnmounted(() => daemonStore.stopPolling());
             <TableHead>Last Received LSN</TableHead>
             <TableHead>Checkpointed LSN</TableHead>
             <TableHead>Sync Status</TableHead>
+            <TableHead>Checkpoint Timeout</TableHead>
             <TableHead v-if="hostnameRoutingEnabled">TLS SNI Prefix</TableHead>
             <TableHead v-else>Port</TableHead>
             <TableHead>Compute Status</TableHead>
@@ -245,6 +246,9 @@ onUnmounted(() => daemonStore.stopPolling());
                 :last-record-lsn="mapping.last_record_lsn"
                 :remote-consistent-lsn="mapping.remote_consistent_lsn_visible"
               />
+            </TableCell>
+            <TableCell class="text-xs text-muted-foreground">
+              {{ mapping.checkpoint_timeout ? Math.ceil(mapping.checkpoint_timeout.secs / 60) + 'm' : '—' }}
             </TableCell>
             <TableCell v-if="hostnameRoutingEnabled">
               <CodeSnippet v-if="mapping.sni">{{ mapping.slug }}.</CodeSnippet>

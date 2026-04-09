@@ -79,6 +79,9 @@ function buildTree(branches: Branch[]): BranchNode[] {
       roots.push(node)
     }
   }
+  const byCreatedAt = (a: BranchNode, b: BranchNode) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  roots.sort(byCreatedAt)
+  for (const node of map.values()) node.children.sort(byCreatedAt)
   return roots
 }
 

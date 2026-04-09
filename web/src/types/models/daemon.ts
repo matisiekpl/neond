@@ -30,6 +30,7 @@ export interface MappingInfo {
   last_record_lsn: string
   remote_consistent_lsn_visible: string
   current_logical_size: number
+  checkpoint_timeout: { secs: number; nanos: number } | null
 }
 
 export interface PendingShutdownInfo {
