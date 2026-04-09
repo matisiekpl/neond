@@ -20,7 +20,7 @@ const isLoading = computed(() =>
 watch(
   () => route.params.organizationId as string,
   (organizationId) => {
-    if (organizationId) organizationStore.saveSelectedOrganization(organizationId)
+    if (organizationId) organizationStore.saveSelected(organizationId)
   },
   { immediate: true },
 )

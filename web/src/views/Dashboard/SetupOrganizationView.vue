@@ -22,7 +22,7 @@ async function onSubmit() {
   if (!trimmed) return
   submitting.value = true
   try {
-    const organization = await organizationStore.createOrganization(trimmed)
+    const organization = await organizationStore.create(trimmed)
     router.push({ name: 'projects.list', params: { organizationId: organization.id } })
   } catch (err) {
     toast.error(getAppError(err))

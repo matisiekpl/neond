@@ -14,7 +14,7 @@ export const useBranchStore = defineStore('branch', () => {
     loading.value = false
   }
 
-  async function fetchBranches(organizationId: string, projectId: string, silent = false): Promise<void> {
+  async function fetch(organizationId: string, projectId: string, silent = false): Promise<void> {
     if (!silent) loading.value = true
     try {
       branches.value = await branchesApi.list(organizationId, projectId)
@@ -23,10 +23,10 @@ export const useBranchStore = defineStore('branch', () => {
     }
   }
 
-  async function createBranch(organizationId: string, projectId: string, name: string, parentBranchId?: string): Promise<Branch> {
+  async function create(organizationId: string, projectId: string, name: string, parentBranchId?: string): Promise<Branch> {
     try {
       const branch = await branchesApi.create(organizationId, projectId, name, parentBranchId)
-      await fetchBranches(organizationId, projectId)
+      await fetch(organizationId, projectId)
       toast.success('Branch created')
       return branch
     } catch (e) {
@@ -35,10 +35,10 @@ export const useBranchStore = defineStore('branch', () => {
     }
   }
 
-  async function renameBranch(organizationId: string, projectId: string, branchId: string, name: string): Promise<void> {
+  async function update(organizationId: string, projectId: string, branchId: string, name: string): Promise<void> {
     try {
-      await branchesApi.rename(organizationId, projectId, branchId, name)
-      await fetchBranches(organizationId, projectId)
+      await branchesApi.update(organizationId, projectId, branchId, name)
+      await fetch(organizationId, projectId)
       toast.success('Branch renamed')
     } catch (e) {
       toast.error(getAppError(e))
@@ -46,10 +46,10 @@ export const useBranchStore = defineStore('branch', () => {
     }
   }
 
-  async function startEndpoint(organizationId: string, projectId: string, branchId: string): Promise<void> {
+  async function launchEndpoint(organizationId: string, projectId: string, branchId: string): Promise<void> {
     try {
       await branchesApi.launch(organizationId, projectId, branchId)
-      await fetchBranches(organizationId, projectId)
+      await fetch(organizationId, projectId)
       toast.success('Endpoint started')
     } catch (e) {
       toast.error(getAppError(e))
@@ -57,10 +57,10 @@ export const useBranchStore = defineStore('branch', () => {
     }
   }
 
-  async function stopEndpoint(organizationId: string, projectId: string, branchId: string): Promise<void> {
+  async function shutdownEndpoint(organizationId: string, projectId: string, branchId: string): Promise<void> {
     try {
       await branchesApi.shutdown(organizationId, projectId, branchId)
-      await fetchBranches(organizationId, projectId)
+      await fetch(organizationId, projectId)
       toast.success('Endpoint stopped')
     } catch (e) {
       toast.error(getAppError(e))
@@ -68,10 +68,10 @@ export const useBranchStore = defineStore('branch', () => {
     }
   }
 
-  async function deleteBranch(organizationId: string, projectId: string, branchId: string): Promise<void> {
+  async function remove(organizationId: string, projectId: string, branchId: string): Promise<void> {
     try {
       await branchesApi.remove(organizationId, projectId, branchId)
-      await fetchBranches(organizationId, projectId)
+      await fetch(organizationId, projectId)
       toast.success('Branch deleted')
     } catch (e) {
       toast.error(getAppError(e))
@@ -79,5 +79,5 @@ export const useBranchStore = defineStore('branch', () => {
     }
   }
 
-  return { branches, loading, reset, fetchBranches, createBranch, renameBranch, startEndpoint, stopEndpoint, deleteBranch }
+  return { branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove }
 })

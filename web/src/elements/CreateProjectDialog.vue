@@ -46,7 +46,7 @@ async function onSubmit() {
   if (!trimmed || !organizationStore.selectedOrganizationId) return
   submitting.value = true
   try {
-    await projectStore.createProject(organizationStore.selectedOrganizationId, { name: trimmed, pg_version: pgVersion.value })
+    await projectStore.create(organizationStore.selectedOrganizationId, { name: trimmed, pg_version: pgVersion.value })
     emit('update:open', false)
   } catch (e) {
     toast.error(getAppError(e))

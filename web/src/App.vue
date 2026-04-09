@@ -19,7 +19,7 @@ watch(() => authStore.user?.id, async (userId) => {
     return
   }
   if (!organizationStore.loaded) {
-    await organizationStore.loadOrganizations()
+    await organizationStore.load()
   }
 })
 </script>

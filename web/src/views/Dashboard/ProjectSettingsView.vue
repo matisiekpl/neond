@@ -114,7 +114,7 @@ const pitrIsDirty = computed(() => form.pitrInterval !== saved.value.pitrInterva
 const checkpointIsDirty = computed(() => form.checkpointDistance !== saved.value.checkpointDistance || form.checkpointTimeout !== saved.value.checkpointTimeout)
 
 watch(() => organizationStore.selectedOrganizationId, (orgId) => {
-  if (orgId) projectStore.fetchProjects(orgId)
+  if (orgId) projectStore.fetch(orgId)
 }, { immediate: true })
 
 watch(project, (p) => {
@@ -150,7 +150,7 @@ async function saveName() {
   if (!trimmed) return
   nameSubmitting.value = true
   try {
-    await projectStore.updateProject(organizationStore.selectedOrganizationId, projectId.value, { name: trimmed })
+    await projectStore.update(organizationStore.selectedOrganizationId, projectId.value, { name: trimmed })
     saved.value = { ...saved.value, name: trimmed }
   } catch (e) {
     toast.error(getAppError(e))
@@ -163,7 +163,7 @@ async function saveGc() {
   if (!organizationStore.selectedOrganizationId || !projectId.value) return
   gcSubmitting.value = true
   try {
-    await projectStore.updateProject(organizationStore.selectedOrganizationId, projectId.value, {
+    await projectStore.update(organizationStore.selectedOrganizationId, projectId.value, {
       gc_period: form.gcPeriod.trim() || undefined,
       gc_horizon: form.gcHorizon.trim() ? Number(form.gcHorizon) : undefined,
     })
@@ -179,7 +179,7 @@ async function savePitr() {
   if (!organizationStore.selectedOrganizationId || !projectId.value) return
   pitrSubmitting.value = true
   try {
-    await projectStore.updateProject(organizationStore.selectedOrganizationId, projectId.value, {
+    await projectStore.update(organizationStore.selectedOrganizationId, projectId.value, {
       pitr_interval: form.pitrInterval.trim() || undefined,
     })
     saved.value = { ...saved.value, pitrInterval: form.pitrInterval }
@@ -194,7 +194,7 @@ async function saveCheckpoint() {
   if (!organizationStore.selectedOrganizationId || !projectId.value) return
   checkpointSubmitting.value = true
   try {
-    await projectStore.updateProject(organizationStore.selectedOrganizationId, projectId.value, {
+    await projectStore.update(organizationStore.selectedOrganizationId, projectId.value, {
       checkpoint_distance: form.checkpointDistance.trim() ? Number(form.checkpointDistance) : undefined,
       checkpoint_timeout: form.checkpointTimeout.trim() || undefined,
     })
@@ -210,7 +210,7 @@ async function confirmDelete() {
   if (!organizationStore.selectedOrganizationId || !projectId.value) return
   deleting.value = true
   try {
-    await projectStore.deleteProject(organizationStore.selectedOrganizationId, projectId.value)
+    await projectStore.remove(organizationStore.selectedOrganizationId, projectId.value)
     await router.push({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })
   } catch {
     deleting.value = false

@@ -41,7 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem(ACCESS_TOKEN, token)
       await refreshUser()
       const organizationStore = useOrganizationStore()
-      await organizationStore.loadOrganizations()
+      await organizationStore.load()
       const organizationId = organizationStore.selectedOrganizationId
       if (organizationId) {
         await router.push({ name: 'projects.list', params: { organizationId } })
@@ -62,7 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem(ACCESS_TOKEN, token)
       await refreshUser()
       const organizationStore = useOrganizationStore()
-      await organizationStore.loadOrganizations()
+      await organizationStore.load()
       const organizationId = organizationStore.selectedOrganizationId
       if (organizationId) {
         await router.push({ name: 'projects.list', params: { organizationId } })
