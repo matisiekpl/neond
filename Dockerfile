@@ -6,7 +6,7 @@ COPY web .
 RUN yarn
 RUN yarn build
 
-FROM rust:1.67
+FROM rust:1.67 as compiler
 RUN apt-get update && apt install -y build-essential libtool libreadline-dev zlib1g-dev flex bison libseccomp-dev \
                       libssl-dev clang pkg-config libpq-dev cmake postgresql-client protobuf-compiler \
                       libprotobuf-dev libcurl4-openssl-dev openssl lsof libicu-dev
@@ -20,3 +20,9 @@ COPY . .
 COPY --from=web /web/dist /neon/web/dist
 RUN rustup target add aarch64-unknown-linux-gnu
 RUN make -C neon -j $JOBS -s
+RUN CARGO_BUILD_JOBS=$JOBS RUSTFLAGS="-C link-arg=-Wl,--no-relax -C code-model=medium" cargo build --release --jobs $JOBS
+
+FROM alpine
+COPY --from=compiler /neon/target/release/neond /usr/local/bin/neond
+WORKDIR /neon
+ENTRYPOINT ["/usr/local/bin/neond"]
