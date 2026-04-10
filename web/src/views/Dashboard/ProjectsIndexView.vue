@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useTitle } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { MoreHorizontal, Loader2 } from 'lucide-vue-next'

@@ -10,7 +10,6 @@ use crate::mgmt::handler::AppState;
 use crate::mgmt::handler::{branch, daemon, endpoint, organization, project, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
-    // TODO(matisiekpl): integrate Vue hosting into app
     // TODO(matisiekpl): add PITR restoration
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
@@ -78,6 +77,9 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     let app = Router::new()
         .nest("/api", api)
         .layer(CorsLayer::permissive());
+
+    #[cfg(not(debug_assertions))]
+    let app = app.fallback(crate::mgmt::frontend::static_handler);
 
     let listener = TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("Listening on 0.0.0.0:{}", port);

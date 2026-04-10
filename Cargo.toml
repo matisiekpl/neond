@@ -54,6 +54,8 @@ pg-sni-muxer = "0.1.0"
 pem = "3.0.3"
 openssl = "0.10"
 tower-http = { version = "0.6.8", features = ["cors"] }
+rust-embed = "8"
+mime_guess = "2"
 tokio-util = { version = "0.7", features = ["rt"] }
 humantime = "2.2"
 aws-config = { version = "1.5", default-features = false, features = ["rustls", "sso"] }
