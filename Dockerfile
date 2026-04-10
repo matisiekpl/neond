@@ -19,6 +19,7 @@ WORKDIR /neon
 COPY . .
 COPY --from=web /web/dist /neon/web/dist
 RUN rustup target add aarch64-unknown-linux-gnu
+RUN rustup target add x86_64-unknown-linux-gnu
 RUN make -C neon -j $JOBS -s
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \
