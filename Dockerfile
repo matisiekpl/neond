@@ -16,9 +16,9 @@ RUN export PROTOC_VERSION=22.2 && curl -fsSL "https://github.com/protocolbuffers
         && mv protoc/bin/protoc /usr/local/bin/protoc \
         && mv protoc/include/google /usr/local/include/google \
         && rm -rf protoc.zip protoc
-WORKDIR /neon
+WORKDIR /neond
 COPY . .
-COPY --from=web /web/dist /neon/web/dist
+COPY --from=web /web/dist /neond/web/dist
 RUN rustup target add aarch64-unknown-linux-gnu
 RUN rustup target add x86_64-unknown-linux-gnu
 RUN CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=release make -C neon -j $JOBS -s
@@ -29,7 +29,17 @@ RUN ARCH=$(uname -m) && \
         cargo build --release --jobs $JOBS; \
     fi
 
-FROM alpine
-COPY --from=compiler /neon/target/release/neond /usr/local/bin/neond
-WORKDIR /neon
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    libpq5 \
+    libreadline8 \
+    libseccomp2 \
+    libcurl4 \
+    libicu72 \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=compiler /neond/target/release/neond /usr/local/bin/neond
+WORKDIR /neond
 ENTRYPOINT ["/usr/local/bin/neond"]
