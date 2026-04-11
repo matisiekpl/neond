@@ -8,6 +8,7 @@ RUN yarn build
 
 FROM rust:1.67 AS compiler
 ARG JOBS
+RUN echo 'Using $JOBS workers'
 RUN apt-get update && apt install -y build-essential libtool libreadline-dev zlib1g-dev flex bison libseccomp-dev \
                       libssl-dev clang pkg-config libpq-dev cmake postgresql-client protobuf-compiler \
                       libprotobuf-dev libcurl4-openssl-dev openssl lsof libicu-dev
