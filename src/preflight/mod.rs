@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::mgmt::dto::config::RemoteStorageConfig;
 
+mod binaries;
 mod network;
 mod s3;
 
@@ -19,7 +20,8 @@ const MINIMUM_FREE_SPACE_GB: u64 = 3;
 
 pub async fn check(
     daemon_directory: PathBuf,
-    binaries_directory: PathBuf,
+    neon_binaries_directory: PathBuf,
+    pg_install_directory: PathBuf,
     pg_proxy_port: u16,
     remote_storage_config: Option<RemoteStorageConfig>,
 ) -> Result<(), PreflightError> {
@@ -61,18 +63,13 @@ pub async fn check(
             .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
     }
 
-    if !binaries_directory.exists() {
-        std::fs::create_dir_all(&binaries_directory)
-            .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
-    }
+    binaries::check_neon_binaries(&neon_binaries_directory)?;
+    binaries::check_pg_install(&pg_install_directory)?;
 
     let daemon_directory_stats = fs2::statvfs(&daemon_directory)
         .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
-    let binaries_directory_stats = fs2::statvfs(&binaries_directory)
-        .map_err(|_| PreflightError::DaemonDirectoryInitializedFailed)?;
 
-    let available_space =
-        daemon_directory_stats.available_space() + binaries_directory_stats.available_space();
+    let available_space = daemon_directory_stats.available_space();
     if available_space < MINIMUM_FREE_SPACE_GB * 1_000_000_000 {
         return Err(PreflightError::NotEnoughSpace);
     }
@@ -98,6 +95,8 @@ pub enum PreflightError {
     PortAlreadyReserved(u16),
     NotEnoughSpace,
     DaemonDirectoryInitializedFailed,
+    MissingBinary(PathBuf),
+    MissingPgInstall(PathBuf),
     S3WriteCheckFailed(String),
 }
 
@@ -114,6 +113,12 @@ impl std::fmt::Display for PreflightError {
             ),
             PreflightError::DaemonDirectoryInitializedFailed => {
                 write!(f, "Failed to initialize daemon directory")
+            }
+            PreflightError::MissingBinary(path) => {
+                write!(f, "Required Neon binary missing at {}", path.display())
+            }
+            PreflightError::MissingPgInstall(path) => {
+                write!(f, "Required pg_install path missing at {}", path.display())
             }
             PreflightError::S3WriteCheckFailed(message) => {
                 write!(f, "S3 connectivity check failed: {}", message)

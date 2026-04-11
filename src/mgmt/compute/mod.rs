@@ -107,11 +107,11 @@ impl ComputeEndpoint {
         let config_path = self.compute_dir.path().join("config.json");
         fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
 
-        let compute_ctl_binary = self.config.binaries_directory.join("compute_ctl");
+        let compute_ctl_binary = self.config.neon_binaries_directory.join("compute_ctl");
         let pgbin = self
             .config
-            .binaries_directory
-            .join(format!("pg_install/{}/bin/postgres", self.pg_version));
+            .pg_install_directory
+            .join(format!("{}/bin/postgres", self.pg_version));
 
         let connection_string = format!("postgresql://cloud_admin@localhost:{}/postgres", port);
 
