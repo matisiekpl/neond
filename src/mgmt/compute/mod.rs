@@ -345,28 +345,56 @@ impl ComputeEndpoint {
 
     fn setup_pg_conf(&self) -> PostgresConf {
         let mut conf = PostgresConf::new();
+
         conf.append("max_wal_senders", "10");
         conf.append("wal_log_hints", "off");
         conf.append("max_replication_slots", "10");
         conf.append("hot_standby", "on");
-        conf.append("shared_buffers", "1MB");
-        conf.append("effective_io_concurrency", "2");
-        conf.append("fsync", "off");
+
+        conf.append("shared_buffers", "128MB");
+        conf.append("effective_cache_size", "512MB");
+        conf.append("work_mem", "8MB");
+        conf.append("maintenance_work_mem", "128MB");
         conf.append("max_connections", "100");
+
+        conf.append("effective_io_concurrency", "100");
+        conf.append("random_page_cost", "1.1");
+        conf.append("fsync", "on");
+        conf.append("synchronous_commit", "on");
+
         conf.append("wal_level", "logical");
-        conf.append("wal_sender_timeout", "5s");
-        conf.append("listen_addresses", "127.0.0.1");
-        conf.append("port", &self.port.unwrap_or(0).to_string());
+        conf.append("wal_sender_timeout", "60s");
         conf.append("wal_keep_size", "0");
         conf.append("restart_after_crash", "off");
+
+        conf.append("listen_addresses", "127.0.0.1");
+        conf.append("port", &self.port.unwrap_or(0).to_string());
         conf.append("shared_preload_libraries", "neon");
 
+        conf.append("jit", "off");
+
+        conf.append("statement_timeout", "0");
+        conf.append("idle_in_transaction_session_timeout", "600000");
+
+        conf.append("autovacuum_max_workers", "4");
+        conf.append("autovacuum_naptime", "10s");
+        conf.append("autovacuum_vacuum_scale_factor", "0.05");
+        conf.append("autovacuum_analyze_scale_factor", "0.02");
+        conf.append("autovacuum_vacuum_cost_limit", "2000");
+
+        conf.append("log_min_duration_statement", "1000");
+        conf.append("log_connections", "on");
+        conf.append("log_disconnections", "on");
+        conf.append("log_checkpoints", "on");
+        conf.append("log_lock_waits", "on");
+        conf.append("log_temp_files", "0");
+        conf.append("log_autovacuum_min_duration", "1000");
+        conf.append("log_line_prefix", "'%m [%p] %q%u@%d '");
+
         conf.append_line("");
-        // Configure backpressure
-        conf.append("max_replication_write_lag", "15MB");
+        conf.append("max_replication_write_lag", "500MB");
         conf.append("max_replication_flush_lag", "10GB");
 
-        // Configure Postgres to connect to the safekeepers
         conf.append("synchronous_standby_names", "walproposer");
         conf.append("neon.safekeepers", "localhost:5454");
 
