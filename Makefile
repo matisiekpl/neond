@@ -15,3 +15,7 @@ kill:
 	-kill $(shell lsof -ti:1234)  2>/dev/null || true
 	-kill $(shell lsof -ti:1235)  2>/dev/null || true
 	-kill $(shell lsof -ti:9993)  2>/dev/null || true
+
+clean:
+	cd neon; make distclean
+	cargo clean
