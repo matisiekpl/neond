@@ -21,7 +21,7 @@ COPY . .
 COPY --from=web /web/dist /neon/web/dist
 RUN rustup target add aarch64-unknown-linux-gnu
 RUN rustup target add x86_64-unknown-linux-gnu
-RUN make -C neon -j $JOBS -s
+RUN CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=release make -C neon -j $JOBS -s
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \
         RUSTFLAGS="-C link-arg=-Wl,--no-relax -C code-model=medium" cargo build --release --jobs $JOBS; \
