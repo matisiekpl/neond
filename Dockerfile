@@ -1,5 +1,5 @@
 ARG JOBS=1
-ARG BUILD_TYPE=debug
+ARG BUILD_TYPE=release
 
 FROM node AS web
 WORKDIR /web
