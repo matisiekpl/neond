@@ -8,3 +8,5 @@ neon_daemon_data/
 .junie/
 .claude/
 .cursor/
+
+daemondata/

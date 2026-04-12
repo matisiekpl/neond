@@ -367,7 +367,7 @@ impl ComputeEndpoint {
         conf.append("wal_keep_size", "0");
         conf.append("restart_after_crash", "off");
 
-        conf.append("listen_addresses", "127.0.0.1");
+        conf.append("listen_addresses", "0.0.0.0");
         conf.append("port", &self.port.unwrap_or(0).to_string());
         conf.append("shared_preload_libraries", "neon");
 

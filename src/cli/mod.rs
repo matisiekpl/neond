@@ -20,7 +20,9 @@ pub async fn run() -> Result<(), anyhow::Error> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    dotenvy::dotenv().expect("Failed to load .env file");
+    if let Err(err) = dotenvy::dotenv() {
+        tracing::warn!("Failed to load .env file: {err}");
+    }
 
     let config = Config::new()?;
     crate::preflight::check(

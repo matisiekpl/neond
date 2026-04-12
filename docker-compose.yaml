@@ -1,0 +1,17 @@
+services:
+  neond:
+    image: 271f3eff6228
+#    image: neond/neond
+    environment:
+      PORT: 3000
+      SERVER_SECRET: "1234"
+      PG_PROXY_PORT: "5433"
+      PORT_RANGE: 50000-50010
+#      PG_HOSTNAME: bazy.local
+    ports:
+      - "3000:3000"
+      - "5433:5433"
+      - "50000-50010:50000-50010"
+    restart: unless-stopped
+    volumes:
+      - ./neond_data:/neond
