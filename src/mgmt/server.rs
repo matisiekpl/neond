@@ -18,6 +18,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add global daemon event log
     // TODO(matisiekpl): optimize postgres parameters
     // TODO(matisiekpl): handle unwrap and expect
+    // TODO(matisiekpl): password change of compute endpoint
+    // TODO(matisiekpl): signup restrictions
+    // TODO(matisiekpl): ephemeral branches
+    // TODO(matisiekpl): data tables
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
