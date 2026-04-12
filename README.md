@@ -1,5 +1,11 @@
 <div align="center">
-  <img src="web/public/header.svg" alt="NeonD Logo" width="250"/>
+ <div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/header-dark.svg"/>
+    <source media="(prefers-color-scheme: light)" srcset="web/public/header-light.svg"/>
+    <img src="web/public/header-light.svg" alt="NeonD Logo" width="250"/>
+  </picture>
+</div>
 
 <h3>DX-focused control plane for PostgreSQL</h3>
   <p>NeonD is an open-source Neon-based control plane daemon for PostgreSQL. It offers S3-based layer durability, instant branching, precise Point-in-time recovery in seconds. Runs as a single Docker container, handles multi-tenant PostgreSQL instances seamlessly.</p>
