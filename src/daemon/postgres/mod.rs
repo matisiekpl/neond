@@ -31,9 +31,9 @@ impl Postgres {
     ) -> Self {
         Postgres {
             name,
-            initdb_binary_path: pg_install_directory.join("v17/bin/initdb"),
-            postgres_binary_path: pg_install_directory.join("v17/bin/postgres"),
-            postgres_lib_path: pg_install_directory.join("v17/lib"),
+            initdb_binary_path: pg_install_directory.join("vanilla_v17/bin/initdb"),
+            postgres_binary_path: pg_install_directory.join("vanilla_v17/bin/postgres"),
+            postgres_lib_path: pg_install_directory.join("vanilla_v17/lib"),
             data_directory: daemon_directory
                 .join("daemon_data")
                 .join(data_directory_suffix),

@@ -43,7 +43,6 @@ neond.iml
 neon_daemon_data/
 
 # Git
-.git/
 .github/
 
 # Neon build artifacts (if nested)

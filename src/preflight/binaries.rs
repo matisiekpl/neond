@@ -10,7 +10,14 @@ const NEON_COMPONENT_BINARIES: &[&str] = &[
     "storage_controller",
 ];
 
-const PG_INSTALL_REQUIRED_PATHS: &[&str] = &["v17/bin/postgres", "v17/bin/initdb", "v17/lib"];
+const PG_INSTALL_REQUIRED_PATHS: &[&str] = &[
+    "v17/bin/postgres",
+    "v17/bin/initdb",
+    "v17/lib",
+    "vanilla_v17/bin/postgres",
+    "vanilla_v17/bin/initdb",
+    "vanilla_v17/lib",
+];
 
 pub fn check_neon_binaries(neon_binaries_directory: &Path) -> Result<(), PreflightError> {
     if !neon_binaries_directory.exists() {

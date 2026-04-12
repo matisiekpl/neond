@@ -12,7 +12,7 @@ ARG JOBS
 ARG BUILD_TYPE
 RUN echo "Using $JOBS jobs"
 RUN echo "Using build type: $BUILD_TYPE"
-RUN apt-get update && apt-get install -y build-essential libtool libreadline-dev zlib1g-dev flex bison libseccomp-dev \
+RUN apt-get update && apt-get install -y git build-essential libtool libreadline-dev zlib1g-dev flex bison libseccomp-dev \
                       libssl-dev clang pkg-config libpq-dev cmake postgresql-client protobuf-compiler \
                       libprotobuf-dev libcurl4-openssl-dev openssl lsof libicu-dev
 RUN export PROTOC_VERSION=22.2 && curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-$(uname -m | sed 's/aarch64/aarch_64/g').zip" -o "protoc.zip" \
@@ -26,6 +26,7 @@ COPY --from=web /web/dist /neond/web/dist
 RUN rustup target add aarch64-unknown-linux-gnu
 RUN rustup target add x86_64-unknown-linux-gnu
 RUN CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE make -C neon -j $JOBS -s
+RUN make vanillapg JOBS=$JOBS
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
         CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE cargo build --jobs $JOBS --release; \
     else \
