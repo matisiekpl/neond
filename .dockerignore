@@ -1,0 +1,52 @@
+# Top-level build artifacts
+target/
+build/
+
+# Neon subdir - exclude everything except what's needed
+neon/*
+!neon/Cargo.lock
+!neon/Cargo.toml
+!neon/Makefile
+!neon/postgres.mk
+!neon/rust-toolchain.toml
+!neon/scripts/
+!neon/build-tools/
+!neon/.cargo/
+!neon/.config/
+!neon/compute/
+!neon/compute_tools/
+!neon/control_plane/
+!neon/docker-compose/
+!neon/libs/
+!neon/pageserver/
+!neon/pgxn/
+!neon/proxy/
+!neon/endpoint_storage/
+!neon/storage_scrubber/
+!neon/safekeeper/
+!neon/storage_broker/
+!neon/storage_controller/
+!neon/vendor/
+!neon/workspace_hack/
+
+# IDE / editor
+.idea/
+neond.iml
+.cursor/
+.junie/
+.claude/
+
+# Environment
+.env
+
+# Data directories
+neon_daemon_data/
+
+# Git
+.github/
+
+# Neon build artifacts (if nested)
+neon/target/
+neon/pg_install/
+neon/pg_install%
+**/target/

@@ -2,7 +2,6 @@ mod auth;
 mod cli;
 mod mgmt;
 mod preflight;
-mod unpacker;
 mod daemon;
 mod utils;
 

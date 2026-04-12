@@ -43,17 +43,13 @@ struct PageserverMetadata {
 
 pub fn write_pageserver_init_files(
     daemon_directory: &PathBuf,
-    binaries_directory: &PathBuf,
+    pg_install_directory: &PathBuf,
     remote_storage_config: &Option<RemoteStorageConfig>,
     component_auth: &DaemonAuth,
 ) -> Result<(), anyhow::Error> {
     let config = PageserverConfig {
         availability_zone: "neond-1".to_string(),
-        pg_distrib_dir: binaries_directory
-            .join("pg_install")
-            .to_str()
-            .unwrap()
-            .to_string(),
+        pg_distrib_dir: pg_install_directory.to_str().unwrap().to_string(),
         broker_endpoint: "http://127.0.0.1:50051/".to_string(),
         listen_pg_addr: "127.0.0.1:64000".to_string(),
         listen_http_addr: "127.0.0.1:9898".to_string(),

@@ -3821,7 +3821,6 @@ dependencies = [
  "diesel-derive-enum",
  "diesel_migrations",
  "dotenvy",
- "flate2",
  "fs2",
  "futures-util",
  "hmac",
@@ -3850,7 +3849,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tar",
  "tempfile",
  "tokio",
  "tokio-postgres 0.7.16",
@@ -6621,17 +6619,6 @@ checksum = "a75fb188eb626b924683e3b95e3a48e63551fcfb51949de2f06a9d91dbee93c9"
 dependencies = [
  "core-foundation-sys",
  "libc",
-]
-
-[[package]]
-name = "tar"
-version = "0.4.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d863878d212c87a19c1a610eb53bb01fe12951c0501cf5a0d65f724914a667a"
-dependencies = [
- "filetime",
- "libc",
- "xattr",
 ]
 
 [[package]]

@@ -1,3 +1,6 @@
 [submodule "neon"]
 	path = neon
 	url = https://github.com/neondatabase/neon.git
+[submodule "postgres"]
+	path = postgres
+	url = https://github.com/postgres/postgres.git

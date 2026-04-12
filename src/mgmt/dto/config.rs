@@ -18,7 +18,8 @@ pub struct Config {
     pub(crate) port: u16,
     pub(crate) server_secret: String,
     pub(crate) daemon_directory: PathBuf,
-    pub(crate) binaries_directory: PathBuf,
+    pub(crate) neon_binaries_directory: PathBuf,
+    pub(crate) pg_install_directory: PathBuf,
     pub(crate) remote_storage_config: Option<RemoteStorageConfig>,
     pub(crate) port_range: PortRange,
     pub(crate) hostname: Option<String>,
@@ -35,7 +36,23 @@ impl Config {
         let server_secret =
             std::env::var("SERVER_SECRET").map_err(|_| anyhow::anyhow!("SERVER_SECRET not set"))?;
         let daemon_directory = current_dir()?.join("neon_daemon_data");
-        let binaries_directory = tempfile::TempDir::new()?.keep();
+
+        let build_profile = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
+        let neon_binaries_directory = match std::env::var("NEON_BINARIES_DIR") {
+            Ok(value) => PathBuf::from(value),
+            Err(_) => current_dir()?
+                .join("neon")
+                .join("target")
+                .join(build_profile),
+        };
+        let pg_install_directory = match std::env::var("PG_INSTALL_DIR") {
+            Ok(value) => PathBuf::from(value),
+            Err(_) => current_dir()?.join("neon").join("pg_install"),
+        };
 
         let remote_storage_config = if std::env::var("AWS_S3_BUCKET").is_ok()
             && std::env::var("AWS_REGION").is_ok()
@@ -80,7 +97,8 @@ impl Config {
             port,
             server_secret,
             daemon_directory,
-            binaries_directory,
+            neon_binaries_directory,
+            pg_install_directory,
             remote_storage_config,
             port_range,
             hostname,

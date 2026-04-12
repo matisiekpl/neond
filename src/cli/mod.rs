@@ -20,17 +20,19 @@ pub async fn run() -> Result<(), anyhow::Error> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    dotenvy::dotenv().expect("Failed to load .env file");
+    if let Err(err) = dotenvy::dotenv() {
+        tracing::warn!("Failed to load .env file: {err}");
+    }
 
     let config = Config::new()?;
     crate::preflight::check(
         config.daemon_directory.clone(),
-        config.binaries_directory.clone(),
+        config.neon_binaries_directory.clone(),
+        config.pg_install_directory.clone(),
         config.pg_proxy_port,
         config.remote_storage_config.clone(),
     )
     .await?;
-    crate::unpacker::Unpacker::new(config.binaries_directory.clone())?.unpack()?;
     let mut daemon = crate::daemon::Daemon::new(config.clone());
 
     daemon.start().await?;

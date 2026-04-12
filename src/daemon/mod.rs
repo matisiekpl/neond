@@ -34,7 +34,7 @@ impl Daemon {
         let storage_controller_postgres = postgres::Postgres::new(
             "storage_controller_db",
             config.daemon_directory.clone(),
-            config.binaries_directory.clone(),
+            config.pg_install_directory.clone(),
             "storage_controller_pg_data",
             5431,
             config.server_secret.clone(),
@@ -42,7 +42,7 @@ impl Daemon {
         let management_postgres = postgres::Postgres::new(
             "management_db",
             config.daemon_directory.clone(),
-            config.binaries_directory.clone(),
+            config.pg_install_directory.clone(),
             "management_pg_data",
             5430,
             config.server_secret.clone(),
@@ -57,7 +57,7 @@ impl Daemon {
 
         let storage_broker = ProcessControl::new(
             "Storage broker",
-            config.binaries_directory.join("storage_broker"),
+            config.neon_binaries_directory.join("storage_broker"),
             ["-l", "127.0.0.1:50051"],
             vec![],
             config.daemon_directory.clone(),
@@ -77,7 +77,7 @@ impl Daemon {
         let public_key_arg = format!("--public-key={}", public_key_pem);
         let storage_controller = ProcessControl::new(
             "Storage controller",
-            config.binaries_directory.join("storage_controller"),
+            config.neon_binaries_directory.join("storage_controller"),
             [
                 "-l",
                 "127.0.0.1:1234",
@@ -105,7 +105,7 @@ impl Daemon {
 
         let safekeeper = ProcessControl::new(
             "Safekeeper",
-            config.binaries_directory.join("safekeeper"),
+            config.neon_binaries_directory.join("safekeeper"),
             [
                 "-D",
                 safekeeper_working_directory
@@ -138,7 +138,7 @@ impl Daemon {
 
         let pageserver = ProcessControl::new(
             "Pageserver",
-            config.binaries_directory.join("pageserver"),
+            config.neon_binaries_directory.join("pageserver"),
             [
                 "-D",
                 pageserver_working_directory
@@ -194,7 +194,7 @@ impl Daemon {
         std::fs::create_dir_all(&self.pageserver_working_directory)?;
         pageserver::write_pageserver_init_files(
             &self.config.daemon_directory,
-            &self.config.binaries_directory,
+            &self.config.pg_install_directory,
             &self.config.remote_storage_config,
             &self.config.component_auth,
         )?;
