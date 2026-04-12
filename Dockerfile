@@ -23,11 +23,14 @@ RUN export PROTOC_VERSION=22.2 && curl -fsSL "https://github.com/protocolbuffers
 WORKDIR /neond
 COPY neon /neond/neon
 COPY postgres /neond/postgres
+COPY rust-toolchain.toml .
 RUN rustup target add aarch64-unknown-linux-gnu
 RUN rustup target add x86_64-unknown-linux-gnu
 RUN CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE make -C neon -j $JOBS -s
+COPY Makefile .
 RUN make vanillapg JOBS=$JOBS
 COPY --from=web /web/dist /neond/web/dist
+COPY . .
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
         CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE cargo build --jobs $JOBS --release; \
     else \
