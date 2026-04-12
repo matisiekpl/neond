@@ -48,6 +48,11 @@
 
 The easiest way of deployment is to spin-up NeonD using Docker Compose.
 
+```bash
+mkdir neond_data
+sudo chown -R 1000:1000 neond_data
+```
+
 ```yaml
 services:
   neond:
