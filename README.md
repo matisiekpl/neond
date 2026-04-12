@@ -9,6 +9,13 @@
 [![Self Hosted](https://img.shields.io/badge/self--hosted-yes-brightgreen)](https://github.com/matisiekpl/neond)
 [![Open Source](https://img.shields.io/badge/open%20source-❤️-red)](https://github.com/matisiekpl/neond)
 
+  <p>
+    <a href="#-features">Features</a> •
+    <a href="#-installation">Installation</a> •
+    <a href="#-usage">Usage</a> •
+    <a href="#-license">License</a>
+  </p>
+
 <img src="assets/screenshot.png" alt="NeonD Dashboard" width="800"/>
 
 </div>
