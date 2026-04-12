@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Database,
   GalleryVerticalEnd,
+  Github,
   Info,
   LayoutDashboard,
   LogOut,
@@ -199,6 +200,14 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
 
     <SidebarFooter>
       <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton as-child tooltip="GitHub">
+            <a href="https://github.com/matisiekpl/neond" target="_blank" rel="noopener noreferrer">
+              <Github />
+              <span>GitHub</span>
+            </a>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton as-child tooltip="Log out">
             <RouterLink to="/logout">
