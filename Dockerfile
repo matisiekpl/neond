@@ -21,12 +21,13 @@ RUN export PROTOC_VERSION=22.2 && curl -fsSL "https://github.com/protocolbuffers
         && mv protoc/include/google /usr/local/include/google \
         && rm -rf protoc.zip protoc
 WORKDIR /neond
-COPY . .
-COPY --from=web /web/dist /neond/web/dist
+COPY neon /neond/neon
+COPY postgres /neond/postgres
 RUN rustup target add aarch64-unknown-linux-gnu
 RUN rustup target add x86_64-unknown-linux-gnu
 RUN CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE make -C neon -j $JOBS -s
 RUN make vanillapg JOBS=$JOBS
+COPY --from=web /web/dist /neond/web/dist
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
         CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE cargo build --jobs $JOBS --release; \
     else \
