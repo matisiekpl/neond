@@ -40,7 +40,7 @@ RUN if [ "$BUILD_TYPE" = "release" ]; then \
 FROM debian:bookworm-slim
 ARG BUILD_TYPE
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 libpq5 libreadline8 libseccomp2 libcurl4 libicu72 zlib1g liblz4-1 libzstd1 libxml2 libkrb5-3 && rm -rf /var/lib/apt/lists/*
-RUN groupadd --system --gid 1000 neond && useradd --system --uid 1000 --gid 1000 --create-home --home-dir /home/neond --shell /bin/bash neond
+RUN groupadd --system --gid 600 neond && useradd --system --uid 600 --gid 600 --create-home --home-dir /home/neond --shell /bin/bash neond
 COPY --from=compiler /neond/target/${BUILD_TYPE}/neond /usr/local/bin/neond
 COPY --from=compiler /neond/neon/target/${BUILD_TYPE}/safekeeper /usr/local/share/neon/bin/safekeeper
 COPY --from=compiler /neond/neon/target/${BUILD_TYPE}/pageserver /usr/local/share/neon/bin/pageserver
