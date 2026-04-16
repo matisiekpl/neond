@@ -31,9 +31,21 @@ ARG JOBS
 COPY Makefile .
 RUN make vanillapg JOBS=$JOBS
 
-FROM postgres AS server
+FROM postgres AS deps
 ARG JOBS
 ARG BUILD_TYPE
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN if [ "$BUILD_TYPE" = "release" ]; then \
+        CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE cargo build --jobs $JOBS --release; \
+    else \
+        CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE cargo build --jobs $JOBS; \
+    fi
+
+FROM deps AS server
+ARG JOBS
+ARG BUILD_TYPE
+RUN rm -rf src target/${BUILD_TYPE}/deps/neond-* target/${BUILD_TYPE}/neond*
 COPY --from=web /web/dist /neond/web/dist
 COPY . .
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
