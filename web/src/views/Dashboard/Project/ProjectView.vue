@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref, computed, watch, onUnmounted} from 'vue'
+import {ref, computed, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
@@ -206,28 +206,9 @@ async function confirmDelete() {
   }
 }
 
-let pollInterval: ReturnType<typeof setInterval> | null = null
-
-watch(
-  [() => organizationStore.selectedOrganizationId, projectId],
-  ([orgId, pid]) => {
-    if (!orgId || !pid) return
-    branchStore.fetch(orgId, pid)
-    if (pollInterval) clearInterval(pollInterval)
-    pollInterval = setInterval(() => {
-      branchStore.fetch(orgId, pid, true)
-    }, 500)
-  },
-  {immediate: true},
-)
-
 watch(() => organizationStore.selectedOrganizationId, (orgId) => {
   if (orgId) projectStore.fetch(orgId)
 }, {immediate: true})
-
-onUnmounted(() => {
-  if (pollInterval) clearInterval(pollInterval)
-})
 
 function copyConnectionString(branch: Branch) {
   if (branch.connection_string) {
@@ -310,7 +291,12 @@ function copyConnectionString(branch: Branch) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="{ branch, depth } in rows" :key="branch.id">
+            <TableRow
+              v-for="{ branch, depth } in rows"
+              :key="branch.id"
+              class="cursor-pointer"
+              @click="router.push({ name: 'projects.branches.data', params: { organizationId: organizationStore.selectedOrganizationId!, projectId, branchId: branch.id } })"
+            >
               <TableCell class="font-medium">
                 <span class="flex items-center gap-1.5" :style="{ paddingLeft: `${depth * 20}px` }">
                   <span v-if="depth > 0" class="shrink-0 text-muted-foreground">╰</span>
@@ -323,7 +309,7 @@ function copyConnectionString(branch: Branch) {
               <TableCell class="w-24 text-xs text-muted-foreground">
                 {{ formatBytes(branch.current_logical_size) }}
               </TableCell>
-              <TableCell class="w-44">
+              <TableCell class="w-44" @click.stop>
                 <HoverCard :open-delay="0" :close-delay="500">
                   <HoverCardTrigger as-child>
                     <DurabilityStatusBadge
@@ -373,7 +359,7 @@ function copyConnectionString(branch: Branch) {
                 </HoverCard>
               </TableCell>
               <TableCell class="w-28 text-muted-foreground">{{ formatDate(branch.created_at) }}</TableCell>
-              <TableCell>
+              <TableCell @click.stop>
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
                     <Button variant="ghost" size="icon" class="size-7 cursor-pointer">

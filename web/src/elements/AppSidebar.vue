@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Database,
   GalleryVerticalEnd,
+  GitBranch,
   Github,
   Info,
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { useProjectStore } from '@/stores/project.store'
+import { useBranchStore } from '@/stores/branch.store'
 import CreateOrganizationDialog from '@/elements/CreateOrganizationDialog.vue'
 import {
   DropdownMenu,
@@ -43,12 +45,15 @@ const route = useRoute()
 const router = useRouter()
 const organizationStore = useOrganizationStore()
 const projectStore = useProjectStore()
+const branchStore = useBranchStore()
 
 const createOpen = ref(false)
 
 const organizationId = computed(() => route.params.organizationId as string)
 const projectId = computed(() => route.params.projectId as string | undefined)
+const branchId = computed(() => route.params.branchId as string | undefined)
 const currentProject = computed(() => projectStore.projects.find((p) => p.id === projectId.value))
+const currentBranch = computed(() => branchStore.branches.find((b) => b.id === branchId.value))
 const displayOrg = computed(() => organizationStore.organizations.find((o) => o.id === organizationId.value))
 </script>
 
@@ -191,6 +196,55 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               <RouterLink :to="{ name: 'projects.settings', params: { organizationId, projectId } }">
                 <Settings />
                 <span>Settings</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroup>
+
+      <SidebarGroup v-if="branchId">
+        <SidebarGroupLabel>Branch</SidebarGroupLabel>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <SidebarMenuButton
+                  class="border data-[state=open]:bg-sidebar-accent cursor-pointer"
+                  :tooltip="currentBranch?.name ?? 'Branch'"
+                >
+                  <GitBranch class="size-4" />
+                  <span class="flex-1 truncate">{{ currentBranch?.name ?? 'Unknown branch' }}</span>
+                  <ChevronDown class="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent class="min-w-48 rounded-none" side="right" align="start">
+                <DropdownMenuLabel>Branches</DropdownMenuLabel>
+                <DropdownMenuItem
+                  v-for="branch in branchStore.branches"
+                  :key="branch.id"
+                  @click="router.push({ name: 'projects.branches.data', params: { organizationId, projectId, branchId: branch.id } })"
+                >
+                  <span class="flex-1">{{ branch.name }}</span>
+                  <Check v-if="branchId === branch.id" class="size-4" />
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @click="router.push({ name: 'projects.show', params: { organizationId, projectId } })">
+                  <LayoutDashboard />
+                  All branches
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem class="mt-1">
+            <SidebarMenuButton
+              as-child
+              :is-active="route.name === 'projects.branches.data'"
+              tooltip="Data"
+            >
+              <RouterLink :to="{ name: 'projects.branches.data', params: { organizationId, projectId, branchId } }">
+                <Database />
+                <span>Data</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
