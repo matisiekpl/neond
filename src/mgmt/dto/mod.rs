@@ -20,3 +20,5 @@ pub mod config;
 pub mod checkpoint_status;
 pub mod daemon_response;
 pub mod shutdown_daemon_request;
+pub mod execute_sql_request;
+pub mod execute_sql_response;

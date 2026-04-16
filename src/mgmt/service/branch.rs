@@ -9,12 +9,12 @@ use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::endpoint::EndpointService;
 use crate::mgmt::service::membership::MembershipService;
+use crate::utils::password::generate_password;
 use names::Generator;
 use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
 use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
 use neon_utils::id::{TenantId, TimelineId};
 use neon_utils::shard::TenantShardId;
-use rand::Rng;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -120,7 +120,7 @@ impl BranchService {
             .map_err(|e| AppError::Internal(format!("Failed to create timeline: {e}")))?;
 
         let id = Uuid::new_v4();
-        let password = Self::generate_password();
+        let password = generate_password();
         let slug = self.generate_unique_slug().await?;
 
         let branch = self
@@ -447,18 +447,6 @@ impl BranchService {
             all_in_sync,
             max_checkpoint_timeout,
         })
-    }
-
-    fn generate_password() -> String {
-        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        const PASSWORD_LEN: usize = 32;
-        let mut rng = rand::rng();
-        (0..PASSWORD_LEN)
-            .map(|_| {
-                let idx = rng.random_range(0..CHARSET.len());
-                CHARSET[idx] as char
-            })
-            .collect()
     }
 
     async fn generate_unique_slug(&self) -> Result<String> {

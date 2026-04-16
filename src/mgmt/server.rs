@@ -7,7 +7,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
 use crate::mgmt::handler::AppState;
-use crate::mgmt::handler::{branch, daemon, endpoint, organization, project, user};
+use crate::mgmt::handler::{branch, daemon, endpoint, organization, project, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add PITR restoration
@@ -20,8 +20,9 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): handle unwrap and expect
     // TODO(matisiekpl): password change of compute endpoint
     // TODO(matisiekpl): signup restrictions
-    // TODO(matisiekpl): ephemeral branches
     // TODO(matisiekpl): data tables
+    // TODO(matisiekpl): investigate "health_check" table
+    // TODO(matisiekpl): preserve compute endpoint port
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
@@ -70,6 +71,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             post(endpoint::start)
                 .delete(endpoint::stop)
                 .get(endpoint::status),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",
+            post(sql::execute),
         )
         .route("/daemon", get(daemon::get))
         .route(

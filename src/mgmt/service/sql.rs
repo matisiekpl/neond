@@ -1,0 +1,301 @@
+use std::str::FromStr;
+use std::sync::Arc;
+use uuid::Uuid;
+
+use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
+use neon_utils::id::{TenantId, TimelineId};
+use neon_utils::lsn::Lsn;
+use neon_utils::shard::TenantShardId;
+use tokio_postgres::SimpleQueryMessage;
+
+use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointStatus};
+use crate::mgmt::dto::config::Config;
+use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::dto::execute_sql_request::ExecuteSqlRequest;
+use crate::mgmt::dto::execute_sql_response::ExecuteSqlResponse;
+use crate::mgmt::model::branch::Branch;
+use crate::mgmt::model::project::{PgVersion, Project};
+use crate::mgmt::repository::branch::BranchRepository;
+use crate::mgmt::repository::project::ProjectRepository;
+use crate::mgmt::service::endpoint::EndpointService;
+use crate::mgmt::service::membership::MembershipService;
+use crate::utils::password::generate_password;
+
+pub struct SqlService {
+    config: Config,
+    branch_repo: Arc<BranchRepository>,
+    project_repo: Arc<ProjectRepository>,
+    membership_service: Arc<MembershipService>,
+    endpoint_service: Arc<EndpointService>,
+    pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+}
+
+impl SqlService {
+    pub fn new(
+        config: Config,
+        branch_repo: Arc<BranchRepository>,
+        project_repo: Arc<ProjectRepository>,
+        membership_service: Arc<MembershipService>,
+        endpoint_service: Arc<EndpointService>,
+        pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+    ) -> Self {
+        Self {
+            config,
+            branch_repo,
+            project_repo,
+            membership_service,
+            endpoint_service,
+            pageserver_client,
+        }
+    }
+
+    pub async fn execute(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+        request: ExecuteSqlRequest,
+    ) -> Result<ExecuteSqlResponse> {
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        match request.lsn {
+            Some(lsn) => {
+                self.execute_ephemeral(project, branch, lsn, request.sql)
+                    .await
+            }
+            None => {
+                self.execute_on_branch(
+                    user_id,
+                    organization_id,
+                    project_id,
+                    branch_id,
+                    request.sql,
+                )
+                .await
+            }
+        }
+    }
+
+    async fn execute_on_branch(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+        sql: String,
+    ) -> Result<ExecuteSqlResponse> {
+        let existing = self.endpoint_service.get_endpoint_info(branch_id).await;
+
+        if let Some(info) = &existing {
+            if info.status == ComputeEndpointStatus::Running {
+                return run_sql(info.port, &sql).await;
+            }
+        }
+
+        let started = self
+            .endpoint_service
+            .start(user_id, organization_id, project_id, branch_id)
+            .await?;
+
+        let result = run_sql(started.port, &sql).await;
+
+        if let Err(e) = self
+            .endpoint_service
+            .stop(user_id, organization_id, project_id, branch_id)
+            .await
+        {
+            tracing::warn!(
+                "Failed to stop endpoint for branch {} after SQL execution: {}",
+                branch_id,
+                e
+            );
+        }
+
+        result
+    }
+
+    async fn execute_ephemeral(
+        &self,
+        project: Project,
+        parent_branch: Branch,
+        lsn: String,
+        sql: String,
+    ) -> Result<ExecuteSqlResponse> {
+        let start_lsn = Lsn::from_str(lsn.trim())
+            .map_err(|_| AppError::Internal(format!("invalid lsn: {lsn}")))?;
+
+        let ancestor_timeline_id =
+            TimelineId::from_str(parent_branch.timeline_id.as_simple().to_string().as_str())
+                .map_err(|_| AppError::Internal("Invalid parent timeline id".into()))?;
+
+        let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+
+        let new_timeline_id = TimelineId::generate();
+
+        self.pageserver_client
+            .timeline_create(
+                TenantShardId::unsharded(tenant_id),
+                &TimelineCreateRequest {
+                    new_timeline_id,
+                    mode: TimelineCreateRequestMode::Branch {
+                        ancestor_timeline_id,
+                        ancestor_start_lsn: Some(start_lsn),
+                        pg_version: None,
+                        read_only: false,
+                    },
+                },
+            )
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to create ephemeral timeline: {e}"))
+            })?;
+
+        let ephemeral_timeline_uuid =
+            Uuid::from_str(new_timeline_id.to_string().as_str())
+                .map_err(|_| AppError::Internal("Invalid ephemeral timeline id".into()))?;
+
+        let ephemeral_branch = Branch {
+            id: Uuid::new_v4(),
+            name: "ephemeral".to_string(),
+            parent_branch_id: Some(parent_branch.id),
+            timeline_id: ephemeral_timeline_uuid,
+            project_id: project.id,
+            password: generate_password(),
+            slug: format!("ephemeral-{}", Uuid::new_v4()),
+            recent_status: None,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+        };
+
+        let sql_result = self
+            .run_ephemeral_endpoint(ephemeral_branch, project.pg_version.clone(), &sql)
+            .await;
+
+        self.delete_ephemeral_timeline(tenant_id, new_timeline_id).await;
+
+        sql_result
+    }
+
+    async fn run_ephemeral_endpoint(
+        &self,
+        ephemeral_branch: Branch,
+        pg_version: PgVersion,
+        sql: &str,
+    ) -> Result<ExecuteSqlResponse> {
+        let mut endpoint = ComputeEndpoint::new(self.config.clone(), ephemeral_branch, pg_version)
+            .map_err(|e| {
+                AppError::Internal(format!("Failed to create ephemeral compute endpoint: {e}"))
+            })?;
+
+        endpoint.launch().map_err(|e| {
+            AppError::Internal(format!("Failed to launch ephemeral compute endpoint: {e}"))
+        })?;
+
+        let port = endpoint.get_port();
+        let result = run_sql(port, sql).await;
+
+        if let Err(e) = endpoint.shutdown() {
+            tracing::warn!("Failed to shutdown ephemeral compute endpoint: {}", e);
+        }
+
+        result
+    }
+
+    async fn delete_ephemeral_timeline(&self, tenant_id: TenantId, timeline_id: TimelineId) {
+        loop {
+            let status_code = match self
+                .pageserver_client
+                .timeline_delete(TenantShardId::unsharded(tenant_id), timeline_id)
+                .await
+            {
+                Ok(code) => code.as_u16(),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to delete ephemeral timeline {}: {}",
+                        timeline_id,
+                        e
+                    );
+                    return;
+                }
+            };
+            if status_code != 500 && status_code != 503 && status_code != 409 {
+                return;
+            }
+        }
+    }
+}
+
+async fn run_sql(port: u16, sql: &str) -> Result<ExecuteSqlResponse> {
+    let connection_string =
+        format!("host=127.0.0.1 port={port} user=cloud_admin dbname=postgres");
+
+    let (client, connection) = tokio_postgres::connect(&connection_string, tokio_postgres::NoTls)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to connect to compute endpoint: {e}")))?;
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            tracing::warn!("Postgres connection error during SQL execution: {}", e);
+        }
+    });
+
+    let messages = client
+        .simple_query(sql)
+        .await
+        .map_err(|e| AppError::Internal(format!("SQL execution failed: {e}")))?;
+
+    let mut columns: Vec<String> = Vec::new();
+    let mut rows: Vec<Vec<Option<String>>> = Vec::new();
+    let mut rows_affected: Option<u64> = None;
+
+    for message in messages {
+        match message {
+            SimpleQueryMessage::RowDescription(description) => {
+                columns = description
+                    .iter()
+                    .map(|column| column.name().to_string())
+                    .collect();
+            }
+            SimpleQueryMessage::Row(row) => {
+                let values = (0..row.len())
+                    .map(|index| row.get(index).map(|value| value.to_string()))
+                    .collect();
+                rows.push(values);
+            }
+            SimpleQueryMessage::CommandComplete(count) => {
+                rows_affected = Some(count);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(ExecuteSqlResponse {
+        columns,
+        rows,
+        rows_affected,
+    })
+}
