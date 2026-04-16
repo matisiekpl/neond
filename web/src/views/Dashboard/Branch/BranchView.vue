@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTitle } from '@vueuse/core'
+import { Square } from 'lucide-vue-next'
 import { useProjectStore } from '@/stores/project.store'
 import { useBranchStore } from '@/stores/branch.store'
 import { useOrganizationStore } from '@/stores/organization.store'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
+import { Button } from '@/components/ui/button'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +28,15 @@ useTitle(
       : 'neond',
   ),
 )
+
+async function stopEndpoint() {
+  if (!organizationStore.selectedOrganizationId || !branch.value) return
+  await branchStore.shutdownEndpoint(
+    organizationStore.selectedOrganizationId,
+    projectId.value,
+    branch.value.id,
+  )
+}
 </script>
 
 <template>
@@ -46,29 +57,31 @@ useTitle(
     </button>
   </div>
 
-  <div v-else class="space-y-6">
-    <div>
-      <div class="flex items-center gap-2">
-        <h1 class="text-lg font-semibold">{{ branch.name }}</h1>
-        <EndpointStatusBadge :status="branch.endpoint_status" />
+  <div v-else class="flex flex-col gap-6 h-full">
+    <div class="shrink-0 flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg font-semibold truncate">{{ branch.name }}</h1>
+          <EndpointStatusBadge :status="branch.endpoint_status" />
+        </div>
+        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <span class="font-mono text-xs break-all">{{ branch.id }}</span>
+        </div>
       </div>
-      <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-        <span class="font-mono text-xs">{{ branch.id }}</span>
-      </div>
+      <Button
+        v-if="branch.endpoint_status === 'running'"
+        variant="outline"
+        size="sm"
+        class="cursor-pointer shrink-0"
+        @click="stopEndpoint"
+      >
+        <Square class="size-4" />
+        <span class="hidden sm:inline">Stop endpoint</span>
+      </Button>
     </div>
 
-    <div class="border-b">
-      <nav class="flex gap-0">
-        <RouterLink
-          :to="{ name: 'projects.branches.data', params: { organizationId: organizationStore.selectedOrganizationId, projectId, branchId } }"
-          class="px-4 py-2 text-sm font-medium"
-          :class="route.name === 'projects.branches.data' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'"
-        >
-          Data
-        </RouterLink>
-      </nav>
+    <div class="flex-1 min-h-0">
+      <RouterView />
     </div>
-
-    <RouterView />
   </div>
 </template>

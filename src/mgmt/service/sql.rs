@@ -120,21 +120,7 @@ impl SqlService {
             .start(user_id, organization_id, project_id, branch_id)
             .await?;
 
-        let result = run_sql(started.port, &sql).await;
-
-        if let Err(e) = self
-            .endpoint_service
-            .stop(user_id, organization_id, project_id, branch_id)
-            .await
-        {
-            tracing::warn!(
-                "Failed to stop endpoint for branch {} after SQL execution: {}",
-                branch_id,
-                e
-            );
-        }
-
-        result
+        run_sql(started.port, &sql).await
     }
 
     async fn execute_ephemeral(
