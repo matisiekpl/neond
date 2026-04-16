@@ -44,6 +44,8 @@ neon_daemon_data/
 
 # Git
 .github/
+neon/**/.git
+postgres/**/.git
 
 # Neon build artifacts (if nested)
 neon/target/
