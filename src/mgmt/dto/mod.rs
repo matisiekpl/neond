@@ -22,3 +22,5 @@ pub mod daemon_response;
 pub mod shutdown_daemon_request;
 pub mod execute_sql_request;
 pub mod execute_sql_response;
+pub mod lsn_request;
+pub mod lsn_response;
