@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useMediaQuery } from '@vueuse/core'
 import { ChevronLeft } from 'lucide-vue-next'
 import TablesList from '@/elements/TablesList.vue'
@@ -11,6 +11,7 @@ import { useOrganizationStore } from '@/stores/organization.store'
 import type { TableRef } from '@/types/models/tableRef'
 
 const route = useRoute()
+const router = useRouter()
 const organizationStore = useOrganizationStore()
 
 const projectId = computed(() => route.params.projectId as string)
@@ -18,7 +19,26 @@ const branchId = computed(() => route.params.branchId as string)
 const organizationId = computed(() => organizationStore.selectedOrganizationId)
 
 const isDesktop = useMediaQuery('(min-width: 768px)')
-const selected = ref<TableRef | null>(null)
+
+const selected = computed<TableRef | null>(() => {
+  const table = route.params.table as string | undefined
+  if (!table) return null
+  const dotIndex = table.indexOf('.')
+  if (dotIndex === -1) return { schema: 'public', name: table }
+  return { schema: table.slice(0, dotIndex), name: table.slice(dotIndex + 1) }
+})
+
+function selectTable(tableRef: TableRef | null) {
+  router.push({
+    name: 'projects.branches.data',
+    params: {
+      organizationId: organizationId.value!,
+      projectId: projectId.value,
+      branchId: branchId.value,
+      table: tableRef ? `${tableRef.schema}.${tableRef.name}` : '',
+    },
+  })
+}
 </script>
 
 <template>
@@ -35,7 +55,7 @@ const selected = ref<TableRef | null>(null)
           :project-id="projectId"
           :branch-id="branchId"
           :selected="selected"
-          @update:selected="selected = $event"
+          @update:selected="selectTable($event)"
         />
       </div>
       <div class="border rounded-lg overflow-hidden flex flex-col">
@@ -67,7 +87,7 @@ const selected = ref<TableRef | null>(null)
           :project-id="projectId"
           :branch-id="branchId"
           :selected="selected"
-          @update:selected="selected = $event"
+          @update:selected="selectTable($event)"
         />
       </div>
       <div v-else class="h-full border rounded-lg overflow-hidden flex flex-col">
@@ -76,7 +96,7 @@ const selected = ref<TableRef | null>(null)
             variant="ghost"
             size="sm"
             class="cursor-pointer"
-            @click="selected = null"
+            @click="selectTable(null)"
           >
             <ChevronLeft class="size-4" />
             Tables

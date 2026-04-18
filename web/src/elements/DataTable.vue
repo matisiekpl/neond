@@ -193,17 +193,17 @@ function onFilterValueInput() {
   debouncedLoad()
 }
 
-function toggleAllRows(checked: boolean | 'indeterminate') {
-  if (checked === true) {
+function toggleAllRows(value: boolean | 'indeterminate') {
+  if (value === true) {
     selectedRows.value = new Set(rows.value.map((_, index) => index))
   } else {
     selectedRows.value = new Set()
   }
 }
 
-function toggleRow(index: number, checked: boolean | 'indeterminate') {
+function toggleRow(index: number, value: boolean | 'indeterminate') {
   const next = new Set(selectedRows.value)
-  if (checked === true) {
+  if (value === true) {
     next.add(index)
   } else {
     next.delete(index)
@@ -289,7 +289,7 @@ function exportAll(format: 'csv' | 'json') {
       </DropdownMenu>
     </div>
 
-    <div class="h-[calc(100vh-15rem+5px)] flex flex-col">
+    <div class="h-[calc(100vh-16rem)] md:h-[calc(100vh-15rem+5px)] flex flex-col">
       <div v-if="showFilters" class="border-b px-3 py-2 flex flex-col gap-2 shrink-0">
         <div
           v-for="(filter, index) in filters"
@@ -388,8 +388,8 @@ function exportAll(format: 'csv' | 'json') {
             <TableRow>
               <TableHead class="w-10 px-3">
                 <Checkbox
-                  :checked="allSelected ? true : someSelected ? 'indeterminate' : false"
-                  @update:checked="toggleAllRows"
+                  :model-value="allSelected ? true : someSelected ? 'indeterminate' : false"
+                  @update:model-value="toggleAllRows"
                 />
               </TableHead>
               <TableHead
@@ -420,8 +420,8 @@ function exportAll(format: 'csv' | 'json') {
             >
               <TableCell class="px-3">
                 <Checkbox
-                  :checked="selectedRows.has(rowIndex)"
-                  @update:checked="(checked: boolean | 'indeterminate') => toggleRow(rowIndex, checked)"
+                  :model-value="selectedRows.has(rowIndex)"
+                  @update:model-value="(value: boolean | 'indeterminate') => toggleRow(rowIndex, value)"
                 />
               </TableCell>
               <TableCell v-for="(cell, cellIndex) in row" :key="cellIndex">

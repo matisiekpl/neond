@@ -48,7 +48,7 @@ const routes = [
               },
             }),
           },
-          { path: 'data', component: BranchDataView, name: 'projects.branches.data' },
+          { path: 'data/:table?', component: BranchDataView, name: 'projects.branches.data' },
           { path: 'sql', component: BranchSqlView, name: 'projects.branches.sql' },
         ],
       },
