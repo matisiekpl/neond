@@ -249,10 +249,21 @@ async fn run_sql(port: u16, sql: &str) -> Result<ExecuteSqlResponse> {
         }
     });
 
-    let messages = client
-        .simple_query(sql)
-        .await
-        .map_err(|e| AppError::Internal(format!("SQL execution failed: {e}")))?;
+    let messages = match client.simple_query(sql).await {
+        Ok(messages) => messages,
+        Err(e) => {
+            let message = e
+                .as_db_error()
+                .map(|db| db.message().to_string())
+                .unwrap_or_else(|| e.to_string());
+            return Ok(ExecuteSqlResponse {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                rows_affected: None,
+                error: Some(message),
+            });
+        }
+    };
 
     let mut columns: Vec<String> = Vec::new();
     let mut rows: Vec<Vec<Option<String>>> = Vec::new();
@@ -283,5 +294,6 @@ async fn run_sql(port: u16, sql: &str) -> Result<ExecuteSqlResponse> {
         columns,
         rows,
         rows_affected,
+        error: None,
     })
 }

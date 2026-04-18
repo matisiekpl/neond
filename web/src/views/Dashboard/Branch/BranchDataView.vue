@@ -2,40 +2,32 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMediaQuery } from '@vueuse/core'
-import { Database, Play, Loader2, ChevronLeft } from 'lucide-vue-next'
+import { ChevronLeft } from 'lucide-vue-next'
 import TablesList from '@/elements/TablesList.vue'
 import DataTable from '@/elements/DataTable.vue'
+import EndpointGate from '@/elements/EndpointGate.vue'
 import { Button } from '@/components/ui/button'
 import { useOrganizationStore } from '@/stores/organization.store'
-import { useBranchStore } from '@/stores/branch.store'
 import type { TableRef } from '@/types/models/tableRef'
 
 const route = useRoute()
 const organizationStore = useOrganizationStore()
-const branchStore = useBranchStore()
 
 const projectId = computed(() => route.params.projectId as string)
 const branchId = computed(() => route.params.branchId as string)
 const organizationId = computed(() => organizationStore.selectedOrganizationId)
 
-const branch = computed(() => branchStore.branches.find((b) => b.id === branchId.value))
-const endpointStatus = computed(() => branch.value?.endpoint_status)
-const isRunning = computed(() => endpointStatus.value === 'running')
-const isTransient = computed(
-  () => endpointStatus.value === 'starting' || endpointStatus.value === 'stopping',
-)
-
 const isDesktop = useMediaQuery('(min-width: 768px)')
 const selected = ref<TableRef | null>(null)
-
-async function startEndpoint() {
-  if (!organizationId.value) return
-  await branchStore.launchEndpoint(organizationId.value, projectId.value, branchId.value)
-}
 </script>
 
 <template>
-  <template v-if="isRunning && organizationId">
+  <EndpointGate
+    v-if="organizationId"
+    :organization-id="organizationId"
+    :project-id="projectId"
+    :branch-id="branchId"
+  >
     <div v-if="isDesktop" class="grid grid-cols-[260px_1fr] gap-4 h-full">
       <div class="border rounded-lg overflow-hidden flex flex-col">
         <TablesList
@@ -106,29 +98,5 @@ async function startEndpoint() {
         />
       </div>
     </div>
-  </template>
-
-  <div v-else class="h-full flex items-center justify-center">
-    <div class="max-w-md flex flex-col items-center text-center gap-3 p-6">
-      <Database class="size-10 text-muted-foreground" />
-      <div class="text-base font-medium">
-        <template v-if="endpointStatus === 'starting'">Endpoint is starting…</template>
-        <template v-else-if="endpointStatus === 'stopping'">Endpoint is stopping…</template>
-        <template v-else-if="endpointStatus === 'failed'">Endpoint failed to start</template>
-        <template v-else>Compute endpoint is stopped</template>
-      </div>
-      <p class="text-sm text-muted-foreground">
-        To browse data on this branch you need to start the compute endpoint.
-      </p>
-      <Button
-        v-if="endpointStatus === 'stopped' || endpointStatus === 'failed'"
-        class="cursor-pointer"
-        @click="startEndpoint"
-      >
-        <Play class="size-4" />
-        Start endpoint
-      </Button>
-      <Loader2 v-else-if="isTransient" class="size-5 animate-spin text-muted-foreground" />
-    </div>
-  </div>
+  </EndpointGate>
 </template>

@@ -247,6 +247,19 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="route.name === 'projects.branches.sql'"
+              tooltip="SQL"
+            >
+              <RouterLink :to="{ name: 'projects.branches.sql', params: { organizationId, projectId, branchId } }">
+                <Terminal />
+                <span>SQL</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>
     </SidebarContent>

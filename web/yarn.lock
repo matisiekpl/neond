@@ -866,6 +866,11 @@ hasown@^2.0.2:
   dependencies:
     function-bind "^1.1.2"
 
+highlight.js@^11.9.0:
+  version "11.11.1"
+  resolved "https://registry.yarnpkg.com/highlight.js/-/highlight.js-11.11.1.tgz#fca06fa0e5aeecf6c4d437239135fabc15213585"
+  integrity sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==
+
 hookable@^5.5.3:
   version "5.5.3"
   resolved "https://registry.yarnpkg.com/hookable/-/hookable-5.5.3.tgz#6cfc358984a1ef991e2518cb9ed4a778bbd3215d"
@@ -1273,6 +1278,13 @@ vscode-uri@^3.0.8:
   version "3.1.0"
   resolved "https://registry.yarnpkg.com/vscode-uri/-/vscode-uri-3.1.0.tgz#dd09ec5a66a38b5c3fffc774015713496d14e09c"
   integrity sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==
+
+vue-code-highlighter@latest:
+  version "1.1.3"
+  resolved "https://registry.yarnpkg.com/vue-code-highlighter/-/vue-code-highlighter-1.1.3.tgz#9e187181a2797cacb8c964d1e6fda738d16e4212"
+  integrity sha512-PqY4Wd/AKKUHG7Q1FKuCIplX6OcN2A7HgCk7NPueRvsCEU1e4chLdbr5ASn+VxNgjYaSAOuJjSlfX9UcX3xJbg==
+  dependencies:
+    highlight.js "^11.9.0"
 
 vue-demi@>=0.13.0:
   version "0.14.10"

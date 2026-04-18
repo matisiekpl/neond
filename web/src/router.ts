@@ -11,6 +11,7 @@ import OrganizationSettingsView from '@/views/Dashboard/Organization/Organizatio
 import DaemonView from '@/views/Dashboard/Daemon/DaemonView.vue'
 import BranchView from '@/views/Dashboard/Branch/BranchView.vue'
 import BranchDataView from '@/views/Dashboard/Branch/BranchDataView.vue'
+import BranchSqlView from '@/views/Dashboard/Branch/BranchSqlView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -48,6 +49,7 @@ const routes = [
             }),
           },
           { path: 'data', component: BranchDataView, name: 'projects.branches.data' },
+          { path: 'sql', component: BranchSqlView, name: 'projects.branches.sql' },
         ],
       },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },

@@ -12,6 +12,9 @@ const LIST_TABLES_SQL = `SELECT table_schema, table_name FROM information_schema
 export const useSqlStore = defineStore('sql', () => {
   const tablesLoading = ref(false)
   const rowsLoading = ref(false)
+  const executeLoading = ref(false)
+  const result = ref<ExecuteSqlResponse | null>(null)
+  let abortController: AbortController | null = null
 
   async function listTables(
     organizationId: string,
@@ -55,5 +58,30 @@ export const useSqlStore = defineStore('sql', () => {
     }
   }
 
-  return { tablesLoading, rowsLoading, listTables, fetchTableData }
+  async function execute(
+    organizationId: string,
+    projectId: string,
+    branchId: string,
+    sql: string,
+    lsn?: string | null,
+  ): Promise<void> {
+    abortController = new AbortController()
+    executeLoading.value = true
+    try {
+      result.value = await sqlApi.execute(organizationId, projectId, branchId, sql, lsn, abortController.signal)
+    } catch (error) {
+      if ((error as { name?: string }).name !== 'CanceledError') {
+        toast.error(getAppError(error))
+      }
+    } finally {
+      executeLoading.value = false
+      abortController = null
+    }
+  }
+
+  function cancelExecute() {
+    abortController?.abort()
+  }
+
+  return { tablesLoading, rowsLoading, executeLoading, result, listTables, fetchTableData, execute, cancelExecute }
 })

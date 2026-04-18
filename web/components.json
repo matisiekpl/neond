@@ -1,7 +1,6 @@
 {
   "$schema": "https://shadcn-vue.com/schema.json",
-  "style": "lyra",
-  "base": "reka",
+  "style": "reka-lyra",
   "font": "jetbrains-mono",
   "typescript": true,
   "tailwind": {
