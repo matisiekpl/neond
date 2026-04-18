@@ -72,7 +72,7 @@ function next() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full font-mono">
     <div v-if="sqlStore.rowsLoading" class="flex flex-col gap-2 p-4">
       <Skeleton class="h-8 w-full" />
       <Skeleton class="h-6 w-full" />
@@ -80,7 +80,7 @@ function next() {
       <Skeleton class="h-6 w-4/5" />
     </div>
     <template v-else-if="response">
-      <div class="flex-1 min-h-0 [&>[data-slot=table-container]]:h-full">
+      <div class="flex-1 min-h-0 [&>[data-slot=table-container]]:h-[calc(100vh-15rem+5px)]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -89,7 +89,7 @@ function next() {
               </TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody  class="overflow-y-scroll">
             <TableRow v-if="rows.length === 0">
               <TableCell :colspan="response.columns.length" class="text-center text-muted-foreground py-8">
                 No rows

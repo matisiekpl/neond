@@ -41,7 +41,7 @@ function isSelected(tableRef: TableRef): boolean {
     <div class="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b">
       Tables
     </div>
-    <div class="flex-1 overflow-auto">
+    <div class="flex-1 overflow-auto max-h-[calc(100vh-14rem+5px)]">
       <div v-if="sqlStore.tablesLoading" class="flex flex-col gap-2 p-3">
         <Skeleton class="h-6 w-full" />
         <Skeleton class="h-6 w-4/5" />

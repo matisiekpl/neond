@@ -39,7 +39,7 @@ const toggleDark = useToggle(isDark)
 </script>
 
 <template>
-  <header class="flex h-12 shrink-0 items-center gap-2 border-b px-2">
+  <header class="flex h-12 shrink-0 items-center gap-2 border-b px-2" :class="{dark: isDark}">
     <SidebarTrigger class="cursor-pointer"/>
     <span class="text-sm font-medium">{{ title }}</span>
     <Button variant="ghost" size="icon" class="ml-auto cursor-pointer" @click="toggleDark()">
@@ -48,3 +48,9 @@ const toggleDark = useToggle(isDark)
     </Button>
   </header>
 </template>
+
+<style>
+.dark {
+  color-scheme: dark;
+}
+</style>

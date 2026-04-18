@@ -3,6 +3,7 @@ import { computed, watch, watchEffect, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import { useOrganizationStore } from '@/stores/organization.store'
+import { useProjectStore } from '@/stores/project.store'
 import { useBranchStore } from '@/stores/branch.store'
 import { Loader2 } from 'lucide-vue-next'
 import AppSidebar from '@/elements/AppSidebar.vue'
@@ -11,6 +12,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 const authStore = useAuthStore()
 const organizationStore = useOrganizationStore()
+const projectStore = useProjectStore()
 const branchStore = useBranchStore()
 const route = useRoute()
 const router = useRouter()
@@ -45,6 +47,14 @@ watchEffect(() => {
 })
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
+
+watch(
+  () => organizationStore.selectedOrganizationId,
+  (organizationId) => {
+    if (organizationId) projectStore.fetch(organizationId, true)
+  },
+  { immediate: true },
+)
 
 watch(
   [() => organizationStore.selectedOrganizationId, () => route.params.projectId as string | undefined],

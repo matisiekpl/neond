@@ -9,7 +9,6 @@ import {
   GalleryVerticalEnd,
   GitBranch,
   Github,
-  Info,
   LayoutDashboard,
   LogOut,
   Plus,
@@ -178,11 +177,11 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
             <SidebarMenuButton
               as-child
               :is-active="route.name === 'projects.show'"
-              tooltip="Details"
+              tooltip="Branches"
             >
               <RouterLink :to="{ name: 'projects.show', params: { organizationId, projectId } }">
-                <Info />
-                <span>Details</span>
+                <GitBranch />
+                <span>Branches</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

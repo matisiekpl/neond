@@ -35,7 +35,7 @@ async function startEndpoint() {
 </script>
 
 <template>
-  <template v-if="isRunning">
+  <template v-if="isRunning && organizationId">
     <div v-if="isDesktop" class="grid grid-cols-[260px_1fr] gap-4 h-full">
       <div class="border rounded-lg overflow-hidden flex flex-col">
         <TablesList
