@@ -55,7 +55,7 @@ onUnmounted(() => daemonStore.stopPolling());
 </script>
 
 <template>
-  <div class="w-full space-y-6">
+  <div class="space-y-6">
     <div v-if="daemonStore.loading && !daemonStore.state" class="text-sm text-muted-foreground">
       Loading…
     </div>
@@ -196,6 +196,7 @@ onUnmounted(() => daemonStore.stopPolling());
       </div>
 
       <h2 class="text-sm font-semibold">Branches</h2>
+      <div class="max-w-[calc(100vw-19rem)]">
       <Table class="rounded-md border">
         <TableHeader>
           <TableRow>
@@ -264,6 +265,7 @@ onUnmounted(() => daemonStore.stopPolling());
           </TableRow>
         </TableBody>
       </Table>
+      </div>
 
     </template>
 

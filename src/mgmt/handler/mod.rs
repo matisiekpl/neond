@@ -4,6 +4,7 @@ pub mod daemon;
 pub mod endpoint;
 pub mod organization;
 pub mod project;
+pub mod sql;
 pub mod user;
 
 use std::sync::Arc;

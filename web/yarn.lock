@@ -1124,10 +1124,10 @@ readdirp@^5.0.0:
   resolved "https://registry.yarnpkg.com/readdirp/-/readdirp-5.0.0.tgz#fbf1f71a727891d685bb1786f9ba74084f6e2f91"
   integrity sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==
 
-reka-ui@^2.9.3:
-  version "2.9.5"
-  resolved "https://registry.yarnpkg.com/reka-ui/-/reka-ui-2.9.5.tgz#b7c28ae5c5747c950b3f5edd5c11dcc0961d8abc"
-  integrity sha512-6cZGIMgEeslpFLJ7IihaCSMPp1cJgl2eDkZ2vBMdl+HPUVBaV/iDPMWu3abT2KUkj1lir+oyHq5KelOTT9OheQ==
+reka-ui@^2.9.6:
+  version "2.9.6"
+  resolved "https://registry.yarnpkg.com/reka-ui/-/reka-ui-2.9.6.tgz#980db045e442742c5e87ea962915c02524258f2a"
+  integrity sha512-K6bL457owpvWONc7hsjFxo3HDC9s6IzhRqShW0w9JSKelPGfRbkHD558UQTn/NH1cvrXVHygKyC7fExFmRketg==
   dependencies:
     "@floating-ui/dom" "^1.6.13"
     "@floating-ui/vue" "^1.1.6"

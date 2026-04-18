@@ -4,17 +4,19 @@ use crate::mgmt::dto::checkpoint_status::CheckpointStatus;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::dto::lsn_response::LsnResponse;
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::endpoint::EndpointService;
 use crate::mgmt::service::membership::MembershipService;
+use crate::utils::password::generate_password;
 use names::Generator;
 use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
 use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
 use neon_utils::id::{TenantId, TimelineId};
 use neon_utils::shard::TenantShardId;
-use rand::Rng;
+use chrono::{DateTime, SecondsFormat, Utc};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -120,7 +122,7 @@ impl BranchService {
             .map_err(|e| AppError::Internal(format!("Failed to create timeline: {e}")))?;
 
         let id = Uuid::new_v4();
-        let password = Self::generate_password();
+        let password = generate_password();
         let slug = self.generate_unique_slug().await?;
 
         let branch = self
@@ -377,6 +379,76 @@ impl BranchService {
         Ok(())
     }
 
+    pub async fn lsn(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+        timestamp: DateTime<Utc>,
+    ) -> Result<LsnResponse> {
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+
+        let timeline_id = TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+
+        let token = self
+            .config
+            .component_auth
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+
+        let timestamp_string = timestamp.to_rfc3339_opts(SecondsFormat::Millis, true);
+
+        let response = reqwest::Client::new()
+            .get(format!(
+                "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}/get_lsn_by_timestamp"
+            ))
+            .query(&[("timestamp", &timestamp_string)])
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to call pageserver: {e}")))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "Pageserver returned {status}: {body}"
+            )));
+        }
+
+        response
+            .json::<LsnResponse>()
+            .await
+            .map_err(|e| AppError::Internal(format!("Invalid pageserver response: {e}")))
+    }
+
     pub async fn check_branches_durability(&self) -> Result<CheckpointStatus> {
         let projects = self.project_repo.list_all().await?;
         let mut all_in_sync = true;
@@ -447,18 +519,6 @@ impl BranchService {
             all_in_sync,
             max_checkpoint_timeout,
         })
-    }
-
-    fn generate_password() -> String {
-        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        const PASSWORD_LEN: usize = 32;
-        let mut rng = rand::rng();
-        (0..PASSWORD_LEN)
-            .map(|_| {
-                let idx = rng.random_range(0..CHARSET.len());
-                CHARSET[idx] as char
-            })
-            .collect()
     }
 
     async fn generate_unique_slug(&self) -> Result<String> {

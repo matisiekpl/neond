@@ -1,5 +1,6 @@
 import api from '@/api/base'
 import type { Branch } from '@/types/models/branch'
+import type { LsnResponse } from '@/types/dto/lsn'
 
 export const branchesApi = {
   async list(organizationId: string, projectId: string): Promise<Branch[]> {
@@ -33,5 +34,13 @@ export const branchesApi = {
 
   async remove(organizationId: string, projectId: string, branchId: string): Promise<void> {
     await api.delete(`organizations/${organizationId}/projects/${projectId}/branches/${branchId}`)
+  },
+
+  async lsn(organizationId: string, projectId: string, branchId: string, timestamp: Date): Promise<LsnResponse> {
+    const response = await api.get<LsnResponse>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/lsn`,
+      { params: { timestamp: timestamp.toISOString() } },
+    )
+    return response.data
   },
 }

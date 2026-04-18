@@ -25,6 +25,6 @@ watch(() => authStore.user?.id, async (userId) => {
 </script>
 
 <template>
-  <RouterView />
+  <RouterView/>
   <Toaster />
 </template>

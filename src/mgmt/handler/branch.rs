@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::mgmt::dto::error::AppError;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
+use crate::mgmt::dto::lsn_request::LsnRequest;
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
 use crate::mgmt::handler::auth::UserId;
 use crate::mgmt::handler::AppState;
@@ -49,4 +50,18 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, AppError> {
     state.services.branch().delete(user_id, organization_id, project_id, branch_id).await?;
     Ok((StatusCode::NO_CONTENT, ()))
+}
+
+pub async fn lsn(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+    Query(query): Query<LsnRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let response = state
+        .services
+        .branch()
+        .lsn(user_id, organization_id, project_id, branch_id, query.timestamp)
+        .await?;
+    Ok((StatusCode::OK, Json(response)))
 }

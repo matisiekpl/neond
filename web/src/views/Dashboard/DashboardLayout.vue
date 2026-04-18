@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, watch, watchEffect } from 'vue'
+import { computed, watch, watchEffect, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import { useOrganizationStore } from '@/stores/organization.store'
+import { useProjectStore } from '@/stores/project.store'
+import { useBranchStore } from '@/stores/branch.store'
 import { Loader2 } from 'lucide-vue-next'
 import AppSidebar from '@/elements/AppSidebar.vue'
 import AppMainHeader from '@/elements/AppMainHeader.vue'
@@ -10,6 +12,8 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 const authStore = useAuthStore()
 const organizationStore = useOrganizationStore()
+const projectStore = useProjectStore()
+const branchStore = useBranchStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -40,6 +44,33 @@ watchEffect(() => {
   if (!valid) {
     router.replace({ name: 'projects.list', params: { organizationId: organizationStore.organizations[0].id } })
   }
+})
+
+let pollInterval: ReturnType<typeof setInterval> | null = null
+
+watch(
+  () => organizationStore.selectedOrganizationId,
+  (organizationId) => {
+    if (organizationId) projectStore.fetch(organizationId, true)
+  },
+  { immediate: true },
+)
+
+watch(
+  [() => organizationStore.selectedOrganizationId, () => route.params.projectId as string | undefined],
+  ([orgId, projectId]) => {
+    if (pollInterval) clearInterval(pollInterval)
+    if (!orgId || !projectId) return
+    branchStore.fetch(orgId, projectId)
+    pollInterval = setInterval(() => {
+      branchStore.fetch(orgId, projectId, true)
+    }, 500)
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
 })
 
 const showLayout = computed(
