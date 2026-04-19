@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use base64::prelude::*;
 use hmac::Hmac;
 use hmac::Mac;
@@ -31,8 +30,16 @@ use neon_control_plane::postgresql_conf::PostgresConf;
 use postgres_protocol::authentication::sasl::{ChannelBinding, ScramSha256};
 
 use crate::mgmt::dto::config::Config;
+use crate::mgmt::dto::error::{AppError, Result};
 use base64::{Engine as _, engine::general_purpose};
 use rand::{Rng, RngCore};
+
+fn path_str<'path>(path: &'path std::path::Path) -> Result<&'path str> {
+    path.to_str()
+        .ok_or_else(|| AppError::ComputeProcessStartupFailed {
+            reason: format!("path contains non-UTF-8 characters: {}", path.display()),
+        })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
 #[ExistingTypePath = "crate::mgmt::schema::schema::sql_types::ComputeEndpointStatus"]
@@ -67,8 +74,11 @@ impl ComputeEndpoint {
         config: Config,
         branch: Branch,
         pg_version: PgVersion,
-    ) -> Result<Self, anyhow::Error> {
-        let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))?;
+    ) -> Result<Self> {
+        let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))
+            .map_err(|error| AppError::ComputeStartupFailed {
+                reason: error.to_string(),
+            })?;
 
         Ok(Self {
             config,
@@ -86,15 +96,21 @@ impl ComputeEndpoint {
         &self.branch
     }
 
-    pub fn launch(&mut self) -> Result<(), anyhow::Error> {
+    pub fn launch(&mut self) -> Result<()> {
         if self.status == ComputeEndpointStatus::Running {
-            return Err(anyhow!("Compute endpoint is already running"));
+            return Err(AppError::ComputeStartupFailed {
+                reason: "Compute endpoint is already running".to_string(),
+            });
         }
         if self.status == ComputeEndpointStatus::Starting {
-            return Err(anyhow!("Compute endpoint is already starting"));
+            return Err(AppError::ComputeStartupFailed {
+                reason: "Compute endpoint is already starting".to_string(),
+            });
         }
         if self.status == ComputeEndpointStatus::Stopping {
-            return Err(anyhow!("Compute endpoint is currently stopping"));
+            return Err(AppError::ComputeStartupFailed {
+                reason: "Compute endpoint is currently stopping".to_string(),
+            });
         }
 
         let port = self.generate_random_port()?;
@@ -102,10 +118,19 @@ impl ComputeEndpoint {
 
         self.status = ComputeEndpointStatus::Starting;
 
-        self.generate_certificates();
-        let config = self.generate_config();
+        self.generate_certificates()?;
+        let config = self.generate_config()?;
         let config_path = self.compute_dir.path().join("config.json");
-        fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+        let config_json = serde_json::to_string_pretty(&config).map_err(|error| {
+            AppError::ComputeProcessStartupFailed {
+                reason: error.to_string(),
+            }
+        })?;
+        fs::write(&config_path, config_json).map_err(|error| {
+            AppError::ComputeProcessStartupFailed {
+                reason: error.to_string(),
+            }
+        })?;
 
         let compute_ctl_binary = self.config.neon_binaries_directory.join("compute_ctl");
         let pgbin = self
@@ -130,25 +155,35 @@ impl ComputeEndpoint {
             }
         }
 
+        let pg_data_path = self.compute_dir.path().join("pg_data");
         let mut child = cmd
             .env_clear()
             .arg("--pgdata")
-            .arg(self.compute_dir.path().join("pg_data").to_str().unwrap())
+            .arg(path_str(&pg_data_path)?)
             .arg("--pgbin")
-            .arg(pgbin.to_str().unwrap())
+            .arg(path_str(&pgbin)?)
             .arg("--compute-id")
             .arg(format!("compute-{}", self.branch.timeline_id))
             .arg("--connstr")
             .arg(&connection_string)
             .arg("--config")
-            .arg(config_path.to_str().unwrap())
+            .arg(path_str(&config_path)?)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()?;
+            .spawn()
+            .map_err(|error| AppError::ComputeProcessStartupFailed {
+                reason: error.to_string(),
+            })?;
 
         let pid = child.id();
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| AppError::ComputeProcessStartupFailed {
+                reason: "stderr was not piped".to_string(),
+            })?;
         let result = wait_for_output_timeout(
-            child.stderr.take().unwrap(),
+            stderr,
             "listening on IPv4 address",
             true,
             true,
@@ -164,7 +199,9 @@ impl ComputeEndpoint {
             child.kill().ok();
             child.wait().ok();
             self.status = ComputeEndpointStatus::Failed;
-            return Err(anyhow!("Compute endpoint failed to start: {}", e));
+            return Err(AppError::ComputeProcessStartupFailed {
+                reason: e.to_string(),
+            });
         }
 
         self.child = Some(child);
@@ -179,12 +216,16 @@ impl ComputeEndpoint {
         Ok(())
     }
 
-    pub fn shutdown(&mut self) -> Result<(), anyhow::Error> {
+    pub fn shutdown(&mut self) -> Result<()> {
         if self.status == ComputeEndpointStatus::Stopped {
-            return Err(anyhow!("Compute endpoint is already stopped"));
+            return Err(AppError::ComputeShutdownFailed {
+                reason: "Compute endpoint is already stopped".to_string(),
+            });
         }
         if self.status == ComputeEndpointStatus::Stopping {
-            return Err(anyhow!("Compute endpoint is already stopping"));
+            return Err(AppError::ComputeShutdownFailed {
+                reason: "Compute endpoint is already stopping".to_string(),
+            });
         }
 
         self.status = ComputeEndpointStatus::Stopping;
@@ -240,71 +281,90 @@ impl ComputeEndpoint {
         self.port.unwrap_or(0)
     }
 
-    fn generate_certificates(&mut self) {
-        let ca_key = KeyPair::generate().expect("failed to generate CA key");
+    fn generate_certificates(&mut self) -> Result<()> {
+        let cert_error = |component: &str, reason: String| AppError::ComputeCertificateGenerationFailed {
+            component: component.to_string(),
+            reason,
+        };
+        let write_cert_file = |path: std::path::PathBuf, contents: String, component: &str| -> Result<()> {
+            fs::write(path, contents).map_err(|error| cert_error(component, error.to_string()))
+        };
+        let printable = |value: &str, component: &str| -> Result<DnValue> {
+            value
+                .try_into()
+                .map(DnValue::PrintableString)
+                .map_err(|error: rcgen::Error| cert_error(component, error.to_string()))
+        };
+
+        let ca_key = KeyPair::generate().map_err(|error| cert_error("ca_key", error.to_string()))?;
         let mut ca_params = CertificateParams::default();
         ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         ca_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
         ca_params.distinguished_name = {
             let mut dn = DistinguishedName::new();
-            dn.push(
-                rcgen::DnType::CommonName,
-                DnValue::PrintableString("neond".try_into().unwrap()),
-            );
+            dn.push(rcgen::DnType::CommonName, printable("neond", "ca_cert")?);
             dn
         };
         let ca_cert = ca_params
             .self_signed(&ca_key)
-            .expect("failed to self-sign CA");
+            .map_err(|error| cert_error("ca_cert", error.to_string()))?;
 
         let issuer = Issuer::new(ca_params, &ca_key);
 
-        fs::write(self.compute_dir.path().join("root_ca.pem"), ca_cert.pem())
-            .expect("failed to write root_ca.pem");
-        fs::write(
+        write_cert_file(
+            self.compute_dir.path().join("root_ca.pem"),
+            ca_cert.pem(),
+            "root_ca.pem",
+        )?;
+        write_cert_file(
             self.compute_dir.path().join("root_ca.key"),
             ca_key.serialize_pem(),
-        )
-        .expect("failed to write root_ca.key");
+            "root_ca.key",
+        )?;
 
-        let server_key = KeyPair::generate().expect("failed to generate server key");
+        let server_key =
+            KeyPair::generate().map_err(|error| cert_error("server_key", error.to_string()))?;
         let mut server_params = CertificateParams::new(vec!["localhost".to_string()])
-            .expect("failed to create server params");
+            .map_err(|error| cert_error("server_params", error.to_string()))?;
         server_params.distinguished_name = {
             let mut dn = DistinguishedName::new();
             dn.push(
                 rcgen::DnType::CommonName,
-                DnValue::PrintableString("neond-server".try_into().unwrap()),
+                printable("neond-server", "server_cert")?,
             );
             dn
         };
         server_params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
         let server_cert = server_params
             .signed_by(&server_key, &issuer)
-            .expect("failed to sign server cert");
+            .map_err(|error| cert_error("server_cert", error.to_string()))?;
 
-        fs::write(
+        write_cert_file(
             self.compute_dir.path().join("server.pem"),
             server_cert.pem(),
-        )
-        .expect("failed to write server.pem");
+            "server.pem",
+        )?;
         let server_key_path = self.compute_dir.path().join("server.key");
-        fs::write(&server_key_path, server_key.serialize_pem())
-            .expect("failed to write server.key");
+        write_cert_file(
+            server_key_path.clone(),
+            server_key.serialize_pem(),
+            "server.key",
+        )?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&server_key_path, fs::Permissions::from_mode(0o600))
-                .expect("failed to set server.key permissions");
+                .map_err(|error| cert_error("server.key_permissions", error.to_string()))?;
         }
 
-        let client_key = KeyPair::generate().expect("failed to generate client key");
+        let client_key =
+            KeyPair::generate().map_err(|error| cert_error("client_key", error.to_string()))?;
         let mut client_params = CertificateParams::default();
         client_params.distinguished_name = {
             let mut dn = DistinguishedName::new();
             dn.push(
                 rcgen::DnType::CommonName,
-                DnValue::PrintableString("neond-client".try_into().unwrap()),
+                printable("neond-client", "client_cert")?,
             );
             dn
         };
@@ -312,25 +372,26 @@ impl ComputeEndpoint {
         client_params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
         let client_cert = client_params
             .signed_by(&client_key, &issuer)
-            .expect("failed to sign client cert");
+            .map_err(|error| cert_error("client_cert", error.to_string()))?;
 
-        fs::write(
+        write_cert_file(
             self.compute_dir.path().join("client.pem"),
             client_cert.pem(),
-        )
-        .expect("failed to write client.pem");
-        fs::write(
+            "client.pem",
+        )?;
+        write_cert_file(
             self.compute_dir.path().join("client.key"),
             client_key.serialize_pem(),
-        )
-        .expect("failed to write client.key");
+            "client.key",
+        )?;
 
         let cert_der = server_cert.der();
         let channel_binding_signature = Sha256::digest(cert_der.as_ref()).to_vec();
         self.channel_binding_signature = Some(channel_binding_signature);
+        Ok(())
     }
 
-    fn generate_random_port(&self) -> Result<u16, anyhow::Error> {
+    fn generate_random_port(&self) -> Result<u16> {
         const MAX_ATTEMPTS: usize = 100;
         let mut rng = rand::rng();
         for _ in 0..MAX_ATTEMPTS {
@@ -340,10 +401,10 @@ impl ComputeEndpoint {
                 return Ok(port);
             }
         }
-        anyhow::bail!("Failed to find a free port");
+        Err(AppError::ComputePortAllocationFailed)
     }
 
-    fn setup_pg_conf(&self) -> PostgresConf {
+    fn setup_pg_conf(&self) -> Result<PostgresConf> {
         let mut conf = PostgresConf::new();
 
         conf.append("max_wal_senders", "10");
@@ -401,53 +462,46 @@ impl ComputeEndpoint {
         conf.append("password_encryption", "scram-sha-256");
 
         conf.append_line("");
-        // Configure HBA
-        self.write_pg_hba();
-        conf.append(
-            "hba_file",
-            self.compute_dir
-                .path()
-                .join("pg_hba.conf")
-                .to_str()
-                .unwrap(),
-        );
+        self.write_pg_hba()?;
+        let hba_path = self.compute_dir.path().join("pg_hba.conf");
+        conf.append("hba_file", path_str(&hba_path)?);
 
         conf.append_line("");
-        // Configure SSL
         conf.append("ssl", "on");
-        conf.append(
-            "ssl_cert_file",
-            self.compute_dir.path().join("server.pem").to_str().unwrap(),
-        );
-        conf.append(
-            "ssl_key_file",
-            self.compute_dir.path().join("server.key").to_str().unwrap(),
-        );
-        conf.append(
-            "ssl_ca_file",
-            self.compute_dir
-                .path()
-                .join("root_ca.pem")
-                .to_str()
-                .unwrap(),
-        );
+        let server_pem_path = self.compute_dir.path().join("server.pem");
+        conf.append("ssl_cert_file", path_str(&server_pem_path)?);
+        let server_key_path = self.compute_dir.path().join("server.key");
+        conf.append("ssl_key_file", path_str(&server_key_path)?);
+        let root_ca_path = self.compute_dir.path().join("root_ca.pem");
+        conf.append("ssl_ca_file", path_str(&root_ca_path)?);
 
-        conf
+        Ok(conf)
     }
 
-    fn write_pg_hba(&self) {
+    fn write_pg_hba(&self) -> Result<()> {
         let pg_hba = include_str!("pg_hba.conf");
-        fs::write(self.compute_dir.path().join("pg_hba.conf"), pg_hba)
-            .expect("failed to write pg_hba.conf");
+        fs::write(self.compute_dir.path().join("pg_hba.conf"), pg_hba).map_err(|error| {
+            AppError::ComputeProcessStartupFailed {
+                reason: format!("failed to write pg_hba.conf: {}", error),
+            }
+        })
     }
 
-    fn generate_config(&self) -> ComputeConfig {
-        let postgresql_conf = self.setup_pg_conf().to_string();
+    fn generate_config(&self) -> Result<ComputeConfig> {
+        let postgresql_conf = self.setup_pg_conf()?.to_string();
 
-        let tenant_id = TenantId::from_str(&self.branch.project_id.simple().to_string())
-            .expect("Failed to parse tenant_id");
-        let timeline_id = TimelineId::from_str(&self.branch.timeline_id.simple().to_string())
-            .expect("Failed to parse timeline_id");
+        let tenant_id_value = self.branch.project_id.simple().to_string();
+        let tenant_id = TenantId::from_str(&tenant_id_value).map_err(|_| {
+            AppError::TenantIdInvalid {
+                value: tenant_id_value,
+            }
+        })?;
+        let timeline_id_value = self.branch.timeline_id.simple().to_string();
+        let timeline_id = TimelineId::from_str(&timeline_id_value).map_err(|_| {
+            AppError::TimelineIdInvalid {
+                value: timeline_id_value,
+            }
+        })?;
 
         let mut shards = HashMap::new();
         shards.insert(
@@ -511,7 +565,7 @@ impl ComputeEndpoint {
             storage_auth_token: Some(
                 self.config
                     .component_auth
-                    .generate_token(Scope::Tenant, Some(tenant_id)),
+                    .generate_token(Scope::Tenant, Some(tenant_id))?,
             ),
             remote_extensions: None,
             pgbouncer_settings: None,
@@ -528,10 +582,10 @@ impl ComputeEndpoint {
             databricks_settings: None,
         };
 
-        ComputeConfig {
+        Ok(ComputeConfig {
             spec: Some(spec),
             compute_ctl_config: ComputeCtlConfig::default(),
-        }
+        })
     }
 }
 

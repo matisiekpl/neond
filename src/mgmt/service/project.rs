@@ -92,7 +92,7 @@ impl ProjectService {
         let token = self
             .config
             .component_auth
-            .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
         let pageserver_http_client = reqwest::Client::new();
         let response = pageserver_http_client
             .request(Method::POST, "http://127.0.0.1:1234/v1/tenant")
@@ -100,10 +100,14 @@ impl ProjectService {
             .json(&tenant_create_request)
             .send()
             .await
-            .unwrap();
+            .map_err(|error| AppError::ProjectCreationFailed {
+                reason: error.to_string(),
+            })?;
 
         if response.status().as_u16() != 201 {
-            return Err(AppError::Internal("Failed to create tenant".into()));
+            return Err(AppError::ProjectCreationFailed {
+                reason: format!("pageserver returned status {}", response.status()),
+            });
         }
 
         Ok(ProjectResponse {
@@ -143,7 +147,7 @@ impl ProjectService {
         let token = self
             .config
             .component_auth
-            .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
         let config_resp = reqwest::Client::new()
             .get(format!(
                 "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/config"

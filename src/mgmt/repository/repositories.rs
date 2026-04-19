@@ -1,3 +1,4 @@
+use crate::mgmt::dto::error::Result;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::db::get_pool;
 use crate::mgmt::repository::membership::MembershipRepository;
@@ -14,15 +15,15 @@ pub struct Repositories {
 }
 
 impl Repositories {
-    pub async fn new() -> Self {
-        let pool = get_pool().await;
-        Self {
+    pub async fn new() -> Result<Self> {
+        let pool = get_pool().await?;
+        Ok(Self {
             user: UserRepository::new(pool.clone()),
             project: ProjectRepository::new(pool.clone()),
             organization: OrganizationRepository::new(pool.clone()),
             membership: MembershipRepository::new(pool.clone()),
             branch: BranchRepository::new(pool.clone()),
-        }
+        })
     }
 
     pub fn user(&self) -> &UserRepository {

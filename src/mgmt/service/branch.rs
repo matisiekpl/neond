@@ -201,7 +201,9 @@ impl BranchService {
                     ForceAwaitLogicalSize::Yes,
                 )
                 .await
-                .unwrap();
+                .map_err(|error| AppError::BranchListingFailed {
+                    reason: error.to_string(),
+                })?;
 
             let endpoint_info = self.endpoint_service.get_endpoint_info(b.id).await;
             results.push(BranchResponse {
@@ -421,7 +423,7 @@ impl BranchService {
         let token = self
             .config
             .component_auth
-            .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
 
         let timestamp_string = timestamp.to_rfc3339_opts(SecondsFormat::Millis, true);
 
@@ -463,7 +465,7 @@ impl BranchService {
             let token = self
                 .config
                 .component_auth
-                .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+                .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
             let config_response = reqwest::Client::new()
                 .get(format!(
                     "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/config"
@@ -507,7 +509,9 @@ impl BranchService {
                         ForceAwaitLogicalSize::Yes,
                     )
                     .await
-                    .unwrap();
+                    .map_err(|error| AppError::DurabilityCheckFailed {
+                        reason: error.to_string(),
+                    })?;
 
                 if timeline_info.remote_consistent_lsn_visible != timeline_info.last_record_lsn {
                     all_in_sync = false;

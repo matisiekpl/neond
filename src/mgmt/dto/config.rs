@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::auth::DaemonAuth;
+use crate::mgmt::dto::error::{AppError, Result};
 
 #[derive(Clone)]
 pub struct RemoteStorageConfig {
@@ -28,14 +29,23 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Result<Self, anyhow::Error> {
+    pub fn new() -> Result<Self> {
         let port: u16 = match std::env::var("PORT") {
-            Ok(port) => port.parse()?,
+            Ok(port) => {
+                port.parse()
+                    .map_err(|error: std::num::ParseIntError| AppError::ApplicationStartupFailed {
+                        reason: format!("PORT is invalid: {}", error),
+                    })?
+            }
             Err(_) => 3000,
         };
         let server_secret =
-            std::env::var("SERVER_SECRET").map_err(|_| anyhow::anyhow!("SERVER_SECRET not set"))?;
-        let daemon_directory = current_dir()?.join("neon_daemon_data");
+            std::env::var("SERVER_SECRET").map_err(|_| AppError::ServerSecretNotConfigured)?;
+        let daemon_directory = current_dir()
+            .map_err(|error| AppError::WorkingDirectoryInvalid {
+                path: error.to_string(),
+            })?
+            .join("neon_daemon_data");
 
         let build_profile = if cfg!(debug_assertions) {
             "debug"
@@ -44,14 +54,22 @@ impl Config {
         };
         let neon_binaries_directory = match std::env::var("NEON_BINARIES_DIR") {
             Ok(value) => PathBuf::from(value),
-            Err(_) => current_dir()?
+            Err(_) => current_dir()
+                .map_err(|error| AppError::WorkingDirectoryInvalid {
+                    path: error.to_string(),
+                })?
                 .join("neon")
                 .join("target")
                 .join(build_profile),
         };
         let pg_install_directory = match std::env::var("PG_INSTALL_DIR") {
             Ok(value) => PathBuf::from(value),
-            Err(_) => current_dir()?.join("neon").join("pg_install"),
+            Err(_) => current_dir()
+                .map_err(|error| AppError::WorkingDirectoryInvalid {
+                    path: error.to_string(),
+                })?
+                .join("neon")
+                .join("pg_install"),
         };
 
         let remote_storage_config = if std::env::var("AWS_S3_BUCKET").is_ok()
@@ -59,8 +77,16 @@ impl Config {
             && std::env::var("AWS_ACCESS_KEY_ID").is_ok()
             && std::env::var("AWS_SECRET_ACCESS_KEY").is_ok()
         {
-            let bucket = std::env::var("AWS_S3_BUCKET")?;
-            let region = std::env::var("AWS_REGION")?;
+            let bucket = std::env::var("AWS_S3_BUCKET").map_err(|error| {
+                AppError::ApplicationStartupFailed {
+                    reason: format!("AWS_S3_BUCKET: {}", error),
+                }
+            })?;
+            let region = std::env::var("AWS_REGION").map_err(|error| {
+                AppError::ApplicationStartupFailed {
+                    reason: format!("AWS_REGION: {}", error),
+                }
+            })?;
             tracing::info!(
                 "Using remote storage - bucket: {}, region: {}",
                 bucket,
@@ -74,15 +100,41 @@ impl Config {
         let port_range = match std::env::var("PORT_RANGE") {
             Ok(port_range) => {
                 let mut parts = port_range.split('-');
-                let start = parts.next().unwrap().parse()?;
-                let end = parts.next().unwrap().parse()?;
+                let start_text =
+                    parts
+                        .next()
+                        .ok_or_else(|| AppError::PortRangeMisconfigured {
+                            value: port_range.clone(),
+                        })?;
+                let end_text =
+                    parts
+                        .next()
+                        .ok_or_else(|| AppError::PortRangeMisconfigured {
+                            value: port_range.clone(),
+                        })?;
+                let start =
+                    start_text
+                        .parse()
+                        .map_err(|_| AppError::PortRangeMisconfigured {
+                            value: port_range.clone(),
+                        })?;
+                let end = end_text
+                    .parse()
+                    .map_err(|_| AppError::PortRangeMisconfigured {
+                        value: port_range.clone(),
+                    })?;
                 PortRange(start, end)
             }
             Err(_) => PortRange(49152, 65535),
         };
 
         let pg_proxy_port = match std::env::var("PG_PROXY_PORT") {
-            Ok(port) => port.parse()?,
+            Ok(port) => {
+                port.parse()
+                    .map_err(|error: std::num::ParseIntError| AppError::ApplicationStartupFailed {
+                        reason: format!("PG_PROXY_PORT is invalid: {}", error),
+                    })?
+            }
             Err(_) => 5432,
         };
 
