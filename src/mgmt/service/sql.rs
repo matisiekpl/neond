@@ -177,61 +177,45 @@ impl SqlService {
             updated_at: chrono::Utc::now().naive_utc(),
         };
 
-        let sql_result = self
-            .run_ephemeral_endpoint(ephemeral_branch, project.pg_version.clone(), &sql)
-            .await;
-
-        self.delete_ephemeral_timeline(tenant_id, new_timeline_id).await;
-
-        sql_result
-    }
-
-    async fn run_ephemeral_endpoint(
-        &self,
-        ephemeral_branch: Branch,
-        pg_version: PgVersion,
-        sql: &str,
-    ) -> Result<ExecuteSqlResponse> {
-        let mut endpoint = ComputeEndpoint::new(self.config.clone(), ephemeral_branch, pg_version)
-            .map_err(|e| {
-                AppError::Internal(format!("Failed to create ephemeral compute endpoint: {e}"))
-            })?;
+        let mut endpoint =
+            ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone())
+                .map_err(|e| {
+                    AppError::Internal(format!("Failed to create ephemeral compute endpoint: {e}"))
+                })?;
 
         endpoint.launch().map_err(|e| {
             AppError::Internal(format!("Failed to launch ephemeral compute endpoint: {e}"))
         })?;
 
         let port = endpoint.get_port();
-        let result = run_sql(port, sql).await;
+        let sql_result = run_sql(port, &sql).await;
 
         if let Err(e) = endpoint.shutdown() {
             tracing::warn!("Failed to shutdown ephemeral compute endpoint: {}", e);
         }
 
-        result
-    }
-
-    async fn delete_ephemeral_timeline(&self, tenant_id: TenantId, timeline_id: TimelineId) {
         loop {
             let status_code = match self
                 .pageserver_client
-                .timeline_delete(TenantShardId::unsharded(tenant_id), timeline_id)
+                .timeline_delete(TenantShardId::unsharded(tenant_id), new_timeline_id)
                 .await
             {
                 Ok(code) => code.as_u16(),
                 Err(e) => {
                     tracing::warn!(
                         "Failed to delete ephemeral timeline {}: {}",
-                        timeline_id,
+                        new_timeline_id,
                         e
                     );
-                    return;
+                    break;
                 }
             };
             if status_code != 500 && status_code != 503 && status_code != 409 {
-                return;
+                break;
             }
         }
+
+        sql_result
     }
 }
 
