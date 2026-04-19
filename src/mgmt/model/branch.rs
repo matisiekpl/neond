@@ -16,6 +16,7 @@ pub struct Branch {
     pub password: String,
     pub slug: String,
     pub recent_status: Option<ComputeEndpointStatus>,
+    pub port: Option<i32>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
