@@ -196,7 +196,7 @@ onUnmounted(() => daemonStore.stopPolling());
       </div>
 
       <h2 class="text-sm font-semibold">Branches</h2>
-      <div class="max-w-[calc(100vw-19rem)]">
+      <div class="md:max-w-[calc(100vw-19rem)]">
       <Table class="rounded-md border">
         <TableHeader>
           <TableRow>
