@@ -77,7 +77,7 @@ impl Services {
             Arc::clone(&safekeeper_client),
         );
         Self {
-            user: UserService::new(Arc::new(repositories.user().clone()), config.server_secret.clone()),
+            user: UserService::new(Arc::new(repositories.user().clone()), Arc::new(repositories.membership().clone()), config.server_secret.clone()),
             organization: OrganizationService::new(
                 Arc::new(repositories.organization().clone()),
                 Arc::new(repositories.project().clone()),

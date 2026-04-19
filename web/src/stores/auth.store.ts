@@ -14,6 +14,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | undefined>(undefined)
   const initialized = ref(false)
   const loading = ref(false)
+  const registrationOpen = ref(false)
 
   async function refreshUser(): Promise<void> {
     const token = localStorage.getItem(ACCESS_TOKEN)
@@ -30,6 +31,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function bootstrap(): Promise<void> {
+    const setup = await authApi.setup()
+    registrationOpen.value = setup.registration_open
     await refreshUser()
     initialized.value = true
   }
@@ -82,5 +85,5 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
-  return { user, initialized, loading, bootstrap, refreshUser, login, register, logout }
+  return { user, initialized, loading, registrationOpen, bootstrap, refreshUser, login, register, logout }
 })
