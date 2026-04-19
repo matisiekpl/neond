@@ -79,6 +79,17 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
+    async function changePassword(organizationId: string, projectId: string, branchId: string, password: string): Promise<void> {
+        try {
+            await branchesApi.changePassword(organizationId, projectId, branchId, password)
+            await fetch(organizationId, projectId)
+            toast.success('Password changed')
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
     async function restore(organizationId: string, projectId: string, branchId: string, lsn: string): Promise<Branch> {
         try {
             const restored = await branchesApi.restore(organizationId, projectId, branchId, lsn)
@@ -91,5 +102,5 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
-    return {branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore}
+    return {branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore, changePassword}
 })

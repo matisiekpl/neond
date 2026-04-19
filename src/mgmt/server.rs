@@ -13,13 +13,9 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add parent restoration
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
-    // TODO(matisiekpl): make Dockerfile and docker compose
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
-    // TODO(matisiekpl): password change of compute endpoint
     // TODO(matisiekpl): signup restrictions
-    // TODO(matisiekpl): investigate "health_check" table
-    // TODO(matisiekpl): preserve compute endpoint port
     // TODO(matisiekpl): implement metrics dashboard
     // TODO(matisiekpl): detect storage driver drift
     let shutdown_token = state.services.daemon().shutdown_token();
@@ -72,6 +68,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/restore",
             post(branch::restore),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/password",
+            put(branch::change_password),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint",

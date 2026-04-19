@@ -44,6 +44,14 @@ export const branchesApi = {
     return response.data
   },
 
+  async changePassword(organizationId: string, projectId: string, branchId: string, password: string): Promise<Branch> {
+    const response = await api.put<Branch>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/password`,
+      { password },
+    )
+    return response.data
+  },
+
   async restore(organizationId: string, projectId: string, branchId: string, lsn: string): Promise<Branch> {
     const response = await api.post<Branch>(
       `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/restore`,

@@ -115,6 +115,16 @@ impl BranchRepository {
             .map_err(Into::into)
     }
 
+    pub async fn update_password(&self, id: Uuid, password: &str) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::update(branches::table.filter(branches::id.eq(id)))
+            .set(branches::password.eq(password))
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn update_recent_status(&self, id: Uuid, status: ComputeEndpointStatus) -> Result<Branch> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

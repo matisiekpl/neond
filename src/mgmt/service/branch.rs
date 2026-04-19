@@ -783,6 +783,111 @@ impl BranchService {
         })
     }
 
+    pub async fn change_password(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+        password: String,
+    ) -> Result<BranchResponse> {
+        if password.trim().is_empty() {
+            return Err(AppError::BranchUpdateFailed {
+                reason: "Password cannot be empty".into(),
+            });
+        }
+
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
+
+        if let Some(ref info) = endpoint_info {
+            match info.status {
+                ComputeEndpointStatus::Starting | ComputeEndpointStatus::Stopping => {
+                    return Err(AppError::PitrConcurrentEndpointOperation);
+                }
+                _ => {}
+            }
+        }
+
+        let was_running = endpoint_info
+            .as_ref()
+            .map(|info| info.status == ComputeEndpointStatus::Running)
+            .unwrap_or(false);
+
+        let updated = self
+            .branch_repo
+            .update_password(branch_id, &password)
+            .await?;
+
+        if was_running {
+            self.endpoint_service
+                .stop(user_id, organization_id, project_id, branch_id)
+                .await?;
+            self.endpoint_service
+                .start(user_id, organization_id, project_id, branch_id)
+                .await?;
+        }
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
+        let timeline_id = TimelineId::from_str(updated.timeline_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: updated.timeline_id.to_string(),
+            })?;
+        let (ancestor_timeline_id, ancestor_lsn) =
+            self.fetch_ancestor(tenant_id, timeline_id).await;
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(updated.id).await;
+
+        Ok(BranchResponse {
+            id: updated.id,
+            project_id: updated.project_id,
+            name: updated.name.clone(),
+            slug: updated.slug.clone(),
+            parent_branch_id: updated.parent_branch_id,
+            timeline_id: updated.timeline_id,
+            ancestor_timeline_id,
+            ancestor_lsn,
+            endpoint_status: endpoint_info
+                .clone()
+                .map(|info| info.status)
+                .unwrap_or(ComputeEndpointStatus::Stopped),
+            remote_consistent_lsn_visible: Default::default(),
+            last_record_lsn: Default::default(),
+            current_logical_size: 0,
+            connection_string: endpoint_info
+                .map(|info| updated.get_connection_string(self.config.clone(), info.port)),
+            password: updated.password.clone(),
+            created_at: updated.created_at,
+            updated_at: updated.updated_at,
+        })
+    }
+
     pub async fn check_branches_durability(&self) -> Result<CheckpointStatus> {
         let projects = self.project_repo.list_all().await?;
         let mut all_in_sync = true;
