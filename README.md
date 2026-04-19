@@ -49,6 +49,7 @@
 The easiest way of deployment is to spin-up NeonD using Docker Compose.
 
 ```bash
+# Skip on macOS
 mkdir neond_data
 sudo chown -R 600:600 neond_data
 ```
