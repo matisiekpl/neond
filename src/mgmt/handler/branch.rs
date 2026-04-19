@@ -8,6 +8,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::mgmt::dto::error::AppError;
+use crate::mgmt::dto::change_password_request::ChangePasswordRequest;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::lsn_request::LsnRequest;
 use crate::mgmt::dto::restore_branch_request::RestoreBranchRequest;
@@ -63,6 +64,20 @@ pub async fn restore(
         .services
         .branch()
         .restore(user_id, organization_id, project_id, branch_id, req)
+        .await?;
+    Ok((StatusCode::OK, Json(branch)))
+}
+
+pub async fn change_password(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(req): Json<ChangePasswordRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let branch = state
+        .services
+        .branch()
+        .change_password(user_id, organization_id, project_id, branch_id, req.password)
         .await?;
     Ok((StatusCode::OK, Json(branch)))
 }

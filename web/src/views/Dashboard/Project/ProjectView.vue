@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Cloud, Copy, GitBranchPlus, History, Loader2, MoreVertical, Pencil, Play, Square, Trash2,
+  BookDown, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -118,6 +118,11 @@ const renameBranch = ref<Branch | null>(null)
 const renameName = ref('')
 const renameSubmitting = ref(false)
 
+const passwordOpen = ref(false)
+const passwordBranch = ref<Branch | null>(null)
+const passwordValue = ref('')
+const passwordSubmitting = ref(false)
+
 watch(createOpen, (val) => {
   if (!val) createName.value = ''
 })
@@ -126,6 +131,9 @@ watch(branchFromOpen, (val) => {
 })
 watch(renameOpen, (val) => {
   if (!val) renameName.value = ''
+})
+watch(passwordOpen, (val) => {
+  if (!val) passwordValue.value = ''
 })
 
 function openCreate() {
@@ -148,6 +156,12 @@ function openRename(branch: Branch) {
   renameBranch.value = branch
   renameName.value = branch.name
   renameOpen.value = true
+}
+
+function openChangePassword(branch: Branch) {
+  passwordBranch.value = branch
+  passwordValue.value = ''
+  passwordOpen.value = true
 }
 
 const restoreOpen = ref(false)
@@ -197,6 +211,20 @@ async function submitRename() {
   } catch {
   } finally {
     renameSubmitting.value = false
+  }
+}
+
+async function submitChangePassword() {
+  if (!organizationStore.selectedOrganizationId || !projectId.value || !passwordBranch.value) return
+  const trimmed = passwordValue.value.trim()
+  if (!trimmed) return
+  passwordSubmitting.value = true
+  try {
+    await branchStore.changePassword(organizationStore.selectedOrganizationId, projectId.value, passwordBranch.value.id, trimmed)
+    passwordOpen.value = false
+  } catch {
+  } finally {
+    passwordSubmitting.value = false
   }
 }
 
@@ -405,6 +433,10 @@ function copyConnectionString(branch: Branch) {
                       <Pencil class="size-4"/>
                       Rename
                     </DropdownMenuItem>
+                    <DropdownMenuItem @click="openChangePassword(branch)">
+                      <KeyRound class="size-4"/>
+                      Change password
+                    </DropdownMenuItem>
                     <DropdownMenuItem @click="openBranchFrom(branch)">
                       <GitBranchPlus class="size-4"/>
                       Branch from here
@@ -469,6 +501,31 @@ function copyConnectionString(branch: Branch) {
               :disabled="renameSubmitting || !renameName.trim() || renameName.trim() === renameBranch?.name"
             >
               <Loader2 v-if="renameSubmitting" class="mr-1.5 size-3.5 animate-spin"/>
+              Save
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="passwordOpen">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change password</DialogTitle>
+        </DialogHeader>
+        <form @submit.prevent="submitChangePassword">
+          <div class="grid gap-2 py-2">
+            <Label for="change-password">New password</Label>
+            <Input id="change-password" v-model="passwordValue" type="password" autocomplete="new-password"/>
+          </div>
+          <DialogFooter class="mt-2">
+            <Button variant="outline" type="button" class="cursor-pointer" @click="passwordOpen = false">Cancel</Button>
+            <Button
+              type="submit"
+              class="cursor-pointer"
+              :disabled="passwordSubmitting || !passwordValue.trim()"
+            >
+              <Loader2 v-if="passwordSubmitting" class="mr-1.5 size-3.5 animate-spin"/>
               Save
             </Button>
           </DialogFooter>
