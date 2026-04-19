@@ -5,6 +5,7 @@ use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::lsn_response::LsnResponse;
+use crate::mgmt::dto::restore_branch_request::RestoreBranchRequest;
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
@@ -15,6 +16,7 @@ use names::Generator;
 use neon_pageserver_api::models::{TimelineCreateRequest, TimelineCreateRequestMode};
 use neon_pageserver_client::mgmt_api::ForceAwaitLogicalSize;
 use neon_utils::id::{TenantId, TimelineId};
+use neon_utils::lsn::Lsn;
 use neon_utils::shard::TenantShardId;
 use chrono::{DateTime, SecondsFormat, Utc};
 use std::str::FromStr;
@@ -449,6 +451,191 @@ impl BranchService {
             .json::<LsnResponse>()
             .await
             .map_err(|e| AppError::Internal(format!("Invalid pageserver response: {e}")))
+    }
+
+    pub async fn restore(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+        request: RestoreBranchRequest,
+    ) -> Result<BranchResponse> {
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        let target_lsn = Lsn::from_str(request.lsn.trim()).map_err(|_| {
+            AppError::PitrLsnInvalid {
+                value: request.lsn.clone(),
+            }
+        })?;
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
+
+        if let Some(ref info) = endpoint_info {
+            match info.status {
+                ComputeEndpointStatus::Starting | ComputeEndpointStatus::Stopping => {
+                    return Err(AppError::PitrConcurrentEndpointOperation);
+                }
+                _ => {}
+            }
+        }
+
+        let was_running = endpoint_info
+            .as_ref()
+            .map(|info| info.status == ComputeEndpointStatus::Running)
+            .unwrap_or(false);
+
+        if was_running {
+            self.endpoint_service
+                .stop(user_id, organization_id, project_id, branch_id)
+                .await?;
+        }
+
+        let ancestor_timeline_id =
+            TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+                .map_err(|_| AppError::TimelineIdInvalid {
+                    value: branch.timeline_id.to_string(),
+                })?;
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
+        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+
+        let new_timeline_id = TimelineId::generate();
+
+        self.pageserver_client
+            .timeline_create(
+                tenant_shard_id,
+                &TimelineCreateRequest {
+                    new_timeline_id,
+                    mode: TimelineCreateRequestMode::Branch {
+                        ancestor_timeline_id,
+                        ancestor_start_lsn: Some(target_lsn),
+                        pg_version: None,
+                        read_only: false,
+                    },
+                },
+            )
+            .await
+            .map_err(|error| {
+                let message = error.to_string();
+                let lower = message.to_lowercase();
+                if lower.contains("lsn")
+                    || lower.contains("bad request")
+                    || lower.contains("out of range")
+                    || lower.contains("not found")
+                {
+                    AppError::PitrLsnOutOfRange { reason: message }
+                } else {
+                    AppError::PitrTimelineCreationFailed { reason: message }
+                }
+            })?;
+
+        let new_timeline_uuid = Uuid::from_str(new_timeline_id.to_string().as_str())
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: new_timeline_id.to_string(),
+            })?;
+
+        let archive_slug = self.generate_unique_slug().await?;
+        let archive_name = format!(
+            "{}_pitr_archived_{}",
+            branch.name,
+            Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
+        );
+
+        let new_branch_id = Uuid::new_v4();
+
+        let inserted = match self
+            .branch_repo
+            .restore_swap(
+                branch.id,
+                &archive_slug,
+                &archive_name,
+                new_branch_id,
+                &branch.slug,
+                &branch.password,
+                &branch.name,
+                new_timeline_uuid,
+                branch.project_id,
+                branch.parent_branch_id,
+            )
+            .await
+        {
+            Ok(inserted) => inserted,
+            Err(error) => {
+                if let Err(cleanup_error) = self
+                    .pageserver_client
+                    .timeline_delete(tenant_shard_id, new_timeline_id)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to clean up orphan timeline {} after PITR swap failure: {}",
+                        new_timeline_id,
+                        cleanup_error
+                    );
+                }
+                return Err(error);
+            }
+        };
+
+        if was_running {
+            if let Err(error) = self
+                .endpoint_service
+                .start(user_id, organization_id, project_id, inserted.id)
+                .await
+            {
+                return Err(AppError::PitrEndpointRelaunchFailed {
+                    reason: error.to_string(),
+                });
+            }
+        }
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(inserted.id).await;
+
+        Ok(BranchResponse {
+            id: inserted.id,
+            project_id: inserted.project_id,
+            name: inserted.name.clone(),
+            slug: inserted.slug.clone(),
+            parent_branch_id: inserted.parent_branch_id,
+            timeline_id: inserted.timeline_id,
+            endpoint_status: endpoint_info
+                .clone()
+                .map(|info| info.status)
+                .unwrap_or(ComputeEndpointStatus::Stopped),
+            remote_consistent_lsn_visible: Default::default(),
+            last_record_lsn: Default::default(),
+            current_logical_size: 0,
+            connection_string: endpoint_info
+                .map(|info| inserted.get_connection_string(self.config.clone(), info.port)),
+            password: inserted.password.clone(),
+            created_at: inserted.created_at,
+            updated_at: inserted.updated_at,
+        })
     }
 
     pub async fn check_branches_durability(&self) -> Result<CheckpointStatus> {

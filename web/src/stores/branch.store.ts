@@ -79,5 +79,17 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
-    return {branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove}
+    async function restore(organizationId: string, projectId: string, branchId: string, lsn: string): Promise<Branch> {
+        try {
+            const restored = await branchesApi.restore(organizationId, projectId, branchId, lsn)
+            await fetch(organizationId, projectId)
+            toast.success('Branch restored')
+            return restored
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
+    return {branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore}
 })

@@ -43,4 +43,12 @@ export const branchesApi = {
     )
     return response.data
   },
+
+  async restore(organizationId: string, projectId: string, branchId: string, lsn: string): Promise<Branch> {
+    const response = await api.post<Branch>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/restore`,
+      { lsn },
+    )
+    return response.data
+  },
 }

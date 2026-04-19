@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Cloud, Copy, GitBranchPlus, Loader2, MoreVertical, Pencil, Play, Square, Trash2,
+  BookDown, Cloud, Copy, GitBranchPlus, History, Loader2, MoreVertical, Pencil, Play, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -13,6 +13,7 @@ import {getAppError} from '@/api/utils'
 import type {Branch} from '@/types/models/branch'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
+import RestorePitrDialog from '@/elements/RestorePitrDialog.vue'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -148,6 +149,14 @@ function openRename(branch: Branch) {
   renameBranch.value = branch
   renameName.value = branch.name
   renameOpen.value = true
+}
+
+const restoreOpen = ref(false)
+const restoreBranch = ref<Branch | null>(null)
+
+function openRestore(branch: Branch) {
+  restoreBranch.value = branch
+  restoreOpen.value = true
 }
 
 async function submitCreate() {
@@ -404,6 +413,10 @@ function copyConnectionString(branch: Branch) {
                       <GitBranchPlus class="size-4"/>
                       Branch from here
                     </DropdownMenuItem>
+                    <DropdownMenuItem @click="openRestore(branch)">
+                      <History class="size-4"/>
+                      Restore from PITR
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       class="text-destructive focus:text-destructive"
                       @click="openDelete(branch.id)"
@@ -509,6 +522,14 @@ function copyConnectionString(branch: Branch) {
         </form>
       </DialogContent>
     </Dialog>
+
+    <RestorePitrDialog
+      v-if="organizationStore.selectedOrganizationId && restoreBranch"
+      v-model:open="restoreOpen"
+      :organization-id="organizationStore.selectedOrganizationId"
+      :project-id="projectId"
+      :branch-id="restoreBranch.id"
+    />
   </div>
 </template>
 

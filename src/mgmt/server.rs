@@ -10,13 +10,12 @@ use crate::mgmt::handler::AppState;
 use crate::mgmt::handler::{branch, daemon, endpoint, organization, project, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
-    // TODO(matisiekpl): add PITR restoration
+    // TODO(matisiekpl): add parent restoration
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
     // TODO(matisiekpl): make Dockerfile and docker compose
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
-    // TODO(matisiekpl): optimize postgres parameters
     // TODO(matisiekpl): password change of compute endpoint
     // TODO(matisiekpl): signup restrictions
     // TODO(matisiekpl): investigate "health_check" table
@@ -69,6 +68,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/lsn",
             get(branch::lsn),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/restore",
+            post(branch::restore),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint",
