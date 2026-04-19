@@ -25,11 +25,15 @@ pub fn wait_for_output_timeout<R: Read + Send + 'static>(
 
     thread::spawn(move || {
         let mut caught = false;
+        let mut buffer: Vec<String> = Vec::new();
         for line in reader.lines() {
             let line = match line {
                 Ok(l) => l,
                 Err(_) => break,
             };
+            if !caught {
+                buffer.push(line.clone());
+            }
             if verbose && !caught {
                 println!("{}", line);
             }
@@ -43,8 +47,9 @@ pub fn wait_for_output_timeout<R: Read + Send + 'static>(
         }
         if !caught {
             let _ = tx.send(Err(anyhow::anyhow!(
-                "Process exited before printing '{}'",
-                needle
+                "Process exited before printing '{}'. Output:\n{}",
+                needle,
+                buffer.join("\n")
             )));
         }
     });
