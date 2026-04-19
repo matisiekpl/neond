@@ -59,4 +59,11 @@ export const branchesApi = {
     )
     return response.data
   },
+
+  async resetToParent(organizationId: string, projectId: string, branchId: string): Promise<Branch> {
+    const response = await api.post<Branch>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/reset`,
+    )
+    return response.data
+  },
 }

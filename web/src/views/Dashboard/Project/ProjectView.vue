@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Square, Trash2,
+  BookDown, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, RotateCcw, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -172,6 +172,15 @@ function openRestore(branch: Branch) {
   restoreOpen.value = true
 }
 
+const resetOpen = ref(false)
+const resetBranch = ref<Branch | null>(null)
+const resetting = ref(false)
+
+function openResetToParent(branch: Branch) {
+  resetBranch.value = branch
+  resetOpen.value = true
+}
+
 async function submitCreate() {
   if (!organizationStore.selectedOrganizationId || !projectId.value) return
   const trimmed = createName.value.trim()
@@ -225,6 +234,17 @@ async function submitChangePassword() {
   } catch {
   } finally {
     passwordSubmitting.value = false
+  }
+}
+
+async function confirmResetToParent() {
+  if (!organizationStore.selectedOrganizationId || !projectId.value || !resetBranch.value) return
+  resetting.value = true
+  try {
+    await branchStore.resetToParent(organizationStore.selectedOrganizationId, projectId.value, resetBranch.value.id)
+    resetOpen.value = false
+  } finally {
+    resetting.value = false
   }
 }
 
@@ -446,6 +466,14 @@ function copyConnectionString(branch: Branch) {
                       Restore from PITR
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      v-if="branch.parent_branch_id"
+                      class="text-destructive focus:text-destructive"
+                      @click="openResetToParent(branch)"
+                    >
+                      <RotateCcw class="size-4"/>
+                      Reset to parent
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       class="text-destructive focus:text-destructive"
                       @click="openDelete(branch.id)"
                     >
@@ -460,6 +488,28 @@ function copyConnectionString(branch: Branch) {
         </Table>
       </div>
     </div>
+
+    <AlertDialog v-model:open="resetOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reset branch to parent?</AlertDialogTitle>
+          <AlertDialogDescription>
+            All data on <b>{{ resetBranch?.name }}</b> will be replaced with the current state of its parent. The endpoint will briefly restart. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="resetting">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            class="bg-destructive text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
+            :disabled="resetting"
+            @click="confirmResetToParent"
+          >
+            <Loader2 v-if="resetting" class="mr-1.5 size-3.5 animate-spin"/>
+            Reset branch
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <AlertDialog v-model:open="deleteOpen">
       <AlertDialogContent>
