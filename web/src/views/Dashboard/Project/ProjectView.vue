@@ -9,7 +9,6 @@ import {
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
 import {useBranchStore} from '@/stores/branch.store'
-import {getAppError} from '@/api/utils'
 import type {Branch} from '@/types/models/branch'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
