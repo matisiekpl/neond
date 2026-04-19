@@ -14,6 +14,8 @@ pub struct BranchResponse {
     pub slug: String,
     pub parent_branch_id: Option<Uuid>,
     pub timeline_id: Uuid,
+    pub ancestor_timeline_id: Option<Uuid>,
+    pub ancestor_lsn: Option<Lsn>,
     pub endpoint_status: ComputeEndpointStatus,
     pub remote_consistent_lsn_visible: Lsn,
     pub last_record_lsn: Lsn,

@@ -54,6 +54,7 @@ pub enum AppError {
     PitrTimelineCreationFailed { reason: String },
     PitrEndpointRelaunchFailed { reason: String },
     PitrConcurrentEndpointOperation,
+    DetachAncestorFailed { reason: String },
     LsnResolutionFailed { reason: String },
     DurabilityCheckFailed { reason: String },
     TenantIdInvalid { value: String },
@@ -208,6 +209,9 @@ impl fmt::Display for AppError {
                     f,
                     "Endpoint for this branch is currently starting or stopping"
                 )
+            }
+            AppError::DetachAncestorFailed { reason } => {
+                write!(f, "Detach ancestor failed: {}", reason)
             }
             AppError::LsnResolutionFailed { reason } => {
                 write!(f, "LSN resolution failed: {}", reason)

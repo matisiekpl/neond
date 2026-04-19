@@ -19,6 +19,7 @@ use neon_utils::id::{TenantId, TimelineId};
 use neon_utils::lsn::Lsn;
 use neon_utils::shard::TenantShardId;
 use chrono::{DateTime, SecondsFormat, Utc};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -161,6 +162,10 @@ impl BranchService {
 
         let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
 
+        let (ancestor_timeline_id, ancestor_lsn) = self
+            .fetch_ancestor(tenant_id, new_timeline_id)
+            .await;
+
         Ok(BranchResponse {
             id: branch.id,
             project_id: branch.project_id,
@@ -168,6 +173,8 @@ impl BranchService {
             slug: branch.slug.clone(),
             parent_branch_id: branch.parent_branch_id,
             timeline_id: branch.timeline_id,
+            ancestor_timeline_id,
+            ancestor_lsn,
             endpoint_status: endpoint_info
                 .clone()
                 .map(|info| info.status)
@@ -231,6 +238,9 @@ impl BranchService {
                 })?;
 
             let endpoint_info = self.endpoint_service.get_endpoint_info(b.id).await;
+            let ancestor_timeline_id = timeline_info
+                .ancestor_timeline_id
+                .and_then(|id| Uuid::from_str(id.to_string().as_str()).ok());
             results.push(BranchResponse {
                 id: b.id,
                 project_id: b.project_id,
@@ -238,6 +248,8 @@ impl BranchService {
                 slug: b.slug.clone(),
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
+                ancestor_timeline_id,
+                ancestor_lsn: timeline_info.ancestor_lsn,
                 endpoint_status: endpoint_info
                     .clone()
                     .map(|info| info.status)
@@ -306,6 +318,17 @@ impl BranchService {
 
         let updated = self.branch_repo.update(branch_id, &req.name).await?;
 
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
+        let timeline_id = TimelineId::from_str(updated.timeline_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: updated.timeline_id.to_string(),
+            })?;
+        let (ancestor_timeline_id, ancestor_lsn) =
+            self.fetch_ancestor(tenant_id, timeline_id).await;
+
         let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
         Ok(BranchResponse {
             id: updated.id,
@@ -314,6 +337,8 @@ impl BranchService {
             slug: updated.slug.clone(),
             parent_branch_id: updated.parent_branch_id,
             timeline_id: updated.timeline_id,
+            ancestor_timeline_id,
+            ancestor_lsn,
             endpoint_status: endpoint_info
                 .clone()
                 .map(|info| info.status)
@@ -607,6 +632,36 @@ impl BranchService {
                 }
             })?;
 
+        let detached = match self
+            .pageserver_client
+            .timeline_detach_ancestor(tenant_shard_id, new_timeline_id, None)
+            .await
+        {
+            Ok(detached) => detached,
+            Err(error) => {
+                if let Err(cleanup_error) = self
+                    .pageserver_client
+                    .timeline_delete(tenant_shard_id, new_timeline_id)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to clean up orphan timeline {} after detach_ancestor failure: {}",
+                        new_timeline_id,
+                        cleanup_error
+                    );
+                }
+                return Err(AppError::DetachAncestorFailed {
+                    reason: error.to_string(),
+                });
+            }
+        };
+
+        let reparented_timeline_ids: HashSet<Uuid> = detached
+            .reparented_timelines
+            .iter()
+            .filter_map(|id| Uuid::from_str(id.to_string().as_str()).ok())
+            .collect();
+
         let new_timeline_uuid = Uuid::from_str(new_timeline_id.to_string().as_str())
             .map_err(|_| AppError::TimelineIdInvalid {
                 value: new_timeline_id.to_string(),
@@ -633,7 +688,7 @@ impl BranchService {
                 &branch.name,
                 new_timeline_uuid,
                 branch.project_id,
-                branch.parent_branch_id,
+                &reparented_timeline_ids,
             )
             .await
         {
@@ -675,6 +730,8 @@ impl BranchService {
             slug: inserted.slug.clone(),
             parent_branch_id: inserted.parent_branch_id,
             timeline_id: inserted.timeline_id,
+            ancestor_timeline_id: None,
+            ancestor_lsn: None,
             endpoint_status: endpoint_info
                 .clone()
                 .map(|info| info.status)
@@ -766,6 +823,29 @@ impl BranchService {
             all_in_sync,
             max_checkpoint_timeout,
         })
+    }
+
+    async fn fetch_ancestor(
+        &self,
+        tenant_id: TenantId,
+        timeline_id: TimelineId,
+    ) -> (Option<Uuid>, Option<Lsn>) {
+        match self
+            .pageserver_client
+            .timeline_info(
+                TenantShardId::unsharded(tenant_id),
+                timeline_id,
+                ForceAwaitLogicalSize::No,
+            )
+            .await
+        {
+            Ok(info) => (
+                info.ancestor_timeline_id
+                    .and_then(|id| Uuid::from_str(id.to_string().as_str()).ok()),
+                info.ancestor_lsn,
+            ),
+            Err(_) => (None, None),
+        }
     }
 
     async fn generate_unique_slug(&self) -> Result<String> {
