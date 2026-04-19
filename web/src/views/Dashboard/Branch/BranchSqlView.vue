@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { useOrganizationStore } from '@/stores/organization.store'
-import { useSqlStore } from '@/stores/sql.store'
+import {ref, computed} from 'vue'
+import {useRoute} from 'vue-router'
+import {useOrganizationStore} from '@/stores/organization.store'
+import {useSqlStore} from '@/stores/sql.store'
 import EndpointGate from '@/elements/EndpointGate.vue'
 import SqlEditor from '@/elements/SqlEditor.vue'
 import SqlResultTable from '@/elements/SqlResultTable.vue'
@@ -30,12 +30,14 @@ async function runQuery() {
     :project-id="projectId"
     :branch-id="branchId"
   >
-    <div class="grid grid-rows-[1fr_1fr] gap-6 h-full">
-      <div class="border rounded-lg overflow-hidden flex flex-col">
-        <SqlEditor v-model="sql" :loading="sqlStore.executeLoading" @run="runQuery" @cancel="sqlStore.cancelExecute" />
+    <div class="flex flex-col h-full w-[calc(100vw-2rem)] md:w-[calc(100vw-19rem)]">
+      <div class="border rounded-lg overflow-hidden h-64 min-w-0">
+        <SqlEditor v-model="sql" :loading="sqlStore.executeLoading" @run="runQuery" @cancel="sqlStore.cancelExecute"/>
       </div>
-      <div class="border rounded-lg overflow-hidden flex flex-col">
-        <SqlResultTable :result="sqlStore.result" :loading="sqlStore.executeLoading" />
+      <div class="pt-6 min-w-0">
+        <div class="border rounded-lg overflow-hidden flex flex-col h-[calc(100vh-30rem)] min-w-0">
+          <SqlResultTable :result="sqlStore.result" :loading="sqlStore.executeLoading"/>
+        </div>
       </div>
     </div>
   </EndpointGate>

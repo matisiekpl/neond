@@ -7,6 +7,8 @@ import { quoteIdentifier } from '@/lib/sqlIdentifier'
 import type { TableRef } from '@/types/models/tableRef'
 import type { ExecuteSqlResponse } from '@/types/dto/executeSqlResponse'
 import type { TableFilter, TableSort } from '@/types/dto/tableFilter'
+import type { RowUpdate } from '@/types/dto/rowUpdate'
+import type { UpdateRowResult } from '@/types/dto/updateRowResult'
 
 const LIST_TABLES_SQL = `SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_type = 'BASE TABLE' ORDER BY table_schema, table_name`
 
@@ -45,6 +47,7 @@ function buildTableDataSql(
   tableRef: TableRef,
   filters: TableFilter[],
   sort: TableSort | null,
+  defaultSortColumns: string[],
   limit?: number,
   offset?: number,
 ): string {
@@ -52,6 +55,8 @@ function buildTableDataSql(
   sql += buildWhereClause(filters)
   if (sort) {
     sql += ` ORDER BY ${quoteIdentifier(sort.column)} ${sort.direction.toUpperCase()}`
+  } else if (defaultSortColumns.length > 0) {
+    sql += ` ORDER BY ${defaultSortColumns.map((column) => `${quoteIdentifier(column)} ASC`).join(', ')}`
   }
   if (limit !== undefined) {
     sql += ` LIMIT ${limit}`
@@ -96,6 +101,7 @@ export const useSqlStore = defineStore('sql', () => {
     pageSize: number,
     filters: TableFilter[],
     sort: TableSort | null,
+    defaultSortColumns: string[],
     lsn?: string | null,
   ): Promise<ExecuteSqlResponse> {
     const safePage = Math.max(1, Math.trunc(page))
@@ -103,7 +109,7 @@ export const useSqlStore = defineStore('sql', () => {
     const offset = (safePage - 1) * safePageSize
     rowsLoading.value = true
     try {
-      const sql = buildTableDataSql(tableRef, filters, sort, safePageSize + 1, offset)
+      const sql = buildTableDataSql(tableRef, filters, sort, defaultSortColumns, safePageSize + 1, offset)
       return await sqlApi.execute(organizationId, projectId, branchId, sql, lsn)
     } catch (error) {
       toast.error(getAppError(error))
@@ -120,11 +126,12 @@ export const useSqlStore = defineStore('sql', () => {
     tableRef: TableRef,
     filters: TableFilter[],
     sort: TableSort | null,
+    defaultSortColumns: string[],
     lsn?: string | null,
   ): Promise<ExecuteSqlResponse> {
     rowsLoading.value = true
     try {
-      const sql = buildTableDataSql(tableRef, filters, sort)
+      const sql = buildTableDataSql(tableRef, filters, sort, defaultSortColumns)
       return await sqlApi.execute(organizationId, projectId, branchId, sql, lsn)
     } catch (error) {
       toast.error(getAppError(error))
@@ -132,6 +139,106 @@ export const useSqlStore = defineStore('sql', () => {
     } finally {
       rowsLoading.value = false
     }
+  }
+
+  async function fetchPrimaryKey(
+    organizationId: string,
+    projectId: string,
+    branchId: string,
+    tableRef: TableRef,
+    lsn?: string | null,
+  ): Promise<string[]> {
+    const qualified = `${quoteIdentifier(tableRef.schema)}.${quoteIdentifier(tableRef.name)}`
+    const sql = `SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) WHERE i.indrelid = ${escapeSqlValue(qualified)}::regclass AND i.indisprimary ORDER BY array_position(i.indkey, a.attnum)`
+    try {
+      const response = await sqlApi.execute(organizationId, projectId, branchId, sql, lsn)
+      return response.rows.map((row) => row[0] ?? '').filter((value) => value !== '')
+    } catch (error) {
+      toast.error(getAppError(error))
+      throw error
+    }
+  }
+
+  async function updateRows(
+    organizationId: string,
+    projectId: string,
+    branchId: string,
+    tableRef: TableRef,
+    updates: RowUpdate[],
+    lsn?: string | null,
+  ): Promise<UpdateRowResult[]> {
+    const qualified = `${quoteIdentifier(tableRef.schema)}.${quoteIdentifier(tableRef.name)}`
+    const results: UpdateRowResult[] = []
+    for (const update of updates) {
+      const setClause = Object.entries(update.changedCells)
+        .map(([column, value]) => `${quoteIdentifier(column)} = ${value === null ? 'NULL' : escapeSqlValue(value)}`)
+        .join(', ')
+      const whereClause = Object.entries(update.primaryKeyValues)
+        .map(([column, value]) => value === null
+          ? `${quoteIdentifier(column)} IS NULL`
+          : `${quoteIdentifier(column)} = ${escapeSqlValue(value)}`)
+        .join(' AND ')
+      const sql = `UPDATE ${qualified} SET ${setClause} WHERE ${whereClause}`
+      try {
+        const response = await sqlApi.execute(organizationId, projectId, branchId, sql, lsn)
+        results.push({ error: response.error ?? null })
+      } catch (error) {
+        results.push({ error: getAppError(error) })
+      }
+    }
+    return results
+  }
+
+  async function deleteRows(
+    organizationId: string,
+    projectId: string,
+    branchId: string,
+    tableRef: TableRef,
+    primaryKeyValuesList: Array<Record<string, string | null>>,
+    lsn?: string | null,
+  ): Promise<UpdateRowResult[]> {
+    const qualified = `${quoteIdentifier(tableRef.schema)}.${quoteIdentifier(tableRef.name)}`
+    const results: UpdateRowResult[] = []
+    for (const primaryKeyValues of primaryKeyValuesList) {
+      const whereClause = Object.entries(primaryKeyValues)
+        .map(([column, value]) => value === null
+          ? `${quoteIdentifier(column)} IS NULL`
+          : `${quoteIdentifier(column)} = ${escapeSqlValue(value)}`)
+        .join(' AND ')
+      const sql = `DELETE FROM ${qualified} WHERE ${whereClause}`
+      try {
+        const response = await sqlApi.execute(organizationId, projectId, branchId, sql, lsn)
+        results.push({ error: response.error ?? null })
+      } catch (error) {
+        results.push({ error: getAppError(error) })
+      }
+    }
+    return results
+  }
+
+  async function insertRows(
+    organizationId: string,
+    projectId: string,
+    branchId: string,
+    tableRef: TableRef,
+    rows: Record<string, string>[],
+    lsn?: string | null,
+  ): Promise<UpdateRowResult[]> {
+    const qualified = `${quoteIdentifier(tableRef.schema)}.${quoteIdentifier(tableRef.name)}`
+    const results: UpdateRowResult[] = []
+    for (const row of rows) {
+      const entries = Object.entries(row).filter(([, value]) => value !== '')
+      const sql = entries.length === 0
+        ? `INSERT INTO ${qualified} DEFAULT VALUES`
+        : `INSERT INTO ${qualified} (${entries.map(([column]) => quoteIdentifier(column)).join(', ')}) VALUES (${entries.map(([, value]) => escapeSqlValue(value)).join(', ')})`
+      try {
+        const response = await sqlApi.execute(organizationId, projectId, branchId, sql, lsn)
+        results.push({ error: response.error ?? null })
+      } catch (error) {
+        results.push({ error: getAppError(error) })
+      }
+    }
+    return results
   }
 
   async function execute(
@@ -159,5 +266,5 @@ export const useSqlStore = defineStore('sql', () => {
     abortController?.abort()
   }
 
-  return { tablesLoading, rowsLoading, executeLoading, result, listTables, fetchTableData, fetchAllTableData, execute, cancelExecute }
+  return { tablesLoading, rowsLoading, executeLoading, result, listTables, fetchTableData, fetchAllTableData, fetchPrimaryKey, updateRows, insertRows, deleteRows, execute, cancelExecute }
 })

@@ -40,18 +40,22 @@ const props = defineProps<{
       {{ props.result.error }}
     </div>
 
-    <div
+  <div
       v-else-if="props.result.columns.length === 0"
       class="flex-1 flex items-center justify-center text-sm text-muted-foreground"
     >
       Query executed successfully
     </div>
 
-    <div v-else class="flex-1 min-h-0 overflow-auto">
+    <div v-else class="flex-1 min-h-0 [&>[data-slot=table-container]]:h-full">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead v-for="column in props.result.columns" :key="column">
+            <TableHead
+              v-for="column in props.result.columns"
+              :key="column"
+              class="whitespace-nowrap"
+            >
               {{ column }}
             </TableHead>
           </TableRow>

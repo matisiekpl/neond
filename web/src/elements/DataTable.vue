@@ -10,7 +10,9 @@ import {
   MoreHorizontal,
   X,
   Plus,
+  Loader2,
 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 import { useSqlStore } from '@/stores/sql.store'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -46,6 +48,7 @@ import {
 } from '@/components/ui/table'
 import type { ExecuteSqlResponse } from '@/types/dto/executeSqlResponse'
 import type { TableFilter, TableSort, FilterOperator, SortDirection } from '@/types/dto/tableFilter'
+import type { RowUpdate } from '@/types/dto/rowUpdate'
 import { toCsv } from '@/lib/csv'
 import { downloadBlob } from '@/lib/download'
 
@@ -70,12 +73,23 @@ const showFilters = ref(false)
 const sort = ref<TableSort | null>(null)
 const selectedRows = ref<Set<number>>(new Set())
 
+const primaryKeyColumns = ref<string[]>([])
+const edits = ref<Map<string, string>>(new Map())
+const failedRows = ref<Map<number, string>>(new Map())
+const newRows = ref<Record<string, string>[]>([])
+const failedNewRows = ref<Map<number, string>>(new Map())
+const pendingDeletes = ref<Set<number>>(new Set())
+const failedDeletes = ref<Map<number, string>>(new Map())
+const savingEdits = ref(false)
+
 const rows = computed(() => response.value?.rows.slice(0, PAGE_SIZE) ?? [])
 const hasNextPage = computed(() => (response.value?.rows.length ?? 0) > PAGE_SIZE)
 const startRow = computed(() => rows.value.length === 0 ? 0 : (page.value - 1) * PAGE_SIZE + 1)
 const endRow = computed(() => (page.value - 1) * PAGE_SIZE + rows.value.length)
 const canPrev = computed(() => page.value > 1 && !sqlStore.rowsLoading)
 const canNext = computed(() => hasNextPage.value && !sqlStore.rowsLoading)
+
+const canEdit = computed(() => primaryKeyColumns.value.length > 0 && !props.lsn)
 
 const allSelected = computed(() => rows.value.length > 0 && selectedRows.value.size === rows.value.length)
 const someSelected = computed(() => selectedRows.value.size > 0 && !allSelected.value)
@@ -102,6 +116,7 @@ async function load() {
       PAGE_SIZE,
       filters.value,
       sort.value,
+      primaryKeyColumns.value,
       props.lsn,
     )
   } catch {
@@ -114,6 +129,23 @@ async function reset() {
   filters.value = []
   sort.value = null
   selectedRows.value = new Set()
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
+  try {
+    primaryKeyColumns.value = await sqlStore.fetchPrimaryKey(
+      props.organizationId,
+      props.projectId,
+      props.branchId,
+      { schema: props.schema, name: props.table },
+      props.lsn,
+    )
+  } catch {
+    primaryKeyColumns.value = []
+  }
   await load()
 }
 
@@ -124,6 +156,12 @@ onMounted(reset)
 watch(() => [props.branchId, props.schema, props.table, props.lsn], reset)
 watch(page, () => {
   selectedRows.value = new Set()
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
   load()
 })
 
@@ -145,6 +183,12 @@ function toggleSort(column: string) {
   }
   page.value = 1
   selectedRows.value = new Set()
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
   load()
 }
 
@@ -163,6 +207,12 @@ function removeFilter(index: number) {
   filterColumnPopoverOpen.value.splice(index, 1)
   page.value = 1
   selectedRows.value = new Set()
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
   load()
 }
 
@@ -170,6 +220,12 @@ function clearFilters() {
   filters.value = []
   page.value = 1
   selectedRows.value = new Set()
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
   load()
 }
 
@@ -177,6 +233,12 @@ function onFilterColumnChange(index: number, column: string) {
   filters.value[index].column = column
   page.value = 1
   selectedRows.value = new Set()
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
   load()
 }
 
@@ -184,12 +246,19 @@ function onFilterOperatorChange(index: number, operator: FilterOperator) {
   filters.value[index].operator = operator
   page.value = 1
   selectedRows.value = new Set()
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
   load()
 }
 
 function onFilterValueInput() {
   page.value = 1
   selectedRows.value = new Set()
+  edits.value = new Map()
   debouncedLoad()
 }
 
@@ -198,6 +267,205 @@ function toggleAllRows(value: boolean | 'indeterminate') {
     selectedRows.value = new Set(rows.value.map((_, index) => index))
   } else {
     selectedRows.value = new Set()
+  }
+}
+
+function onCellBlur(event: FocusEvent, rowIndex: number, columnIndex: number, originalValue: string | null) {
+  const target = event.target as HTMLElement
+  const text = target.textContent ?? ''
+  const key = `${rowIndex}:${columnIndex}`
+  if (text === (originalValue ?? '')) {
+    edits.value.delete(key)
+  } else {
+    edits.value.set(key, text)
+  }
+  edits.value = new Map(edits.value)
+  if (failedRows.value.has(rowIndex)) {
+    failedRows.value.delete(rowIndex)
+    failedRows.value = new Map(failedRows.value)
+  }
+}
+
+function onCellKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    ;(event.target as HTMLElement).blur()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    ;(event.target as HTMLElement).blur()
+  }
+}
+
+function rejectChanges() {
+  edits.value = new Map()
+  failedRows.value = new Map()
+  newRows.value = []
+  failedNewRows.value = new Map()
+  pendingDeletes.value = new Set()
+  failedDeletes.value = new Map()
+}
+
+function deleteSelectedRows() {
+  if (selectedRows.value.size === 0) return
+  const next = new Set(pendingDeletes.value)
+  for (const rowIndex of selectedRows.value) next.add(rowIndex)
+  pendingDeletes.value = next
+  selectedRows.value = new Set()
+}
+
+function undoPendingDelete(rowIndex: number) {
+  const next = new Set(pendingDeletes.value)
+  next.delete(rowIndex)
+  pendingDeletes.value = next
+  if (failedDeletes.value.has(rowIndex)) {
+    failedDeletes.value.delete(rowIndex)
+    failedDeletes.value = new Map(failedDeletes.value)
+  }
+}
+
+function addNewRow() {
+  newRows.value = [...newRows.value, {}]
+}
+
+function removeNewRow(index: number) {
+  newRows.value = newRows.value.filter((_, i) => i !== index)
+  if (failedNewRows.value.has(index)) {
+    const next = new Map<number, string>()
+    for (const [key, error] of failedNewRows.value) {
+      if (key < index) next.set(key, error)
+      else if (key > index) next.set(key - 1, error)
+    }
+    failedNewRows.value = next
+  }
+}
+
+function onNewRowCellBlur(event: FocusEvent, newRowIndex: number, columnName: string) {
+  const text = (event.target as HTMLElement).textContent ?? ''
+  const row = { ...newRows.value[newRowIndex], [columnName]: text }
+  const next = [...newRows.value]
+  next[newRowIndex] = row
+  newRows.value = next
+  if (failedNewRows.value.has(newRowIndex)) {
+    failedNewRows.value.delete(newRowIndex)
+    failedNewRows.value = new Map(failedNewRows.value)
+  }
+}
+
+async function acceptChanges() {
+  if (edits.value.size === 0 && newRows.value.length === 0 && pendingDeletes.value.size === 0) return
+  const columns = response.value?.columns ?? []
+  const rowsByIndex = new Map<number, RowUpdate>()
+  for (const [key, newValue] of edits.value) {
+    const [rowIndexString, columnIndexString] = key.split(':')
+    const rowIndex = Number(rowIndexString)
+    const columnIndex = Number(columnIndexString)
+    const columnName = columns[columnIndex]
+    if (!columnName) continue
+    let update = rowsByIndex.get(rowIndex)
+    if (!update) {
+      const primaryKeyValues: Record<string, string | null> = {}
+      for (const primaryKeyColumn of primaryKeyColumns.value) {
+        const primaryKeyColumnIndex = columns.indexOf(primaryKeyColumn)
+        if (primaryKeyColumnIndex === -1) continue
+        primaryKeyValues[primaryKeyColumn] = rows.value[rowIndex][primaryKeyColumnIndex]
+      }
+      update = { primaryKeyValues, changedCells: {} }
+      rowsByIndex.set(rowIndex, update)
+    }
+    update.changedCells[columnName] = newValue
+  }
+  const rowIndices = Array.from(rowsByIndex.keys())
+  const updates = Array.from(rowsByIndex.values())
+  savingEdits.value = true
+  try {
+    let failedCount = 0
+    if (updates.length > 0) {
+      const results = await sqlStore.updateRows(
+        props.organizationId,
+        props.projectId,
+        props.branchId,
+        { schema: props.schema, name: props.table },
+        updates,
+        props.lsn,
+      )
+      const nextEdits = new Map(edits.value)
+      const nextFailed = new Map<number, string>()
+      results.forEach((result, index) => {
+        const rowIndex = rowIndices[index]
+        if (result.error) {
+          failedCount++
+          nextFailed.set(rowIndex, result.error)
+        } else {
+          for (const key of Array.from(nextEdits.keys())) {
+            if (key.startsWith(`${rowIndex}:`)) nextEdits.delete(key)
+          }
+        }
+      })
+      edits.value = nextEdits
+      failedRows.value = nextFailed
+    }
+    if (newRows.value.length > 0) {
+      const insertResults = await sqlStore.insertRows(
+        props.organizationId,
+        props.projectId,
+        props.branchId,
+        { schema: props.schema, name: props.table },
+        newRows.value,
+        props.lsn,
+      )
+      const remainingRows: Record<string, string>[] = []
+      const nextFailedNew = new Map<number, string>()
+      insertResults.forEach((result, index) => {
+        if (result.error) {
+          failedCount++
+          nextFailedNew.set(remainingRows.length, result.error)
+          remainingRows.push(newRows.value[index])
+        }
+      })
+      newRows.value = remainingRows
+      failedNewRows.value = nextFailedNew
+    }
+    if (pendingDeletes.value.size > 0) {
+      const columns = response.value?.columns ?? []
+      const deleteIndices = Array.from(pendingDeletes.value)
+      const primaryKeyValuesList = deleteIndices.map((rowIndex) => {
+        const primaryKeyValues: Record<string, string | null> = {}
+        for (const primaryKeyColumn of primaryKeyColumns.value) {
+          const primaryKeyColumnIndex = columns.indexOf(primaryKeyColumn)
+          if (primaryKeyColumnIndex === -1) continue
+          primaryKeyValues[primaryKeyColumn] = rows.value[rowIndex][primaryKeyColumnIndex]
+        }
+        return primaryKeyValues
+      })
+      const deleteResults = await sqlStore.deleteRows(
+        props.organizationId,
+        props.projectId,
+        props.branchId,
+        { schema: props.schema, name: props.table },
+        primaryKeyValuesList,
+        props.lsn,
+      )
+      const nextPendingDeletes = new Set<number>()
+      const nextFailedDeletes = new Map<number, string>()
+      deleteResults.forEach((result, index) => {
+        const rowIndex = deleteIndices[index]
+        if (result.error) {
+          failedCount++
+          nextPendingDeletes.add(rowIndex)
+          nextFailedDeletes.set(rowIndex, result.error)
+        }
+      })
+      pendingDeletes.value = nextPendingDeletes
+      failedDeletes.value = nextFailedDeletes
+    }
+    if (failedCount === 0) {
+      toast.success('Changes saved')
+      await load()
+    } else {
+      toast.error(`${failedCount} row${failedCount === 1 ? '' : 's'} failed`)
+    }
+  } finally {
+    savingEdits.value = false
   }
 }
 
@@ -239,6 +507,7 @@ function exportAll(format: 'csv' | 'json') {
     { schema: props.schema, name: props.table },
     filters.value,
     sort.value,
+    primaryKeyColumns.value,
     props.lsn,
   ).then((allData: ExecuteSqlResponse) => {
     if (format === 'csv') {
@@ -254,7 +523,7 @@ function exportAll(format: 'csv' | 'json') {
 
 <template>
   <div class="flex flex-col h-full font-mono">
-    <div class="border-b px-3 py-2 flex items-center gap-2 shrink-0">
+    <div class="border-b px-3 py-2 flex items-center gap-2 shrink-0 overflow-x-auto [&>*]:shrink-0">
       <Button
         variant="outline"
         size="sm"
@@ -265,6 +534,28 @@ function exportAll(format: 'csv' | 'json') {
         <Filter class="size-3.5" />
         Filters
         <span v-if="filters.length > 0" class="text-xs font-medium">({{ filters.length }})</span>
+      </Button>
+
+      <Button
+        v-if="canEdit"
+        variant="outline"
+        size="sm"
+        class="cursor-pointer gap-1.5"
+        @click="addNewRow"
+      >
+        <Plus class="size-3.5" />
+        Add row
+      </Button>
+
+      <Button
+        v-if="canEdit && selectedRows.size > 0"
+        variant="outline"
+        size="sm"
+        class="cursor-pointer gap-1.5 text-red-600 hover:text-red-700"
+        @click="deleteSelectedRows"
+      >
+        <X class="size-3.5" />
+        Delete {{ selectedRows.size }}
       </Button>
 
       <div class="flex-1" />
@@ -407,30 +698,118 @@ function exportAll(format: 'csv' | 'json') {
             </TableRow>
           </TableHeader>
           <TableBody class="overflow-y-scroll">
-            <TableRow v-if="rows.length === 0">
+            <TableRow
+              v-for="(newRow, newRowIndex) in newRows"
+              :key="`new-${newRowIndex}`"
+              :class="failedNewRows.has(newRowIndex)
+                ? 'bg-red-100/60 dark:bg-red-900/30'
+                : 'bg-emerald-50 dark:bg-emerald-950/30'"
+              :title="failedNewRows.get(newRowIndex)"
+            >
+              <TableCell class="px-3">
+                <button
+                  type="button"
+                  class="cursor-pointer text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  :disabled="savingEdits"
+                  @click="removeNewRow(newRowIndex)"
+                >
+                  <X class="size-3.5" />
+                </button>
+              </TableCell>
+              <TableCell
+                v-for="(column, columnIndex) in response.columns"
+                :key="columnIndex"
+              >
+                <span
+                  class="outline-none block min-w-4"
+                  :contenteditable="!savingEdits"
+                  spellcheck="false"
+                  @blur="onNewRowCellBlur($event, newRowIndex, column)"
+                  @keydown="onCellKeydown"
+                >{{ newRow[column] ?? '' }}</span>
+              </TableCell>
+            </TableRow>
+            <TableRow v-if="rows.length === 0 && newRows.length === 0">
               <TableCell :colspan="response.columns.length + 1" class="text-center text-muted-foreground py-8">
                 No rows
               </TableCell>
             </TableRow>
             <TableRow
-              v-else
               v-for="(row, rowIndex) in rows"
               :key="rowIndex"
-              :class="{ 'bg-accent/40': selectedRows.has(rowIndex) }"
+              :class="[
+                failedDeletes.has(rowIndex) ? 'bg-red-100/60 dark:bg-red-900/30' : '',
+                pendingDeletes.has(rowIndex) && !failedDeletes.has(rowIndex) ? 'opacity-50 line-through' : '',
+                !pendingDeletes.has(rowIndex) && selectedRows.has(rowIndex) ? 'bg-accent/40' : '',
+              ]"
+              :title="failedDeletes.get(rowIndex)"
             >
               <TableCell class="px-3">
+                <button
+                  v-if="pendingDeletes.has(rowIndex)"
+                  type="button"
+                  class="cursor-pointer text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  :disabled="savingEdits"
+                  @click="undoPendingDelete(rowIndex)"
+                >
+                  <X class="size-3.5" />
+                </button>
                 <Checkbox
+                  v-else
                   :model-value="selectedRows.has(rowIndex)"
                   @update:model-value="(value: boolean | 'indeterminate') => toggleRow(rowIndex, value)"
                 />
               </TableCell>
-              <TableCell v-for="(cell, cellIndex) in row" :key="cellIndex">
-                <span v-if="cell === null" class="text-muted-foreground italic text-xs">NULL</span>
-                <span v-else>{{ cell }}</span>
+              <TableCell
+                v-for="(cell, cellIndex) in row"
+                :key="cellIndex"
+                :class="{
+                  'bg-amber-100 dark:bg-amber-900/40': edits.has(`${rowIndex}:${cellIndex}`) && !failedRows.has(rowIndex),
+                  'bg-red-100 dark:bg-red-900/40': edits.has(`${rowIndex}:${cellIndex}`) && failedRows.has(rowIndex),
+                }"
+                :title="edits.has(`${rowIndex}:${cellIndex}`) ? failedRows.get(rowIndex) : undefined"
+              >
+                <span
+                  v-if="canEdit && !primaryKeyColumns.includes(response.columns[cellIndex]) && !pendingDeletes.has(rowIndex)"
+                  class="outline-none block"
+                  :contenteditable="!savingEdits"
+                  spellcheck="false"
+                  @blur="onCellBlur($event, rowIndex, cellIndex, cell)"
+                  @keydown="onCellKeydown"
+                >{{ edits.get(`${rowIndex}:${cellIndex}`) ?? cell ?? '' }}</span>
+                <template v-else>
+                  <span v-if="cell === null" class="text-muted-foreground italic text-xs">NULL</span>
+                  <span v-else>{{ cell }}</span>
+                </template>
               </TableCell>
             </TableRow>
           </TableBody>
         </Table>
+      </div>
+      <div
+        v-if="edits.size > 0 || newRows.length > 0 || pendingDeletes.size > 0"
+        class="border-t px-4 py-2 text-xs shrink-0 flex items-center justify-between gap-2"
+        :class="failedRows.size > 0 || failedNewRows.size > 0 || failedDeletes.size > 0
+          ? 'bg-red-50 dark:bg-red-950/40'
+          : 'bg-amber-50 dark:bg-amber-950/40'"
+      >
+        <span>
+          <span v-if="edits.size > 0">{{ edits.size }} unsaved {{ edits.size === 1 ? 'change' : 'changes' }}</span>
+          <span v-if="edits.size > 0 && newRows.length > 0"> · </span>
+          <span v-if="newRows.length > 0">{{ newRows.length }} new {{ newRows.length === 1 ? 'row' : 'rows' }}</span>
+          <span v-if="(edits.size > 0 || newRows.length > 0) && pendingDeletes.size > 0"> · </span>
+          <span v-if="pendingDeletes.size > 0">{{ pendingDeletes.size }} to delete</span>
+          <span v-if="failedRows.size + failedNewRows.size + failedDeletes.size > 0"> · {{ failedRows.size + failedNewRows.size + failedDeletes.size }} failed</span>
+        </span>
+        <div class="flex items-center gap-2">
+          <Button variant="outline" size="sm" class="cursor-pointer" :disabled="savingEdits" @click="rejectChanges">
+            Reject
+          </Button>
+          <Button size="sm" class="cursor-pointer" :disabled="savingEdits" @click="acceptChanges">
+            <Loader2 v-if="savingEdits" class="mr-1.5 size-3.5 animate-spin" />
+            Accept
+          </Button>
+        </div>
       </div>
       <div class="border-t px-4 py-2 text-xs text-muted-foreground shrink-0 flex items-center justify-between gap-2">
         <span>
