@@ -47,11 +47,7 @@ impl Config {
             })?
             .join("neon_daemon_data");
 
-        let build_profile = if cfg!(debug_assertions) {
-            "debug"
-        } else {
-            "release"
-        };
+        let build_profile = "release";
         let neon_binaries_directory = match std::env::var("NEON_BINARIES_DIR") {
             Ok(value) => PathBuf::from(value),
             Err(_) => current_dir()

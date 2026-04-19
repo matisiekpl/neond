@@ -25,6 +25,7 @@ pub struct ProjectService {
     membership_service: Arc<MembershipService>,
     branch_service: Arc<BranchService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+    safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
     config: Config,
 }
 
@@ -35,6 +36,7 @@ impl ProjectService {
         membership_service: Arc<MembershipService>,
         branch_service: Arc<BranchService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
         config: Config,
     ) -> Self {
         Self {
@@ -43,6 +45,7 @@ impl ProjectService {
             membership_service,
             branch_service,
             pageserver_client,
+            safekeeper_client,
             config,
         }
     }
@@ -67,7 +70,9 @@ impl ProjectService {
 
         let tenant_id = TenantId::generate();
         let project_id = Uuid::from_str(tenant_id.to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid project id".to_string()))?;
+            .map_err(|error| AppError::ProjectCreationFailed {
+                reason: format!("Invalid project id: {error}"),
+            })?;
         let pg_version = req.pg_version.unwrap_or(PgVersion::V17);
         let project = self
             .project_repo
@@ -141,7 +146,9 @@ impl ProjectService {
         }
 
         let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project.id.to_string(),
+            })?;
         let tenant_shard_id = TenantShardId::unsharded(tenant_id);
 
         let token = self
@@ -269,7 +276,9 @@ impl ProjectService {
 
         if has_config {
             let tenant_id = TenantId::from_str(id.as_simple().to_string().as_str())
-                .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
+                .map_err(|_| AppError::TenantIdInvalid {
+                    value: id.to_string(),
+                })?;
 
             let config = TenantConfigPatch {
                 gc_period: req.gc_period.map(FieldPatch::Upsert).unwrap_or_default(),
@@ -284,7 +293,9 @@ impl ProjectService {
             self.pageserver_client
                 .patch_tenant_config(&patch_request)
                 .await
-                .map_err(|e| AppError::Internal(format!("Failed to update tenant config: {e}")))?;
+                .map_err(|error| AppError::ProjectConfigUpdateFailed {
+                    reason: error.to_string(),
+                })?;
         }
 
         self.get(user_id, org_id, id).await
@@ -306,7 +317,9 @@ impl ProjectService {
         }
 
         let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid tenant id".to_string()))?;
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project.id.to_string(),
+            })?;
 
         let branches = self.branch_service.list(user_id, org_id, project.id).await?;
         for branch in branches.into_iter().filter(|b| b.parent_branch_id.is_none()) {
@@ -321,16 +334,26 @@ impl ProjectService {
                 .pageserver_client
                 .tenant_delete(TenantShardId::unsharded(tenant_id))
                 .await
-                .map_err(|_| AppError::Internal("Failed to delete tenant".to_string()))?
+                .map_err(|error| AppError::ProjectDeletionFailed {
+                    reason: error.to_string(),
+                })?
                 .as_u16();
             if status_code != 500 && status_code != 503 && status_code != 409 {
                 break;
             }
         }
         if status_code != 200 && status_code != 404 {
-            return Err(AppError::Internal(format!(
-                "Unexpected status code from pageserver when deleting tenant: {status_code}"
-            )));
+            return Err(AppError::ProjectDeletionFailed {
+                reason: format!(
+                    "Unexpected status code from pageserver when deleting tenant: {status_code}"
+                ),
+            });
+        }
+
+        if let Err(error) = self.safekeeper_client.delete_tenant(tenant_id).await {
+            return Err(AppError::ProjectDeletionFailed {
+                reason: format!("safekeeper tenant delete failed: {error}"),
+            });
         }
 
         self.project_repo.delete(project.id).await
@@ -338,13 +361,15 @@ impl ProjectService {
 
     fn validate_project_name(name: &str) -> Result<()> {
         if name.is_empty() {
-            return Err(AppError::Internal("Project name cannot be empty".into()));
+            return Err(AppError::ProjectCreationFailed {
+                reason: "Project name cannot be empty".into(),
+            });
         }
 
         if name.len() > 255 {
-            return Err(AppError::Internal(
-                "Project name is too long (max 255 characters)".into(),
-            ));
+            return Err(AppError::ProjectCreationFailed {
+                reason: "Project name is too long (max 255 characters)".into(),
+            });
         }
 
         Ok(())

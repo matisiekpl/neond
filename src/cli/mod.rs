@@ -58,12 +58,23 @@ pub async fn run() -> Result<()> {
         Some(pageserver_api_token.as_str()),
     );
 
+    let safekeeper_http_client = reqwest::Client::new();
+    let safekeeper_api_token = config
+        .component_auth
+        .generate_token(neon_utils::auth::Scope::SafekeeperData, None)?;
+    let safekeeper_client = neon_safekeeper_client::mgmt_api::Client::new(
+        safekeeper_http_client,
+        "http://127.0.0.1:7676".to_string(),
+        Some(neon_utils::logging::SecretString::from(safekeeper_api_token)),
+    );
+
     let shutdown_token = CancellationToken::new();
 
     let repositories = Repositories::new().await?;
     let services = Arc::new(Services::new(
         &repositories,
         Arc::new(pageserver_client),
+        Arc::new(safekeeper_client),
         config.clone(),
         shutdown_token.clone(),
     ));

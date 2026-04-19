@@ -6,6 +6,8 @@ export interface Branch {
   name: string
   slug: string
   parent_branch_id: string | null
+  ancestor_timeline_id: string | null
+  ancestor_lsn: string | null
   endpoint_status: BranchStatus
   connection_string: string | null
   current_logical_size: number

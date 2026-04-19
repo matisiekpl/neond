@@ -43,9 +43,18 @@ pub enum AppError {
     ProjectConfigUpdateFailed { reason: String },
 
     BranchCreationFailed { reason: String },
+    BranchNameAlreadyExists { name: String },
     BranchDeletionFailed { reason: String },
     BranchListingFailed { reason: String },
     BranchUpdateFailed { reason: String },
+    BranchRestoreFailed { reason: String },
+    PitrLsnInvalid { value: String },
+    PitrLsnOutOfRange { reason: String },
+    PitrSwapFailed { reason: String },
+    PitrTimelineCreationFailed { reason: String },
+    PitrEndpointRelaunchFailed { reason: String },
+    PitrConcurrentEndpointOperation,
+    DetachAncestorFailed { reason: String },
     LsnResolutionFailed { reason: String },
     DurabilityCheckFailed { reason: String },
     TenantIdInvalid { value: String },
@@ -165,6 +174,9 @@ impl fmt::Display for AppError {
             AppError::BranchCreationFailed { reason } => {
                 write!(f, "Branch creation failed: {}", reason)
             }
+            AppError::BranchNameAlreadyExists { name } => {
+                write!(f, "Branch with name '{}' already exists in this project", name)
+            }
             AppError::BranchDeletionFailed { reason } => {
                 write!(f, "Branch deletion failed: {}", reason)
             }
@@ -173,6 +185,33 @@ impl fmt::Display for AppError {
             }
             AppError::BranchUpdateFailed { reason } => {
                 write!(f, "Branch update failed: {}", reason)
+            }
+            AppError::BranchRestoreFailed { reason } => {
+                write!(f, "Branch restore failed: {}", reason)
+            }
+            AppError::PitrLsnInvalid { value } => {
+                write!(f, "LSN is invalid: {}", value)
+            }
+            AppError::PitrLsnOutOfRange { reason } => {
+                write!(f, "LSN is out of range: {}", reason)
+            }
+            AppError::PitrSwapFailed { reason } => {
+                write!(f, "PITR branch swap failed: {}", reason)
+            }
+            AppError::PitrTimelineCreationFailed { reason } => {
+                write!(f, "PITR timeline creation failed: {}", reason)
+            }
+            AppError::PitrEndpointRelaunchFailed { reason } => {
+                write!(f, "PITR endpoint relaunch failed: {}", reason)
+            }
+            AppError::PitrConcurrentEndpointOperation => {
+                write!(
+                    f,
+                    "Endpoint for this branch is currently starting or stopping"
+                )
+            }
+            AppError::DetachAncestorFailed { reason } => {
+                write!(f, "Detach ancestor failed: {}", reason)
             }
             AppError::LsnResolutionFailed { reason } => {
                 write!(f, "LSN resolution failed: {}", reason)
@@ -258,12 +297,16 @@ impl IntoResponse for AppError {
             AppError::Unauthorized
             | AppError::TokenValidationFailed { .. }
             | AppError::LoginFailed { .. } => StatusCode::UNAUTHORIZED,
-            AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::Conflict(_)
+            | AppError::PitrConcurrentEndpointOperation
+            | AppError::BranchNameAlreadyExists { .. } => StatusCode::CONFLICT,
             AppError::TenantIdInvalid { .. }
             | AppError::TimelineIdInvalid { .. }
             | AppError::ComputeSocketAddressInvalid { .. }
             | AppError::PortRangeMisconfigured { .. }
-            | AppError::RegistrationFailed { .. } => StatusCode::BAD_REQUEST,
+            | AppError::RegistrationFailed { .. }
+            | AppError::PitrLsnInvalid { .. }
+            | AppError::PitrLsnOutOfRange { .. } => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(json!({ "message": self.to_string() }))).into_response()

@@ -98,12 +98,14 @@ impl EndpointService {
 
         let mut endpoint =
             ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version).map_err(
-                |e| AppError::Internal(format!("Failed to create compute endpoint: {e}")),
+                |error| AppError::ComputeStartupFailed {
+                    reason: error.to_string(),
+                },
             )?;
 
-        endpoint
-            .launch()
-            .map_err(|e| AppError::Internal(format!("Failed to launch compute endpoint: {e}")))?;
+        endpoint.launch().map_err(|error| AppError::ComputeStartupFailed {
+            reason: error.to_string(),
+        })?;
 
         let sni_hostname = self
             .config
@@ -184,9 +186,9 @@ impl EndpointService {
 
         let endpoint = endpoints.get_mut(&branch_id).ok_or(AppError::NotFound)?;
 
-        endpoint
-            .shutdown()
-            .map_err(|e| AppError::Internal(format!("Failed to shutdown compute endpoint: {e}")))?;
+        endpoint.shutdown().map_err(|error| AppError::ComputeShutdownFailed {
+            reason: error.to_string(),
+        })?;
 
         let sni_hostname = self
             .config

@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::mgmt::dto::error::AppError;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::lsn_request::LsnRequest;
+use crate::mgmt::dto::restore_branch_request::RestoreBranchRequest;
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
 use crate::mgmt::handler::auth::UserId;
 use crate::mgmt::handler::AppState;
@@ -50,6 +51,20 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, AppError> {
     state.services.branch().delete(user_id, organization_id, project_id, branch_id).await?;
     Ok((StatusCode::NO_CONTENT, ()))
+}
+
+pub async fn restore(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(req): Json<RestoreBranchRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let branch = state
+        .services
+        .branch()
+        .restore(user_id, organization_id, project_id, branch_id, req)
+        .await?;
+    Ok((StatusCode::OK, Json(branch)))
 }
 
 pub async fn lsn(

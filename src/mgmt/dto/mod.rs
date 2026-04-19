@@ -13,6 +13,7 @@ pub mod project_response;
 pub mod register_user_request;
 pub mod register_user_response;
 pub mod update_branch_request;
+pub mod restore_branch_request;
 pub mod update_organization_request;
 pub mod update_project_request;
 pub mod user_response;
