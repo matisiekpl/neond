@@ -227,6 +227,64 @@ impl BranchRepository {
         .await
     }
 
+    pub async fn reset_to_parent_swap(
+        &self,
+        old_id: Uuid,
+        archive_slug: &str,
+        archive_name: &str,
+        new_id: Uuid,
+        new_slug: &str,
+        new_password: &str,
+        new_name: &str,
+        new_timeline_id: Uuid,
+        parent_branch_id: Uuid,
+        project_id: Uuid,
+        new_port: Option<i32>,
+    ) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|error| AppError::PitrSwapFailed { reason: error.to_string() })?;
+
+        let archive_slug = archive_slug.to_string();
+        let archive_name = archive_name.to_string();
+        let new_slug = new_slug.to_string();
+        let new_password = new_password.to_string();
+        let new_name = new_name.to_string();
+
+        conn.transaction::<Branch, AppError, _>(|conn| {
+            async move {
+                diesel::update(branches::table.filter(branches::id.eq(old_id)))
+                    .set((
+                        branches::slug.eq(&archive_slug),
+                        branches::name.eq(&archive_name),
+                        branches::recent_status.eq(ComputeEndpointStatus::Stopped),
+                        branches::port.eq(None::<i32>),
+                    ))
+                    .execute(conn)
+                    .await
+                    .map_err(|error| AppError::PitrSwapFailed { reason: error.to_string() })?;
+
+                let inserted: Branch = diesel::insert_into(branches::table)
+                    .values((
+                        branches::id.eq(new_id),
+                        branches::project_id.eq(project_id),
+                        branches::name.eq(&new_name),
+                        branches::parent_branch_id.eq(Some(parent_branch_id)),
+                        branches::timeline_id.eq(new_timeline_id),
+                        branches::password.eq(&new_password),
+                        branches::slug.eq(&new_slug),
+                        branches::port.eq(new_port),
+                    ))
+                    .get_result(conn)
+                    .await
+                    .map_err(|error| AppError::PitrSwapFailed { reason: error.to_string() })?;
+
+                Ok(inserted)
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+
     pub async fn delete(&self, id: Uuid) -> Result<()> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

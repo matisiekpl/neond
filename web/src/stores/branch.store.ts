@@ -102,5 +102,16 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
-    return {branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore, changePassword}
+    async function resetToParent(organizationId: string, projectId: string, branchId: string): Promise<void> {
+        try {
+            await branchesApi.resetToParent(organizationId, projectId, branchId)
+            await fetch(organizationId, projectId)
+            toast.success('Branch reset to parent')
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
+    return {branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, changePassword}
 })

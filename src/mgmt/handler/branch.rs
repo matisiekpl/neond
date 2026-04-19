@@ -68,6 +68,19 @@ pub async fn restore(
     Ok((StatusCode::OK, Json(branch)))
 }
 
+pub async fn reset_to_parent(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let branch = state
+        .services
+        .branch()
+        .reset_to_parent(user_id, organization_id, project_id, branch_id)
+        .await?;
+    Ok((StatusCode::OK, Json(branch)))
+}
+
 pub async fn change_password(
     State(state): State<Arc<AppState>>,
     UserId(user_id): UserId,

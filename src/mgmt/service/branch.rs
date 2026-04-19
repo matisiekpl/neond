@@ -783,6 +783,225 @@ impl BranchService {
         })
     }
 
+    pub async fn reset_to_parent(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+    ) -> Result<BranchResponse> {
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        let parent_branch_id = branch.parent_branch_id.ok_or(AppError::BranchUpdateFailed {
+            reason: "Branch has no parent".into(),
+        })?;
+
+        let parent = self
+            .branch_repo
+            .find_by_id(parent_branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if parent.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        let has_children = !self
+            .branch_repo
+            .list_by_parent_id(branch.id)
+            .await?
+            .is_empty();
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
+
+        if let Some(ref info) = endpoint_info {
+            match info.status {
+                ComputeEndpointStatus::Starting | ComputeEndpointStatus::Stopping => {
+                    return Err(AppError::PitrConcurrentEndpointOperation);
+                }
+                _ => {}
+            }
+        }
+
+        let was_running = endpoint_info
+            .as_ref()
+            .map(|info| info.status == ComputeEndpointStatus::Running)
+            .unwrap_or(false);
+
+        if was_running {
+            self.endpoint_service
+                .stop(user_id, organization_id, project_id, branch_id)
+                .await?;
+        }
+
+        let ancestor_timeline_id =
+            TimelineId::from_str(parent.timeline_id.as_simple().to_string().as_str())
+                .map_err(|_| AppError::TimelineIdInvalid {
+                    value: parent.timeline_id.to_string(),
+                })?;
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
+        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+
+        let new_timeline_id = TimelineId::generate();
+
+        self.pageserver_client
+            .timeline_create(
+                tenant_shard_id,
+                &TimelineCreateRequest {
+                    new_timeline_id,
+                    mode: TimelineCreateRequestMode::Branch {
+                        ancestor_timeline_id,
+                        ancestor_start_lsn: None,
+                        pg_version: None,
+                        read_only: false,
+                    },
+                },
+            )
+            .await
+            .map_err(|error| AppError::PitrTimelineCreationFailed {
+                reason: error.to_string(),
+            })?;
+
+        let new_timeline_uuid = Uuid::from_str(new_timeline_id.to_string().as_str())
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: new_timeline_id.to_string(),
+            })?;
+
+        let archive_slug = self.generate_unique_slug().await?;
+        let archive_name = format!(
+            "{}_reset_archived_{}",
+            branch.name,
+            Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
+        );
+
+        let new_branch_id = Uuid::new_v4();
+
+        let inserted = match self
+            .branch_repo
+            .reset_to_parent_swap(
+                branch.id,
+                &archive_slug,
+                &archive_name,
+                new_branch_id,
+                &branch.slug,
+                &branch.password,
+                &branch.name,
+                new_timeline_uuid,
+                parent.id,
+                branch.project_id,
+                branch.port,
+            )
+            .await
+        {
+            Ok(inserted) => inserted,
+            Err(error) => {
+                if let Err(cleanup_error) = self
+                    .pageserver_client
+                    .timeline_delete(tenant_shard_id, new_timeline_id)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to clean up orphan timeline {} after reset-to-parent swap failure: {}",
+                        new_timeline_id,
+                        cleanup_error
+                    );
+                }
+                if let Err(cleanup_error) = self
+                    .safekeeper_client
+                    .delete_timeline(tenant_id, new_timeline_id)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to clean up orphan timeline {} on safekeeper after reset-to-parent swap failure: {}",
+                        new_timeline_id,
+                        cleanup_error
+                    );
+                }
+                return Err(error);
+            }
+        };
+
+        if was_running {
+            if let Err(error) = self
+                .endpoint_service
+                .start(user_id, organization_id, project_id, inserted.id)
+                .await
+            {
+                return Err(AppError::PitrEndpointRelaunchFailed {
+                    reason: error.to_string(),
+                });
+            }
+        }
+
+        if !has_children {
+            if let Err(error) = self
+                .delete(user_id, organization_id, project_id, branch.id)
+                .await
+            {
+                tracing::warn!(
+                    "Failed to prune archived branch {} after reset-to-parent: {}",
+                    branch.id,
+                    error
+                );
+            }
+        }
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(inserted.id).await;
+
+        let (ancestor_timeline_id, ancestor_lsn) = self
+            .fetch_ancestor(tenant_id, new_timeline_id)
+            .await;
+
+        Ok(BranchResponse {
+            id: inserted.id,
+            project_id: inserted.project_id,
+            name: inserted.name.clone(),
+            slug: inserted.slug.clone(),
+            parent_branch_id: inserted.parent_branch_id,
+            timeline_id: inserted.timeline_id,
+            ancestor_timeline_id,
+            ancestor_lsn,
+            endpoint_status: endpoint_info
+                .clone()
+                .map(|info| info.status)
+                .unwrap_or(ComputeEndpointStatus::Stopped),
+            remote_consistent_lsn_visible: Default::default(),
+            last_record_lsn: Default::default(),
+            current_logical_size: 0,
+            connection_string: endpoint_info
+                .map(|info| inserted.get_connection_string(self.config.clone(), info.port)),
+            password: inserted.password.clone(),
+            created_at: inserted.created_at,
+            updated_at: inserted.updated_at,
+        })
+    }
+
     pub async fn change_password(
         &self,
         user_id: Uuid,
