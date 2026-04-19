@@ -199,7 +199,7 @@ impl OrganizationService {
         let members = self.membership_repo.list_by_org_id(org_id).await?;
 
         if members.len() <= 1 {
-            return Err(AppError::Internal(
+            return Err(AppError::Conflict(
                 "Cannot revoke last member from organization".into(),
             ));
         }
@@ -220,9 +220,9 @@ impl OrganizationService {
                 .user_repo
                 .find_by_id(m.user_id)
                 .await?
-                .ok_or(AppError::Internal(
-                    "Member user record missing".into(),
-                ))?;
+                .ok_or(AppError::MemberListingFailed {
+                    reason: "Member user record missing".into(),
+                })?;
             users.push(UserResponse {
                 id: user.id,
                 name: user.name,
@@ -242,7 +242,9 @@ impl OrganizationService {
     ) -> Result<()> {
         let email = email.trim();
         if email.is_empty() {
-            return Err(AppError::Internal("Email cannot be empty".into()));
+            return Err(AppError::MemberAdditionFailed {
+                reason: "Email cannot be empty".into(),
+            });
         }
         let target = self
             .user_repo
@@ -254,15 +256,15 @@ impl OrganizationService {
 
     fn validate_organization_name(name: &str) -> Result<()> {
         if name.is_empty() {
-            return Err(AppError::Internal(
-                "Organization name cannot be empty".into(),
-            ));
+            return Err(AppError::OrganizationCreationFailed {
+                reason: "Organization name cannot be empty".into(),
+            });
         }
 
         if name.len() > 255 {
-            return Err(AppError::Internal(
-                "Organization name is too long (max 255 characters)".into(),
-            ));
+            return Err(AppError::OrganizationCreationFailed {
+                reason: "Organization name is too long (max 255 characters)".into(),
+            });
         }
 
         Ok(())

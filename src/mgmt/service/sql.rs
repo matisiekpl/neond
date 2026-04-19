@@ -130,15 +130,20 @@ impl SqlService {
         lsn: String,
         sql: String,
     ) -> Result<ExecuteSqlResponse> {
-        let start_lsn = Lsn::from_str(lsn.trim())
-            .map_err(|_| AppError::Internal(format!("invalid lsn: {lsn}")))?;
+        let start_lsn = Lsn::from_str(lsn.trim()).map_err(|_| AppError::PitrLsnInvalid {
+            value: lsn.clone(),
+        })?;
 
         let ancestor_timeline_id =
             TimelineId::from_str(parent_branch.timeline_id.as_simple().to_string().as_str())
-                .map_err(|_| AppError::Internal("Invalid parent timeline id".into()))?;
+                .map_err(|_| AppError::TimelineIdInvalid {
+                    value: parent_branch.timeline_id.to_string(),
+                })?;
 
         let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project.id.to_string(),
+            })?;
 
         let new_timeline_id = TimelineId::generate();
 
@@ -156,13 +161,14 @@ impl SqlService {
                 },
             )
             .await
-            .map_err(|e| {
-                AppError::Internal(format!("Failed to create ephemeral timeline: {e}"))
+            .map_err(|error| AppError::EphemeralQueryFailed {
+                reason: format!("Failed to create ephemeral timeline: {error}"),
             })?;
 
-        let ephemeral_timeline_uuid =
-            Uuid::from_str(new_timeline_id.to_string().as_str())
-                .map_err(|_| AppError::Internal("Invalid ephemeral timeline id".into()))?;
+        let ephemeral_timeline_uuid = Uuid::from_str(new_timeline_id.to_string().as_str())
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: new_timeline_id.to_string(),
+            })?;
 
         let ephemeral_branch = Branch {
             id: Uuid::new_v4(),
@@ -179,12 +185,12 @@ impl SqlService {
 
         let mut endpoint =
             ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone())
-                .map_err(|e| {
-                    AppError::Internal(format!("Failed to create ephemeral compute endpoint: {e}"))
+                .map_err(|error| AppError::ComputeStartupFailed {
+                    reason: error.to_string(),
                 })?;
 
-        endpoint.launch().map_err(|e| {
-            AppError::Internal(format!("Failed to launch ephemeral compute endpoint: {e}"))
+        endpoint.launch().map_err(|error| AppError::ComputeStartupFailed {
+            reason: error.to_string(),
         })?;
 
         let port = endpoint.get_port();
@@ -225,7 +231,9 @@ async fn run_sql(port: u16, sql: &str) -> Result<ExecuteSqlResponse> {
 
     let (client, connection) = tokio_postgres::connect(&connection_string, tokio_postgres::NoTls)
         .await
-        .map_err(|e| AppError::Internal(format!("Failed to connect to compute endpoint: {e}")))?;
+        .map_err(|error| AppError::SqlExecutionFailed {
+            reason: format!("Failed to connect to compute endpoint: {error}"),
+        })?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {

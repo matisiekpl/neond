@@ -42,8 +42,12 @@ impl UserService {
         let password = req.password.clone();
         let valid = tokio::task::spawn_blocking(move || verify(&password, &hash))
             .await
-            .map_err(|e| AppError::Internal(e.to_string()))?
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+            .map_err(|error| AppError::LoginFailed {
+                reason: error.to_string(),
+            })?
+            .map_err(|error| AppError::LoginFailed {
+                reason: error.to_string(),
+            })?;
 
         if !valid {
             return Err(AppError::Unauthorized);
@@ -61,8 +65,12 @@ impl UserService {
         let password = req.password.clone();
         let password_hash = tokio::task::spawn_blocking(move || hash(&password, DEFAULT_COST))
             .await
-            .map_err(|e| AppError::Internal(e.to_string()))?
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+            .map_err(|error| AppError::RegistrationFailed {
+                reason: error.to_string(),
+            })?
+            .map_err(|error| AppError::RegistrationFailed {
+                reason: error.to_string(),
+            })?;
 
         let user = self
             .user_repo
@@ -96,7 +104,9 @@ impl UserService {
     fn generate_token(&self, user_id: Uuid) -> Result<String> {
         let exp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| AppError::Internal(e.to_string()))?
+            .map_err(|error| AppError::TokenGenerationFailed {
+                reason: error.to_string(),
+            })?
             .as_secs() as usize
             + 86400; // 24h
 
@@ -106,6 +116,8 @@ impl UserService {
             &claims,
             &EncodingKey::from_secret(self.server_secret.as_bytes()),
         )
-        .map_err(|e| AppError::Internal(e.to_string()))
+        .map_err(|error| AppError::TokenGenerationFailed {
+            reason: error.to_string(),
+        })
     }
 }

@@ -74,7 +74,7 @@ impl DaemonService {
     pub async fn request_shutdown(self: Arc<Self>, wait_for_checkpoints: bool) -> Result<()> {
         let mut pending = self.pending_shutdown.lock().await;
         if pending.is_some() {
-            return Err(AppError::Internal("Shutdown already pending".into()));
+            return Err(AppError::Conflict("Shutdown already pending".into()));
         }
         *pending = Some(PendingShutdown {
             wait_for_checkpoints,
@@ -107,7 +107,7 @@ impl DaemonService {
     pub async fn cancel_shutdown(&self) -> Result<()> {
         let mut task = self.shutdown_task.lock().await;
         match task.take() {
-            None => Err(AppError::Internal("No pending shutdown".into())),
+            None => Err(AppError::Conflict("No pending shutdown".into())),
             Some(handle) => {
                 handle.abort();
                 let mut pending = self.pending_shutdown.lock().await;
@@ -154,7 +154,9 @@ impl DaemonService {
             for project in projects {
                 let tenant_id =
                     TenantId::from_str(project.id.as_simple().to_string().as_str())
-                        .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+                        .map_err(|_| AppError::TenantIdInvalid {
+                            value: project.id.to_string(),
+                        })?;
 
                 let tenant_shard_id = TenantShardId::unsharded(tenant_id);
                 let token = self
@@ -184,7 +186,9 @@ impl DaemonService {
                 for branch in branches {
                     let timeline_id =
                         TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
-                            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+                            .map_err(|_| AppError::TimelineIdInvalid {
+                                value: branch.timeline_id.to_string(),
+                            })?;
 
                     let timeline_info = self
                         .pageserver_client

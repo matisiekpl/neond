@@ -77,6 +77,17 @@ impl BranchService {
             return Err(AppError::NotFound);
         }
 
+        if self
+            .branch_repo
+            .find_by_project_and_name(project_id, &req.name)
+            .await?
+            .is_some()
+        {
+            return Err(AppError::BranchNameAlreadyExists {
+                name: req.name.clone(),
+            });
+        }
+
         let mode = if let Some(parent_id) = req.parent_branch_id {
             let parent = self
                 .branch_repo
@@ -90,7 +101,9 @@ impl BranchService {
 
             let ancestor_timeline_id =
                 TimelineId::from_str(parent.timeline_id.as_simple().to_string().as_str())
-                    .map_err(|_| AppError::Internal("Invalid parent timeline id".into()))?;
+                    .map_err(|_| AppError::TimelineIdInvalid {
+                        value: parent.timeline_id.to_string(),
+                    })?;
 
             TimelineCreateRequestMode::Branch {
                 ancestor_timeline_id,
@@ -107,10 +120,14 @@ impl BranchService {
 
         let new_timeline_id = TimelineId::generate();
         let timeline_uuid = Uuid::from_str(new_timeline_id.to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: new_timeline_id.to_string(),
+            })?;
 
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
 
         self.pageserver_client
             .timeline_create(
@@ -121,7 +138,9 @@ impl BranchService {
                 },
             )
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to create timeline: {e}")))?;
+            .map_err(|error| AppError::BranchCreationFailed {
+                reason: error.to_string(),
+            })?;
 
         let id = Uuid::new_v4();
         let password = generate_password();
@@ -189,11 +208,15 @@ impl BranchService {
         let mut results = Vec::with_capacity(branches.len());
 
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
 
         for b in branches {
             let timeline_id = TimelineId::from_str(b.timeline_id.as_simple().to_string().as_str())
-                .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+                .map_err(|_| AppError::TimelineIdInvalid {
+                    value: b.timeline_id.to_string(),
+                })?;
 
             let timeline_info = self
                 .pageserver_client
@@ -269,6 +292,18 @@ impl BranchService {
             return Err(AppError::NotFound);
         }
 
+        if let Some(existing) = self
+            .branch_repo
+            .find_by_project_and_name(project_id, &req.name)
+            .await?
+        {
+            if existing.id != branch_id {
+                return Err(AppError::BranchNameAlreadyExists {
+                    name: req.name.clone(),
+                });
+            }
+        }
+
         let updated = self.branch_repo.update(branch_id, &req.name).await?;
 
         let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
@@ -327,7 +362,9 @@ impl BranchService {
         }
 
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
 
         let mut to_delete: Vec<Uuid> = Vec::new();
         let mut stack = vec![branch_id];
@@ -356,7 +393,9 @@ impl BranchService {
 
             let timeline_id =
                 TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
-                    .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+                    .map_err(|_| AppError::TimelineIdInvalid {
+                        value: branch.timeline_id.to_string(),
+                    })?;
 
             let mut status_code;
             loop {
@@ -364,7 +403,9 @@ impl BranchService {
                     .pageserver_client
                     .timeline_delete(TenantShardId::unsharded(tenant_id), timeline_id)
                     .await
-                    .map_err(|e| AppError::Internal(format!("Failed to delete timeline: {e}")))?
+                    .map_err(|error| AppError::BranchDeletionFailed {
+                        reason: error.to_string(),
+                    })?
                     .as_u16();
                 if status_code != 500 && status_code != 503 && status_code != 409 {
                     break;
@@ -372,9 +413,9 @@ impl BranchService {
             }
 
             if status_code != 200 && status_code != 404 {
-                return Err(AppError::Internal(format!(
-                    "Unexpected status code from pageserver: {status_code}"
-                )));
+                return Err(AppError::BranchDeletionFailed {
+                    reason: format!("Unexpected status code from pageserver: {status_code}"),
+                });
             }
 
             self.branch_repo.delete(id).await?;
@@ -416,11 +457,15 @@ impl BranchService {
         }
 
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
         let tenant_shard_id = TenantShardId::unsharded(tenant_id);
 
         let timeline_id = TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: branch.timeline_id.to_string(),
+            })?;
 
         let token = self
             .config
@@ -437,20 +482,27 @@ impl BranchService {
             .bearer_auth(token)
             .send()
             .await
-            .map_err(|e| AppError::Internal(format!("Failed to call pageserver: {e}")))?;
+            .map_err(|error| AppError::PageserverApiFailed {
+                operation: "get_lsn_by_timestamp".to_string(),
+                reason: error.to_string(),
+            })?;
 
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(AppError::Internal(format!(
-                "Pageserver returned {status}: {body}"
-            )));
+            return Err(AppError::PageserverApiFailed {
+                operation: "get_lsn_by_timestamp".to_string(),
+                reason: format!("Pageserver returned {status}: {body}"),
+            });
         }
 
         response
             .json::<LsnResponse>()
             .await
-            .map_err(|e| AppError::Internal(format!("Invalid pageserver response: {e}")))
+            .map_err(|error| AppError::PageserverApiFailed {
+                operation: "get_lsn_by_timestamp".to_string(),
+                reason: format!("Invalid pageserver response: {error}"),
+            })
     }
 
     pub async fn restore(
@@ -646,7 +698,9 @@ impl BranchService {
         for project in projects {
             let tenant_id =
                 TenantId::from_str(project.id.as_simple().to_string().as_str())
-                    .map_err(|_| AppError::Internal("Invalid tenant id".into()))?;
+                    .map_err(|_| AppError::TenantIdInvalid {
+                        value: project.id.to_string(),
+                    })?;
             let tenant_shard_id = TenantShardId::unsharded(tenant_id);
 
             let token = self
@@ -686,7 +740,9 @@ impl BranchService {
             for branch in branches {
                 let timeline_id =
                     TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
-                        .map_err(|_| AppError::Internal("Invalid timeline id".into()))?;
+                        .map_err(|_| AppError::TimelineIdInvalid {
+                            value: branch.timeline_id.to_string(),
+                        })?;
 
                 let timeline_info = self
                     .pageserver_client
@@ -728,13 +784,15 @@ impl BranchService {
 
     fn validate_branch_name(name: &str) -> Result<()> {
         if name.is_empty() {
-            return Err(AppError::Internal("Branch name cannot be empty".into()));
+            return Err(AppError::BranchCreationFailed {
+                reason: "Branch name cannot be empty".into(),
+            });
         }
 
         if name.len() > 255 {
-            return Err(AppError::Internal(
-                "Branch name is too long (max 255 characters)".into(),
-            ));
+            return Err(AppError::BranchCreationFailed {
+                reason: "Branch name is too long (max 255 characters)".into(),
+            });
         }
 
         Ok(())

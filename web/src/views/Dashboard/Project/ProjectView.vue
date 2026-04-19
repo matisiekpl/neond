@@ -167,8 +167,7 @@ async function submitCreate() {
   try {
     await branchStore.create(organizationStore.selectedOrganizationId, projectId.value, trimmed)
     createOpen.value = false
-  } catch (e) {
-    toast.error(getAppError(e))
+  } catch {
   } finally {
     createSubmitting.value = false
   }
@@ -182,8 +181,7 @@ async function submitBranchFrom() {
   try {
     await branchStore.create(organizationStore.selectedOrganizationId, projectId.value, trimmed, branchFromParent.value.id)
     branchFromOpen.value = false
-  } catch (e) {
-    toast.error(getAppError(e))
+  } catch {
   } finally {
     branchFromSubmitting.value = false
   }
@@ -197,8 +195,7 @@ async function submitRename() {
   try {
     await branchStore.update(organizationStore.selectedOrganizationId, projectId.value, renameBranch.value.id, trimmed)
     renameOpen.value = false
-  } catch (e) {
-    toast.error(getAppError(e))
+  } catch {
   } finally {
     renameSubmitting.value = false
   }

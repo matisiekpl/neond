@@ -43,6 +43,7 @@ pub enum AppError {
     ProjectConfigUpdateFailed { reason: String },
 
     BranchCreationFailed { reason: String },
+    BranchNameAlreadyExists { name: String },
     BranchDeletionFailed { reason: String },
     BranchListingFailed { reason: String },
     BranchUpdateFailed { reason: String },
@@ -172,6 +173,9 @@ impl fmt::Display for AppError {
             AppError::BranchCreationFailed { reason } => {
                 write!(f, "Branch creation failed: {}", reason)
             }
+            AppError::BranchNameAlreadyExists { name } => {
+                write!(f, "Branch with name '{}' already exists in this project", name)
+            }
             AppError::BranchDeletionFailed { reason } => {
                 write!(f, "Branch deletion failed: {}", reason)
             }
@@ -289,9 +293,9 @@ impl IntoResponse for AppError {
             AppError::Unauthorized
             | AppError::TokenValidationFailed { .. }
             | AppError::LoginFailed { .. } => StatusCode::UNAUTHORIZED,
-            AppError::Conflict(_) | AppError::PitrConcurrentEndpointOperation => {
-                StatusCode::CONFLICT
-            }
+            AppError::Conflict(_)
+            | AppError::PitrConcurrentEndpointOperation
+            | AppError::BranchNameAlreadyExists { .. } => StatusCode::CONFLICT,
             AppError::TenantIdInvalid { .. }
             | AppError::TimelineIdInvalid { .. }
             | AppError::ComputeSocketAddressInvalid { .. }
