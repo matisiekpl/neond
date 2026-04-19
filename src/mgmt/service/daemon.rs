@@ -160,7 +160,7 @@ impl DaemonService {
                 let token = self
                     .config
                     .component_auth
-                    .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+                    .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
                 let pageserver_http_client = reqwest::Client::new();
                 let config_resp = pageserver_http_client
                     .get(format!(
@@ -194,7 +194,10 @@ impl DaemonService {
                             ForceAwaitLogicalSize::Yes,
                         )
                         .await
-                        .unwrap();
+                        .map_err(|error| AppError::PageserverApiFailed {
+                            operation: "timeline_info".to_string(),
+                            reason: error.to_string(),
+                        })?;
 
                     let endpoint_info =
                         self.endpoint_service.get_endpoint_info(branch.id).await;

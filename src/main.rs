@@ -7,5 +7,8 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
-    cli::run().await.unwrap_or_else(|e| panic!("{}", e));
+    if let Err(error) = cli::run().await {
+        tracing::error!("{}", error);
+        std::process::exit(1);
+    }
 }

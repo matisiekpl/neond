@@ -1,6 +1,6 @@
+use crate::mgmt::dto::error::{AppError, Result};
 use crate::utils::death;
 use crate::utils::stdout::wait_for_output;
-use anyhow::anyhow;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -38,7 +38,7 @@ impl ProcessControl {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), anyhow::Error> {
+    pub fn start(&mut self) -> Result<()> {
         let mut cmd = Command::new(&self.binary);
         death::configure_death_signal(&mut cmd);
         let mut child = cmd
@@ -46,10 +46,22 @@ impl ProcessControl {
             .args(&self.args)
             .envs(self.env_vars.iter().map(|(k, v)| (k, v)))
             .stdout(Stdio::piped())
-            .spawn()?;
+            .spawn()
+            .map_err(|error| AppError::DaemonStartupFailed {
+                reason: format!("failed to spawn {}: {}", self.name, error),
+            })?;
 
-        let stdout = child.stdout.take().ok_or(anyhow!("stdout was piped"))?;
-        wait_for_output(stdout, &self.needle, self.verbose, self.verbose)?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AppError::DaemonStartupFailed {
+                reason: format!("stdout was not piped for {}", self.name),
+            })?;
+        wait_for_output(stdout, &self.needle, self.verbose, self.verbose).map_err(|error| {
+            AppError::DaemonStartupFailed {
+                reason: format!("waiting on {} stdout: {}", self.name, error),
+            }
+        })?;
 
         let pid = child.id();
         self.child = Some(child);
@@ -58,7 +70,7 @@ impl ProcessControl {
         Ok(())
     }
 
-    pub fn stop(&mut self) -> Result<(), anyhow::Error> {
+    pub fn stop(&mut self) -> Result<()> {
         if let Some(mut child) = self.child.take() {
             #[cfg(unix)]
             {

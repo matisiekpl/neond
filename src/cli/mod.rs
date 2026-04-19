@@ -1,4 +1,5 @@
 use crate::mgmt::dto::config::Config;
+use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::handler::AppState;
 use crate::mgmt::repository::Repositories;
 use crate::mgmt::repository::db::{init_pool, run_migrations};
@@ -9,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use tracing_panic::panic_hook;
 use tracing_subscriber::EnvFilter;
 
-pub async fn run() -> Result<(), anyhow::Error> {
+pub async fn run() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -18,7 +19,9 @@ pub async fn run() -> Result<(), anyhow::Error> {
     std::panic::set_hook(Box::new(panic_hook));
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
-        .expect("Failed to install rustls crypto provider");
+        .map_err(|_| AppError::CryptoProviderInitFailed {
+            reason: "default provider already installed".to_string(),
+        })?;
 
     if let Err(err) = dotenvy::dotenv() {
         tracing::warn!("Failed to load .env file: {err}");
@@ -32,22 +35,23 @@ pub async fn run() -> Result<(), anyhow::Error> {
         config.pg_proxy_port,
         config.remote_storage_config.clone(),
     )
-    .await?;
-    let mut daemon = crate::daemon::Daemon::new(config.clone());
+    .await
+    .map_err(|error| AppError::ApplicationStartupFailed {
+        reason: format!("preflight check: {}", error),
+    })?;
+    let mut daemon = crate::daemon::Daemon::new(config.clone())?;
 
     daemon.start().await?;
     let database_url = daemon.get_management_postgres_uri();
 
-    run_migrations(&database_url)
-        .await
-        .expect("Failed to run migrations");
+    run_migrations(&database_url).await?;
 
-    init_pool(&database_url).await;
+    init_pool(&database_url).await?;
 
     let pageserver_http_client = reqwest::Client::new();
     let pageserver_api_token = config
         .component_auth
-        .generate_token(neon_utils::auth::Scope::PageServerApi, None);
+        .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
     let pageserver_client = neon_pageserver_client::mgmt_api::Client::new(
         pageserver_http_client,
         "http://127.0.0.1:1234".to_string(),
@@ -56,7 +60,7 @@ pub async fn run() -> Result<(), anyhow::Error> {
 
     let shutdown_token = CancellationToken::new();
 
-    let repositories = Repositories::new().await;
+    let repositories = Repositories::new().await?;
     let services = Arc::new(Services::new(
         &repositories,
         Arc::new(pageserver_client),
@@ -70,16 +74,25 @@ pub async fn run() -> Result<(), anyhow::Error> {
     let ctrlc_shutdown_token = shutdown_token.clone();
     ctrlc::set_handler(move || {
         ctrlc_shutdown_token.cancel();
+    })
+    .map_err(|error| AppError::ApplicationStartupFailed {
+        reason: format!("ctrlc handler: {}", error),
     })?;
 
     services.endpoint().recover_running().await;
 
     let listen_services = Arc::clone(&services);
     tokio::spawn(async move {
-        listen_services.endpoint().listen().await.unwrap();
+        if let Err(error) = listen_services.endpoint().listen().await {
+            tracing::error!("Endpoint listen task failed: {}", error);
+        }
     });
 
-    serve(config.port, state).await?;
+    serve(config.port, state)
+        .await
+        .map_err(|error| AppError::ApplicationStartupFailed {
+            reason: format!("server: {}", error),
+        })?;
 
     services.endpoint().shutdown_all().await;
     daemon.stop()?;

@@ -1,6 +1,6 @@
+use crate::mgmt::dto::error::{AppError, Result};
 use crate::utils::death;
 use crate::utils::stdout::wait_for_output;
-use anyhow::anyhow;
 use nix::sys::signal::{Signal::SIGINT, kill};
 use nix::unistd::Pid;
 use std::io::Write;
@@ -44,22 +44,31 @@ impl Postgres {
         }
     }
 
-    pub fn init(&self) -> Result<(), anyhow::Error> {
+    pub fn init(&self) -> Result<()> {
         if self.data_directory.join("postgresql.conf").exists() {
             tracing::info!("Postgres data dir for {} already initialized", self.name);
             return Ok(());
         }
 
-        let mut pwfile = NamedTempFile::new()?;
-        write!(pwfile, "{}", self.password)?;
-        pwfile.flush()?;
+        let mut pwfile = NamedTempFile::new().map_err(|error| {
+            AppError::PostgresInitializationFailed {
+                reason: error.to_string(),
+            }
+        })?;
+        write!(pwfile, "{}", self.password).map_err(|error| {
+            AppError::PostgresInitializationFailed {
+                reason: error.to_string(),
+            }
+        })?;
+        pwfile
+            .flush()
+            .map_err(|error| AppError::PostgresInitializationFailed {
+                reason: error.to_string(),
+            })?;
 
         let exit_status = std::process::Command::new(self.initdb_binary_path.clone())
-            .env(
-                "DYLD_LIBRARY_PATH",
-                self.postgres_lib_path.to_str().unwrap(),
-            )
-            .env("LD_LIBRARY_PATH", self.postgres_lib_path.to_str().unwrap())
+            .env("DYLD_LIBRARY_PATH", &self.postgres_lib_path)
+            .env("LD_LIBRARY_PATH", &self.postgres_lib_path)
             .arg("-U")
             .arg("neond")
             .arg("--pwfile")
@@ -67,53 +76,79 @@ impl Postgres {
             .arg("--auth-local=scram-sha-256")
             .arg("--auth-host=scram-sha-256")
             .arg("-D")
-            .arg(self.data_directory.to_str().unwrap())
+            .arg(&self.data_directory)
             .stdout(Stdio::piped())
-            .spawn()?
-            .wait()?;
-        let exit_code = exit_status
-            .code()
-            .ok_or(anyhow!("Failed to initialize postgres"))?;
+            .spawn()
+            .map_err(|error| AppError::PostgresInitializationFailed {
+                reason: error.to_string(),
+            })?
+            .wait()
+            .map_err(|error| AppError::PostgresInitializationFailed {
+                reason: error.to_string(),
+            })?;
+        let exit_code =
+            exit_status
+                .code()
+                .ok_or_else(|| AppError::PostgresInitializationFailed {
+                    reason: "initdb terminated by signal".to_string(),
+                })?;
         if exit_code != 0 {
-            return Err(anyhow!("Failed to initialize postgres"));
+            return Err(AppError::PostgresInitializationFailed {
+                reason: format!("initdb exited with code {}", exit_code),
+            });
         }
         tracing::info!("Postgres data dir for {} initialized", self.name);
         Ok(())
     }
 
-    pub fn start(&mut self) -> Result<(), anyhow::Error> {
+    pub fn start(&mut self) -> Result<()> {
         let mut cmd = std::process::Command::new(self.postgres_binary_path.clone());
         death::configure_death_signal(&mut cmd);
         let mut child = cmd
-            .env(
-                "DYLD_LIBRARY_PATH",
-                self.postgres_lib_path.to_str().unwrap(),
-            )
-            .env("LD_LIBRARY_PATH", self.postgres_lib_path.to_str().unwrap())
+            .env("DYLD_LIBRARY_PATH", &self.postgres_lib_path)
+            .env("LD_LIBRARY_PATH", &self.postgres_lib_path)
             .arg("-D")
-            .arg(self.data_directory.to_str().unwrap())
+            .arg(&self.data_directory)
             .arg("-p")
             .arg(self.port.to_string())
             .stderr(Stdio::piped())
-            .spawn()?;
+            .spawn()
+            .map_err(|error| AppError::PostgresStartupFailed {
+                reason: error.to_string(),
+            })?;
 
-        let stderr = child.stderr.take().ok_or(anyhow!("stderr was piped"))?;
-        wait_for_output(stderr, "connections", self.verbose, self.verbose)?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| AppError::PostgresStartupFailed {
+                reason: "stderr was not piped".to_string(),
+            })?;
+        wait_for_output(stderr, "connections", self.verbose, self.verbose).map_err(|error| {
+            AppError::PostgresStartupFailed {
+                reason: error.to_string(),
+            }
+        })?;
 
         self.process = Some(child);
         tracing::info!("Postgres {} started on port {}", self.name, self.port);
         Ok(())
     }
 
-    pub fn stop(&mut self) -> Result<(), anyhow::Error> {
-        if self.process.is_none() {
-            return Ok(());
-        }
-        let mut child = self.process.take().unwrap();
+    pub fn stop(&mut self) -> Result<()> {
+        let mut child = match self.process.take() {
+            Some(child) => child,
+            None => return Ok(()),
+        };
         tracing::info!("Stopping {} postgres...", self.name);
         let pid = Pid::from_raw(child.id() as i32);
-        kill(pid, SIGINT)?;
-        child.wait()?;
+        kill(pid, SIGINT).map_err(|error| AppError::PostgresShutdownFailed {
+            reason: error.to_string(),
+        })?;
+        child
+            .wait()
+            .map_err(|error| AppError::PostgresShutdownFailed {
+                reason: error.to_string(),
+            })?;
         tracing::info!("Postgres {} stopped", self.name);
 
         Ok(())

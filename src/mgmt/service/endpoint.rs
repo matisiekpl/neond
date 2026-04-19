@@ -113,9 +113,11 @@ impl EndpointService {
 
         if let Some(ref sni_hostname) = sni_hostname {
             let port = endpoint.get_port();
-            let backend_addr: SocketAddr = format!("127.0.0.1:{}", port)
-                .parse()
-                .expect("valid socket addr");
+            let backend_addr: SocketAddr = format!("127.0.0.1:{}", port).parse().map_err(
+                |_| AppError::ComputeSocketAddressInvalid {
+                    addr: format!("127.0.0.1:{}", port),
+                },
+            )?;
             self.pg_proxy
                 .set_mapping(sni_hostname.clone(), backend_addr)
                 .await;
@@ -379,12 +381,22 @@ impl EndpointService {
 
                     if let Some(ref sni_hostname) = sni_hostname {
                         let port = endpoint.get_port();
-                        let backend_addr: std::net::SocketAddr = format!("127.0.0.1:{}", port)
-                            .parse()
-                            .expect("valid socket addr");
-                        self.pg_proxy
-                            .set_mapping(sni_hostname.clone(), backend_addr)
-                            .await;
+                        let addr_text = format!("127.0.0.1:{}", port);
+                        match addr_text.parse::<std::net::SocketAddr>() {
+                            Ok(backend_addr) => {
+                                self.pg_proxy
+                                    .set_mapping(sni_hostname.clone(), backend_addr)
+                                    .await;
+                            }
+                            Err(_) => {
+                                tracing::error!(
+                                    "Invalid socket address during recovery for branch {}: {}",
+                                    branch.id,
+                                    addr_text
+                                );
+                                continue;
+                            }
+                        }
                     }
 
                     tracing::info!("Recovered endpoint for branch {}", branch.id);

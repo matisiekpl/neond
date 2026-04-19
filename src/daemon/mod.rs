@@ -5,6 +5,7 @@ mod tracer;
 
 use crate::daemon::process::ProcessControl;
 use crate::mgmt::dto::config::Config;
+use crate::mgmt::dto::error::{AppError, Result};
 use neon_utils::auth::Scope;
 use std::path::PathBuf;
 use tracing::info;
@@ -25,7 +26,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config) -> Result<Self> {
         let verbose = cfg!(debug_assertions);
 
         let pageserver_working_directory = config.daemon_directory.join("pageserver");
@@ -52,7 +53,9 @@ impl Daemon {
         let public_key_path = component_auth
             .public_key_path()
             .to_str()
-            .unwrap()
+            .ok_or_else(|| AppError::WorkingDirectoryInvalid {
+                path: component_auth.public_key_path().display().to_string(),
+            })?
             .to_owned();
 
         let storage_broker = ProcessControl::new(
@@ -65,14 +68,10 @@ impl Daemon {
             verbose,
         );
 
-        let pageserver_api_token =
-            component_auth.generate_token(Scope::PageServerApi, None);
-        let admin_token = component_auth.generate_token(Scope::Admin, None);
-        let safekeeper_data_token =
-            component_auth.generate_token(Scope::SafekeeperData, None);
-        let generations_api_token =
-            component_auth.generate_token(Scope::GenerationsApi, None);
-        let public_key_pem = component_auth.public_key_pem_string();
+        let pageserver_api_token = component_auth.generate_token(Scope::PageServerApi, None)?;
+        let admin_token = component_auth.generate_token(Scope::Admin, None)?;
+        let safekeeper_data_token = component_auth.generate_token(Scope::SafekeeperData, None)?;
+        let public_key_pem = component_auth.public_key_pem_string()?;
 
         let public_key_arg = format!("--public-key={}", public_key_pem);
         let storage_controller = ProcessControl::new(
@@ -103,16 +102,18 @@ impl Daemon {
             verbose,
         );
 
+        let safekeeper_dir_str = safekeeper_working_directory
+            .to_str()
+            .ok_or_else(|| AppError::WorkingDirectoryInvalid {
+                path: safekeeper_working_directory.display().to_string(),
+            })?
+            .to_owned();
         let safekeeper = ProcessControl::new(
             "Safekeeper",
             config.neon_binaries_directory.join("safekeeper"),
             [
                 "-D",
-                safekeeper_working_directory
-                    .to_str()
-                    .unwrap()
-                    .to_owned()
-                    .as_str(),
+                safekeeper_dir_str.as_str(),
                 "--id",
                 "1",
                 "--broker-endpoint",
@@ -136,17 +137,16 @@ impl Daemon {
             verbose,
         );
 
+        let pageserver_dir_str = pageserver_working_directory
+            .to_str()
+            .ok_or_else(|| AppError::WorkingDirectoryInvalid {
+                path: pageserver_working_directory.display().to_string(),
+            })?
+            .to_owned();
         let pageserver = ProcessControl::new(
             "Pageserver",
             config.neon_binaries_directory.join("pageserver"),
-            [
-                "-D",
-                pageserver_working_directory
-                    .to_str()
-                    .unwrap()
-                    .to_owned()
-                    .as_str(),
-            ],
+            ["-D", pageserver_dir_str.as_str()],
             vec![
                 (
                     "NEON_AUTH_TOKEN".to_string(),
@@ -158,7 +158,7 @@ impl Daemon {
             verbose,
         );
 
-        Daemon {
+        Ok(Daemon {
             config,
             storage_controller_postgres,
             management_postgres,
@@ -169,10 +169,10 @@ impl Daemon {
             storage_controller,
             pageserver,
             safekeeper,
-        }
+        })
     }
 
-    pub async fn start(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn start(&mut self) -> Result<()> {
         self.storage_controller_postgres.init()?;
         self.management_postgres.init()?;
         self.storage_controller_postgres.start()?;
@@ -180,18 +180,29 @@ impl Daemon {
         self.tracer.start();
         self.storage_broker.start()?;
         self.storage_controller.start()?;
-        std::fs::create_dir_all(&self.safekeeper_working_directory)?;
+        std::fs::create_dir_all(&self.safekeeper_working_directory).map_err(|error| {
+            AppError::DaemonStartupFailed {
+                reason: error.to_string(),
+            }
+        })?;
         let peer_token = self
             .config
             .component_auth
-            .generate_token(Scope::SafekeeperData, None);
+            .generate_token(Scope::SafekeeperData, None)?;
         std::fs::write(
             self.safekeeper_working_directory.join("peer_jwt_token"),
             &peer_token,
-        )?;
+        )
+        .map_err(|error| AppError::DaemonStartupFailed {
+            reason: error.to_string(),
+        })?;
         self.safekeeper.start()?;
         self.register_safekeeper().await?;
-        std::fs::create_dir_all(&self.pageserver_working_directory)?;
+        std::fs::create_dir_all(&self.pageserver_working_directory).map_err(|error| {
+            AppError::DaemonStartupFailed {
+                reason: error.to_string(),
+            }
+        })?;
         pageserver::write_pageserver_init_files(
             &self.config.daemon_directory,
             &self.config.pg_install_directory,
@@ -202,7 +213,7 @@ impl Daemon {
         Ok(())
     }
 
-    pub fn stop(&mut self) -> Result<(), anyhow::Error> {
+    pub fn stop(&mut self) -> Result<()> {
         tracing::info!("Stopping daemon...");
         self.pageserver.stop()?;
         self.safekeeper.stop()?;
@@ -214,7 +225,7 @@ impl Daemon {
         Ok(())
     }
 
-    async fn register_safekeeper(&mut self) -> Result<(), anyhow::Error> {
+    async fn register_safekeeper(&mut self) -> Result<()> {
         let safekeeper_http_client = reqwest::Client::new();
         let now = chrono::Utc::now().to_rfc3339();
         let body = serde_json::json!({
@@ -232,14 +243,17 @@ impl Daemon {
         let admin_token = self
             .config
             .component_auth
-            .generate_token(Scope::Admin, None);
+            .generate_token(Scope::Admin, None)?;
         let response = safekeeper_http_client
             .post("http://127.0.0.1:1234/control/v1/safekeeper/1")
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", admin_token))
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(|error| AppError::SafekeeperRegistrationFailed {
+                reason: error.to_string(),
+            })?;
         info!(
             "Registered safekeeper with status code: {:?}",
             response.status().as_u16()

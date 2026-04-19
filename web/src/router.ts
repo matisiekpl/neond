@@ -3,12 +3,15 @@ import LoginView from '@/views/Auth/LoginView.vue'
 import RegisterView from '@/views/Auth/RegisterView.vue'
 import LogoutView from '@/views/Auth/LogoutView.vue'
 import DashboardLayout from '@/views/Dashboard/DashboardLayout.vue'
-import ProjectsIndexView from '@/views/Dashboard/ProjectsIndexView.vue'
-import ProjectView from '@/views/Dashboard/ProjectView.vue'
-import ProjectSettingsView from '@/views/Dashboard/ProjectSettingsView.vue'
-import SetupOrganizationView from '@/views/Dashboard/SetupOrganizationView.vue'
-import OrganizationSettingsView from '@/views/Dashboard/OrganizationSettingsView.vue'
-import DaemonView from '@/views/Dashboard/DaemonView.vue'
+import ProjectsIndexView from '@/views/Dashboard/Project/ProjectsIndexView.vue'
+import ProjectView from '@/views/Dashboard/Project/ProjectView.vue'
+import ProjectSettingsView from '@/views/Dashboard/Project/ProjectSettingsView.vue'
+import SetupOrganizationView from '@/views/Dashboard/Organization/SetupOrganizationView.vue'
+import OrganizationSettingsView from '@/views/Dashboard/Organization/OrganizationSettingsView.vue'
+import DaemonView from '@/views/Dashboard/Daemon/DaemonView.vue'
+import BranchView from '@/views/Dashboard/Branch/BranchView.vue'
+import BranchDataView from '@/views/Dashboard/Branch/BranchDataView.vue'
+import BranchSqlView from '@/views/Dashboard/Branch/BranchSqlView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -30,6 +33,25 @@ const routes = [
       { path: 'projects', component: ProjectsIndexView, name: 'projects.list' },
       { path: 'projects/:projectId', component: ProjectView, name: 'projects.show' },
       { path: 'projects/:projectId/settings', component: ProjectSettingsView, name: 'projects.settings' },
+      {
+        path: 'projects/:projectId/branches/:branchId',
+        component: BranchView,
+        children: [
+          {
+            path: '',
+            redirect: (to: RouteLocationGeneric) => ({
+              name: 'projects.branches.data',
+              params: {
+                organizationId: to.params['organizationId'],
+                projectId: to.params['projectId'],
+                branchId: to.params['branchId'],
+              },
+            }),
+          },
+          { path: 'data/:table?', component: BranchDataView, name: 'projects.branches.data' },
+          { path: 'sql', component: BranchSqlView, name: 'projects.branches.sql' },
+        ],
+      },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },
       { path: 'daemon', component: DaemonView, name: 'daemon' },
     ],

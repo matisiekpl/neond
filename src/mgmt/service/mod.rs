@@ -5,6 +5,7 @@ pub mod services;
 pub mod membership;
 pub mod organization;
 pub mod project;
+pub mod sql;
 pub mod user;
 
 pub use services::Services;
