@@ -14,16 +14,28 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add ability to detach ancestor
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
-    // TODO(matisiekpl): signup restrictions
     // TODO(matisiekpl): implement metrics dashboard
     // TODO(matisiekpl): detect storage driver drift
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
     let api = Router::new()
+        .route("/auth/setup", get(user::setup))
         .route("/auth/login", post(user::login))
         .route("/auth/register", post(user::register))
         .route("/auth/me", get(user::me))
+        .route(
+            "/auth/users",
+            post(user::create_user).get(user::list_users),
+        )
+        .route(
+            "/auth/users/{user_id}",
+            put(user::update_user).delete(user::delete_user),
+        )
+        .route(
+            "/auth/users/{user_id}/password",
+            put(user::reset_password),
+        )
         .route(
             "/organizations",
             post(organization::create).get(organization::list),

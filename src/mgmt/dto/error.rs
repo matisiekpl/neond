@@ -9,6 +9,8 @@ pub enum AppError {
     NotFound,
     Conflict(String),
     Unauthorized,
+    Forbidden,
+    RegistrationClosed,
     Internal(String),
 
     ApplicationStartupFailed { reason: String },
@@ -88,6 +90,8 @@ impl fmt::Display for AppError {
             AppError::NotFound => write!(f, "Not found"),
             AppError::Conflict(message) => write!(f, "{}", message),
             AppError::Unauthorized => write!(f, "Unauthorized"),
+            AppError::Forbidden => write!(f, "Forbidden"),
+            AppError::RegistrationClosed => write!(f, "Registration is closed"),
             AppError::Internal(message) => write!(f, "{}", message),
 
             AppError::ApplicationStartupFailed { reason } => {
@@ -297,6 +301,7 @@ impl IntoResponse for AppError {
             AppError::Unauthorized
             | AppError::TokenValidationFailed { .. }
             | AppError::LoginFailed { .. } => StatusCode::UNAUTHORIZED,
+            AppError::Forbidden | AppError::RegistrationClosed => StatusCode::FORBIDDEN,
             AppError::Conflict(_)
             | AppError::PitrConcurrentEndpointOperation
             | AppError::BranchNameAlreadyExists { .. } => StatusCode::CONFLICT,

@@ -14,7 +14,9 @@ import {
   Plus,
   Settings,
   Terminal,
+  Users,
 } from 'lucide-vue-next'
+import { useAuthStore } from '@/stores/auth.store'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { useProjectStore } from '@/stores/project.store'
 import { useBranchStore } from '@/stores/branch.store'
@@ -42,6 +44,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const organizationStore = useOrganizationStore()
 const projectStore = useProjectStore()
 const branchStore = useBranchStore()
@@ -133,6 +136,18 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               <RouterLink :to="{ name: 'daemon', params: { organizationId } }">
                 <Terminal />
                 <span>Daemon</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem v-if="authStore.user?.is_admin">
+            <SidebarMenuButton
+              as-child
+              :is-active="route.name === 'users'"
+              tooltip="Users"
+            >
+              <RouterLink :to="{ name: 'users', params: { organizationId } }">
+                <Users />
+                <span>Users</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

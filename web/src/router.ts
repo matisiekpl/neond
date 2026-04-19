@@ -9,6 +9,7 @@ import ProjectSettingsView from '@/views/Dashboard/Project/ProjectSettingsView.v
 import SetupOrganizationView from '@/views/Dashboard/Organization/SetupOrganizationView.vue'
 import OrganizationSettingsView from '@/views/Dashboard/Organization/OrganizationSettingsView.vue'
 import DaemonView from '@/views/Dashboard/Daemon/DaemonView.vue'
+import UsersView from '@/views/Dashboard/Users/UsersView.vue'
 import BranchView from '@/views/Dashboard/Branch/BranchView.vue'
 import BranchDataView from '@/views/Dashboard/Branch/BranchDataView.vue'
 import BranchSqlView from '@/views/Dashboard/Branch/BranchSqlView.vue'
@@ -54,6 +55,7 @@ const routes = [
       },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },
       { path: 'daemon', component: DaemonView, name: 'daemon' },
+      { path: 'users', component: UsersView, name: 'users' },
     ],
   },
 ]

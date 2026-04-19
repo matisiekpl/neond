@@ -68,7 +68,7 @@ async function onSubmit() {
           <Loader2 v-if="authStore.loading" class="mr-2 size-4 animate-spin" />
           Sign in
         </Button>
-        <span class="text-center text-sm text-muted-foreground">
+        <span v-if="authStore.registrationOpen" class="text-center text-sm text-muted-foreground">
           Don't have an account yet?
           <RouterLink to="/register" class="underline hover:text-foreground">
             Sign up here

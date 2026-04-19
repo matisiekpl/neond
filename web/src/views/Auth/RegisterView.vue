@@ -25,6 +25,10 @@ onMounted(() => {
 })
 
 watchEffect(() => {
+  if (authStore.initialized && !authStore.registrationOpen) {
+    router.replace({ name: 'login' })
+    return
+  }
   if (authStore.initialized && authStore.user && organizationStore.selectedOrganizationId) {
     router.replace({ name: 'projects.list', params: { organizationId: organizationStore.selectedOrganizationId } })
   }
