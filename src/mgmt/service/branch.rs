@@ -713,6 +713,7 @@ impl BranchService {
                 new_timeline_uuid,
                 branch.project_id,
                 &reparented_timeline_ids,
+                branch.port,
             )
             .await
         {

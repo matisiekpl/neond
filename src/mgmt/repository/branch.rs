@@ -125,6 +125,16 @@ impl BranchRepository {
             .map_err(Into::into)
     }
 
+    pub async fn update_port(&self, id: Uuid, port: Option<i32>) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::update(branches::table.filter(branches::id.eq(id)))
+            .set(branches::port.eq(port))
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn list_all_with_recent_status(&self, status: ComputeEndpointStatus) -> Result<Vec<Branch>> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -147,6 +157,7 @@ impl BranchRepository {
         new_timeline_id: Uuid,
         project_id: Uuid,
         reparented_timeline_ids: &HashSet<Uuid>,
+        new_port: Option<i32>,
     ) -> Result<Branch> {
         let conn = &mut self.pool.get().await
             .map_err(|error| AppError::PitrSwapFailed { reason: error.to_string() })?;
@@ -165,6 +176,7 @@ impl BranchRepository {
                         branches::slug.eq(&archive_slug),
                         branches::name.eq(&archive_name),
                         branches::recent_status.eq(ComputeEndpointStatus::Stopped),
+                        branches::port.eq(None::<i32>),
                     ))
                     .execute(conn)
                     .await
@@ -179,6 +191,7 @@ impl BranchRepository {
                         branches::timeline_id.eq(new_timeline_id),
                         branches::password.eq(&new_password),
                         branches::slug.eq(&new_slug),
+                        branches::port.eq(new_port),
                     ))
                     .get_result(conn)
                     .await

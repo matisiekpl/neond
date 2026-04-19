@@ -56,6 +56,7 @@ pub struct ComputeEndpoint {
     branch: Branch,
     pg_version: PgVersion,
     port: Option<u16>,
+    preferred_port: Option<u16>,
     compute_dir: TempDir,
     child: Option<Child>,
     status: ComputeEndpointStatus,
@@ -74,6 +75,7 @@ impl ComputeEndpoint {
         config: Config,
         branch: Branch,
         pg_version: PgVersion,
+        preferred_port: Option<u16>,
     ) -> Result<Self> {
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))
             .map_err(|error| AppError::ComputeStartupFailed {
@@ -85,6 +87,7 @@ impl ComputeEndpoint {
             branch,
             pg_version,
             port: None,
+            preferred_port,
             compute_dir: pgdata_dir,
             child: None,
             status: ComputeEndpointStatus::Stopped,
@@ -113,7 +116,7 @@ impl ComputeEndpoint {
             });
         }
 
-        let port = self.generate_random_port()?;
+        let port = self.resolve_port()?;
         self.port = Some(port);
 
         self.status = ComputeEndpointStatus::Starting;
@@ -389,6 +392,20 @@ impl ComputeEndpoint {
         let channel_binding_signature = Sha256::digest(cert_der.as_ref()).to_vec();
         self.channel_binding_signature = Some(channel_binding_signature);
         Ok(())
+    }
+
+    fn resolve_port(&self) -> Result<u16> {
+        if let Some(preferred) = self.preferred_port {
+            if std::net::TcpListener::bind(("127.0.0.1", preferred)).is_ok() {
+                return Ok(preferred);
+            }
+            tracing::warn!(
+                "Preferred port {} for branch {} is unavailable, falling back to random port",
+                preferred,
+                self.branch.timeline_id
+            );
+        }
+        self.generate_random_port()
     }
 
     fn generate_random_port(&self) -> Result<u16> {

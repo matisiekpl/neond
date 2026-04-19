@@ -56,6 +56,7 @@ diesel::table! {
         password -> Text,
         slug -> Varchar,
         recent_status -> Nullable<ComputeEndpointStatus>,
+        port -> Nullable<Int4>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }

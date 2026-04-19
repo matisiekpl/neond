@@ -96,8 +96,9 @@ impl EndpointService {
             }
         }
 
+        let preferred_port = branch.port.map(|p| p as u16);
         let mut endpoint =
-            ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version).map_err(
+            ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port).map_err(
                 |error| AppError::ComputeStartupFailed {
                     reason: error.to_string(),
                 },
@@ -106,6 +107,21 @@ impl EndpointService {
         endpoint.launch().map_err(|error| AppError::ComputeStartupFailed {
             reason: error.to_string(),
         })?;
+
+        let launched_port = endpoint.get_port();
+        if branch.port != Some(launched_port as i32) {
+            if let Err(e) = self
+                .branch_repo
+                .update_port(branch_id, Some(launched_port as i32))
+                .await
+            {
+                tracing::warn!(
+                    "Failed to save port for branch {}: {}",
+                    branch_id,
+                    e
+                );
+            }
+        }
 
         let sni_hostname = self
             .config
@@ -359,8 +375,9 @@ impl EndpointService {
                 }
             };
 
+            let preferred_port = branch.port.map(|p| p as u16);
             let mut endpoint =
-                match ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version)
+                match ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port)
                 {
                     Ok(e) => e,
                     Err(e) => {
@@ -375,6 +392,21 @@ impl EndpointService {
 
             match endpoint.launch() {
                 Ok(()) => {
+                    let launched_port = endpoint.get_port();
+                    if branch.port != Some(launched_port as i32) {
+                        if let Err(e) = self
+                            .branch_repo
+                            .update_port(branch.id, Some(launched_port as i32))
+                            .await
+                        {
+                            tracing::warn!(
+                                "Failed to save port for branch {}: {}",
+                                branch.id,
+                                e
+                            );
+                        }
+                    }
+
                     let sni_hostname = self
                         .config
                         .hostname

@@ -182,12 +182,13 @@ impl SqlService {
             password: generate_password(),
             slug: format!("ephemeral-{}", Uuid::new_v4()),
             recent_status: None,
+            port: None,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
         };
 
         let mut endpoint =
-            ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone())
+            ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone(), None)
                 .map_err(|error| AppError::ComputeStartupFailed {
                     reason: error.to_string(),
                 })?;
