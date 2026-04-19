@@ -26,6 +26,7 @@ impl Services {
     pub fn new(
         repositories: &Repositories,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
         config: Config,
         shutdown_token: CancellationToken,
     ) -> Self {
@@ -41,6 +42,7 @@ impl Services {
             Arc::new(repositories.project().clone()),
             Arc::new(membership.clone()),
             Arc::clone(&pageserver_client),
+            Arc::clone(&safekeeper_client),
             Arc::clone(&endpoint),
             config.clone(),
         );
@@ -51,6 +53,7 @@ impl Services {
             Arc::new(membership.clone()),
             Arc::clone(&branch),
             Arc::clone(&pageserver_client),
+            Arc::clone(&safekeeper_client),
             config.clone(),
         );
         let project = Arc::new(project);
@@ -71,6 +74,7 @@ impl Services {
             Arc::new(membership.clone()),
             Arc::clone(&endpoint),
             Arc::clone(&pageserver_client),
+            Arc::clone(&safekeeper_client),
         );
         Self {
             user: UserService::new(Arc::new(repositories.user().clone()), config.server_secret.clone()),

@@ -28,6 +28,7 @@ pub struct SqlService {
     membership_service: Arc<MembershipService>,
     endpoint_service: Arc<EndpointService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+    safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
 }
 
 impl SqlService {
@@ -38,6 +39,7 @@ impl SqlService {
         membership_service: Arc<MembershipService>,
         endpoint_service: Arc<EndpointService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
     ) -> Self {
         Self {
             config,
@@ -46,6 +48,7 @@ impl SqlService {
             membership_service,
             endpoint_service,
             pageserver_client,
+            safekeeper_client,
         }
     }
 
@@ -219,6 +222,18 @@ impl SqlService {
             if status_code != 500 && status_code != 503 && status_code != 409 {
                 break;
             }
+        }
+
+        if let Err(error) = self
+            .safekeeper_client
+            .delete_timeline(tenant_id, new_timeline_id)
+            .await
+        {
+            tracing::warn!(
+                "Failed to delete ephemeral timeline {} on safekeeper: {}",
+                new_timeline_id,
+                error
+            );
         }
 
         sql_result

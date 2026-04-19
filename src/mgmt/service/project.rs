@@ -25,6 +25,7 @@ pub struct ProjectService {
     membership_service: Arc<MembershipService>,
     branch_service: Arc<BranchService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+    safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
     config: Config,
 }
 
@@ -35,6 +36,7 @@ impl ProjectService {
         membership_service: Arc<MembershipService>,
         branch_service: Arc<BranchService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
         config: Config,
     ) -> Self {
         Self {
@@ -43,6 +45,7 @@ impl ProjectService {
             membership_service,
             branch_service,
             pageserver_client,
+            safekeeper_client,
             config,
         }
     }
@@ -344,6 +347,12 @@ impl ProjectService {
                 reason: format!(
                     "Unexpected status code from pageserver when deleting tenant: {status_code}"
                 ),
+            });
+        }
+
+        if let Err(error) = self.safekeeper_client.delete_tenant(tenant_id).await {
+            return Err(AppError::ProjectDeletionFailed {
+                reason: format!("safekeeper tenant delete failed: {error}"),
             });
         }
 

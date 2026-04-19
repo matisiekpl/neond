@@ -32,6 +32,7 @@ pub struct BranchService {
     project_repo: Arc<ProjectRepository>,
     membership_service: Arc<MembershipService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+    safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
     endpoint_service: Arc<EndpointService>,
     config: Config,
 }
@@ -42,6 +43,7 @@ impl BranchService {
         project_repo: Arc<ProjectRepository>,
         membership_service: Arc<MembershipService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
+        safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
         endpoint_service: Arc<EndpointService>,
         config: Config,
     ) -> Self {
@@ -50,6 +52,7 @@ impl BranchService {
             project_repo,
             membership_service,
             pageserver_client,
+            safekeeper_client,
             endpoint_service,
             config,
         }
@@ -443,6 +446,16 @@ impl BranchService {
                 });
             }
 
+            if let Err(error) = self
+                .safekeeper_client
+                .delete_timeline(tenant_id, timeline_id)
+                .await
+            {
+                return Err(AppError::BranchDeletionFailed {
+                    reason: format!("safekeeper timeline delete failed: {error}"),
+                });
+            }
+
             self.branch_repo.delete(id).await?;
         }
 
@@ -650,6 +663,17 @@ impl BranchService {
                         cleanup_error
                     );
                 }
+                if let Err(cleanup_error) = self
+                    .safekeeper_client
+                    .delete_timeline(tenant_id, new_timeline_id)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to clean up orphan timeline {} on safekeeper after detach_ancestor failure: {}",
+                        new_timeline_id,
+                        cleanup_error
+                    );
+                }
                 return Err(AppError::DetachAncestorFailed {
                     reason: error.to_string(),
                 });
@@ -701,6 +725,17 @@ impl BranchService {
                 {
                     tracing::warn!(
                         "Failed to clean up orphan timeline {} after PITR swap failure: {}",
+                        new_timeline_id,
+                        cleanup_error
+                    );
+                }
+                if let Err(cleanup_error) = self
+                    .safekeeper_client
+                    .delete_timeline(tenant_id, new_timeline_id)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to clean up orphan timeline {} on safekeeper after PITR swap failure: {}",
                         new_timeline_id,
                         cleanup_error
                     );
