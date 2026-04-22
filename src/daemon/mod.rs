@@ -1,13 +1,16 @@
+pub mod backup;
 mod pageserver;
 mod postgres;
 mod process;
 mod tracer;
 
+use crate::daemon::backup::BackupService;
 use crate::daemon::process::ProcessControl;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::error::{AppError, Result};
 use neon_utils::auth::Scope;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tracing::info;
 
 pub struct Daemon {
@@ -15,6 +18,7 @@ pub struct Daemon {
     storage_controller_postgres: postgres::Postgres,
     management_postgres: postgres::Postgres,
     tracer: tracer::Tracer,
+    backup: Arc<BackupService>,
 
     pageserver_working_directory: PathBuf,
     safekeeper_working_directory: PathBuf,
@@ -26,7 +30,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    pub fn new(config: Config) -> Result<Self> {
+    pub fn new(config: Config, backup: Arc<BackupService>) -> Result<Self> {
         let verbose = cfg!(debug_assertions);
 
         let pageserver_working_directory = config.daemon_directory.join("pageserver");
@@ -163,6 +167,7 @@ impl Daemon {
             storage_controller_postgres,
             management_postgres,
             tracer: tracer::Tracer::new(),
+            backup,
             pageserver_working_directory,
             safekeeper_working_directory,
             storage_broker,
@@ -173,6 +178,18 @@ impl Daemon {
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        self.backup
+            .restore_if_needed(
+                "storage_controller_db",
+                self.storage_controller_postgres.data_directory(),
+            )
+            .await?;
+        self.backup
+            .restore_if_needed(
+                "management_db",
+                self.management_postgres.data_directory(),
+            )
+            .await?;
         self.storage_controller_postgres.init()?;
         self.management_postgres.init()?;
         self.storage_controller_postgres.start()?;
@@ -264,6 +281,16 @@ impl Daemon {
 
     pub fn get_management_postgres_uri(&self) -> String {
         self.management_postgres.get_connection_uri()
+    }
+
+    pub fn backed_up_databases(&self) -> Vec<(&'static str, u16)> {
+        vec![
+            (
+                "storage_controller_db",
+                self.storage_controller_postgres.port(),
+            ),
+            ("management_db", self.management_postgres.port()),
+        ]
     }
 }
 

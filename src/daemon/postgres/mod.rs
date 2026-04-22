@@ -160,6 +160,14 @@ impl Postgres {
             self.password, self.port
         )
     }
+
+    pub fn data_directory(&self) -> &std::path::Path {
+        &self.data_directory
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
 }
 
 impl Drop for Postgres {

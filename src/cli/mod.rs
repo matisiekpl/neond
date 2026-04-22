@@ -1,3 +1,4 @@
+use crate::daemon::backup::BackupService;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::handler::AppState;
@@ -39,14 +40,25 @@ pub async fn run() -> Result<()> {
     .map_err(|error| AppError::ApplicationStartupFailed {
         reason: format!("preflight check: {}", error),
     })?;
-    let mut daemon = crate::daemon::Daemon::new(config.clone())?;
+    let shutdown_token = CancellationToken::new();
+
+    let backup_service = Arc::new(
+        BackupService::new(config.clone(), shutdown_token.clone()).await?,
+    );
+
+    let mut daemon = crate::daemon::Daemon::new(config.clone(), Arc::clone(&backup_service))?;
 
     daemon.start().await?;
+
     let database_url = daemon.get_management_postgres_uri();
 
     run_migrations(&database_url).await?;
 
     init_pool(&database_url).await?;
+
+    Arc::clone(&backup_service)
+        .start_periodic(daemon.backed_up_databases())
+        .await;
 
     let pageserver_http_client = reqwest::Client::new();
     let pageserver_api_token = config
@@ -67,8 +79,6 @@ pub async fn run() -> Result<()> {
         "http://127.0.0.1:7676".to_string(),
         Some(neon_utils::logging::SecretString::from(safekeeper_api_token)),
     );
-
-    let shutdown_token = CancellationToken::new();
 
     let repositories = Repositories::new().await?;
     let services = Arc::new(Services::new(
@@ -106,6 +116,8 @@ pub async fn run() -> Result<()> {
         })?;
 
     services.endpoint().shutdown_all().await;
+    backup_service.stop_periodic().await;
+    backup_service.final_sync(&daemon.backed_up_databases()).await;
     daemon.stop()?;
 
     Ok(())

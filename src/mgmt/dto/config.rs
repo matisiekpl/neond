@@ -1,6 +1,7 @@
 use std::env::current_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::auth::DaemonAuth;
 use crate::mgmt::dto::error::{AppError, Result};
@@ -26,6 +27,7 @@ pub struct Config {
     pub(crate) hostname: Option<String>,
     pub(crate) pg_proxy_port: u16,
     pub(crate) component_auth: Arc<DaemonAuth>,
+    pub(crate) backup_interval: Duration,
 }
 
 impl Config {
@@ -134,6 +136,15 @@ impl Config {
             Err(_) => 5432,
         };
 
+        let backup_interval = match std::env::var("BACKUP_INTERVAL") {
+            Ok(value) => humantime::parse_duration(&value).map_err(|error| {
+                AppError::ApplicationStartupFailed {
+                    reason: format!("BACKUP_INTERVAL is invalid: {}", error),
+                }
+            })?,
+            Err(_) => Duration::from_secs(30 * 60),
+        };
+
         let hostname = std::env::var("PG_HOSTNAME").ok();
         if let Some(hostname) = hostname.clone() {
             tracing::info!("Using hostname *.{}:{}", hostname, pg_proxy_port);
@@ -152,6 +163,7 @@ impl Config {
             hostname,
             pg_proxy_port,
             component_auth: Arc::new(DaemonAuth::generate()?),
+            backup_interval,
         })
     }
 }
