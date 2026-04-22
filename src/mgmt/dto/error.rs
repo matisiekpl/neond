@@ -82,6 +82,10 @@ pub enum AppError {
     TracerStartupFailed { reason: String },
 
     PageserverApiFailed { operation: String, reason: String },
+
+    BackupUploadFailed { database_name: String, reason: String },
+    BackupDownloadFailed { database_name: String, reason: String },
+    BackupRestoreFailed { database_name: String, reason: String },
 }
 
 impl fmt::Display for AppError {
@@ -287,6 +291,16 @@ impl fmt::Display for AppError {
 
             AppError::PageserverApiFailed { operation, reason } => {
                 write!(f, "Pageserver API {} failed: {}", operation, reason)
+            }
+
+            AppError::BackupUploadFailed { database_name, reason } => {
+                write!(f, "Backup upload for {} failed: {}", database_name, reason)
+            }
+            AppError::BackupDownloadFailed { database_name, reason } => {
+                write!(f, "Backup download for {} failed: {}", database_name, reason)
+            }
+            AppError::BackupRestoreFailed { database_name, reason } => {
+                write!(f, "Backup restore for {} failed: {}", database_name, reason)
             }
         }
     }
