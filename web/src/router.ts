@@ -13,6 +13,7 @@ import UsersView from '@/views/Dashboard/Users/UsersView.vue'
 import BranchView from '@/views/Dashboard/Branch/BranchView.vue'
 import BranchDataView from '@/views/Dashboard/Branch/BranchDataView.vue'
 import BranchSqlView from '@/views/Dashboard/Branch/BranchSqlView.vue'
+import BranchMetricsView from '@/views/Dashboard/Branch/BranchMetricsView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -51,6 +52,7 @@ const routes = [
           },
           { path: 'data/:table?', component: BranchDataView, name: 'projects.branches.data' },
           { path: 'sql', component: BranchSqlView, name: 'projects.branches.sql' },
+          { path: 'metrics', component: BranchMetricsView, name: 'projects.branches.metrics' },
         ],
       },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },

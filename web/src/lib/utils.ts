@@ -7,6 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatBytes(bytes: number): string {
+  if (bytes >= 1_000_000_000_000) return (bytes / 1_000_000_000_000).toFixed(1) + ' TB'
   if (bytes >= 1_000_000_000) return (bytes / 1_000_000_000).toFixed(1) + ' GB'
   if (bytes >= 1_000_000) return (bytes / 1_000_000).toFixed(1) + ' MB'
   return (bytes / 1_000).toFixed(1) + ' KB'

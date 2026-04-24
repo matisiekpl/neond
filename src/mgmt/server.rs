@@ -7,15 +7,13 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
 use crate::mgmt::handler::AppState;
-use crate::mgmt::handler::{branch, daemon, endpoint, organization, project, sql, user};
+use crate::mgmt::handler::{branch, daemon, endpoint, metric, organization, project, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): display tenant size
     // TODO(matisiekpl): add ability to detach ancestor
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
-    // TODO(matisiekpl): implement metrics dashboard
-    // TODO(matisiekpl): detect storage driver drift
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
@@ -93,6 +91,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             post(endpoint::start)
                 .delete(endpoint::stop)
                 .get(endpoint::status),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/metrics",
+            get(metric::list),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",
