@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { onKeyStroke } from '@vueuse/core'
 import { InfoIcon } from 'lucide-vue-next'
 import MetricChart from '@/elements/MetricChart.vue'
-import TimeWindowPicker from '@/elements/TimeWindowPicker.vue'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { useOrganizationStore } from '@/stores/organization.store'
-import { useMetricStore } from '@/stores/metric.store'
+import { useMetricStore, RANGE_PRESETS } from '@/stores/metric.store'
 import { metricCharts } from '@/lib/metricPresets'
 
 const route = useRoute()
@@ -22,6 +24,26 @@ const customToLabel = computed(() => new Date(metricStore.rangeEnd).toLocaleStri
 function resetToDefault() {
   metricStore.setRange('30m')
 }
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  return element?.tagName === 'INPUT' || element?.tagName === 'TEXTAREA'
+}
+
+RANGE_PRESETS.forEach((preset, index) => {
+  onKeyStroke(String(index + 1), (event) => {
+    if (isTypingTarget(event.target)) return
+    event.preventDefault()
+    metricStore.setRange(preset.value)
+  })
+})
+
+onKeyStroke(['r', 'R'], (event) => {
+  if (isTypingTarget(event.target)) return
+  if (metricStore.isLive) return
+  event.preventDefault()
+  resetToDefault()
+})
 
 onMounted(() => {
   if (organizationId.value) {
@@ -45,28 +67,19 @@ watch(
 
 <template>
   <div v-if="organizationId" class="flex h-full flex-col gap-4 overflow-auto">
-    <div class="flex items-center justify-end gap-2">
-      <TimeWindowPicker />
-    </div>
-
-    <div
-      v-if="!metricStore.isLive"
-      class="flex items-center justify-between gap-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200"
-    >
-      <div class="flex items-center gap-2">
-        <InfoIcon class="size-4" />
+    <Alert v-if="!metricStore.isLive" class="flex items-center justify-between gap-4">
+      <InfoIcon />
+      <AlertDescription class="flex flex-1 flex-wrap items-center gap-2">
         <span>Showing metrics for custom period</span>
-        <code class="rounded bg-white/60 px-1.5 py-0.5 text-xs dark:bg-black/20">{{ customFromLabel }}</code>
+        <code class="rounded bg-muted px-1.5 py-0.5 text-xs">{{ customFromLabel }}</code>
         <span>to</span>
-        <code class="rounded bg-white/60 px-1.5 py-0.5 text-xs dark:bg-black/20">{{ customToLabel }}</code>
-      </div>
-      <button
-        class="cursor-pointer text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
-        @click="resetToDefault"
-      >
+        <code class="rounded bg-muted px-1.5 py-0.5 text-xs">{{ customToLabel }}</code>
+      </AlertDescription>
+      <Button variant="outline" size="sm" class="cursor-pointer gap-2" @click="resetToDefault">
         Reset
-      </button>
-    </div>
+        <kbd class="flex size-4 items-center justify-center rounded border border-border bg-muted font-mono text-[10px] text-muted-foreground">R</kbd>
+      </Button>
+    </Alert>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <MetricChart v-for="chart in metricCharts" :key="chart.id" :chart="chart" />

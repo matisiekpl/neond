@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
+import { connect, use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { DataZoomInsideComponent, GridComponent, ToolboxComponent, TooltipComponent } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
@@ -11,6 +11,9 @@ import { useMetricStore } from '@/stores/metric.store'
 import type { MetricChartDefinition } from '@/types/dto/metricChartDefinition'
 
 use([LineChart, GridComponent, TooltipComponent, DataZoomInsideComponent, ToolboxComponent, SVGRenderer])
+
+const CHART_GROUP = 'metrics'
+connect(CHART_GROUP)
 
 const props = defineProps<{ chart: MetricChartDefinition }>()
 const metricStore = useMetricStore()
@@ -22,6 +25,17 @@ const colors = computed(() =>
     (series, index) => series.color ?? CHART_COLORS[index % CHART_COLORS.length],
   ),
 )
+
+const chartRef = ref<InstanceType<typeof VChart> | null>(null)
+
+async function enableRangeSelect(): Promise<void> {
+  await nextTick()
+  chartRef.value?.dispatchAction({
+    type: 'takeGlobalCursor',
+    key: 'dataZoomSelect',
+    dataZoomSelectActive: true,
+  })
+}
 
 type ZoomBatch = { startValue?: number; endValue?: number; start?: number; end?: number }
 type ZoomEvent = { batch?: ZoomBatch[]; startValue?: number; endValue?: number }
@@ -63,10 +77,10 @@ const option = computed<EChartsOption>(() => {
     grid: { top: 8, bottom: 28, left: 72, right: 12 },
     toolbox: {
       show: true,
-      right: 4,
-      top: -4,
+      itemSize: 0,
+      showTitle: false,
       feature: {
-        dataZoom: { yAxisIndex: 'none', title: { zoom: 'Select range', back: 'Reset' } },
+        dataZoom: { yAxisIndex: 'none' },
       },
     },
     dataZoom: [
@@ -85,7 +99,9 @@ const option = computed<EChartsOption>(() => {
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { show: false },
+      splitNumber: 6,
       axisLabel: {
+        hideOverlap: true,
         formatter: (value: number) =>
           new Date(value).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
       },
@@ -105,11 +121,11 @@ const option = computed<EChartsOption>(() => {
       formatter: (params) => {
         const items = Array.isArray(params) ? params : [params]
         if (!items.length) return ''
-        const firstValue = (items[0] as { value: [number, number | null] }).value
+        const firstValue = (items[0] as unknown as { value: [number, number | null] }).value
         const time = new Date(firstValue[0]).toLocaleString()
         const rows = items
           .map((item) => {
-            const typed = item as { value: [number, number | null]; color: string; seriesName: string }
+            const typed = item as unknown as { value: [number, number | null]; color: string; seriesName: string }
             const value = typed.value[1]
             if (value === null) return ''
             const formatted = formatMetricValue(value, props.chart.unit)
@@ -147,7 +163,14 @@ const option = computed<EChartsOption>(() => {
       </div>
     </div>
     <div class="relative h-56">
-      <VChart :option="option" autoresize @datazoom="onDataZoom" />
+      <VChart
+        ref="chartRef"
+        :group="CHART_GROUP"
+        :option="option"
+        autoresize
+        @datazoom="onDataZoom"
+        @finished="enableRangeSelect"
+      />
     </div>
   </div>
 </template>

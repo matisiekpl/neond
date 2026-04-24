@@ -10,20 +10,9 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { useMetricStore, type MetricRange, rangeDurationMs } from '@/stores/metric.store'
+import { useMetricStore, type MetricRange, rangeDurationMs, RANGE_PRESETS } from '@/stores/metric.store'
 
 const metricStore = useMetricStore()
-
-const PRESETS: { value: MetricRange; label: string }[] = [
-  { value: '5m', label: 'Last 5 minutes' },
-  { value: '15m', label: 'Last 15 minutes' },
-  { value: '30m', label: 'Last 30 minutes' },
-  { value: '1h', label: 'Last hour' },
-  { value: '3h', label: 'Last 3 hours' },
-  { value: '6h', label: 'Last 6 hours' },
-  { value: '12h', label: 'Last 12 hours' },
-  { value: '24h', label: 'Last 24 hours' },
-]
 
 const open = ref(false)
 const fromDayjs = ref<Dayjs>(dayjs(metricStore.rangeStart))
@@ -32,7 +21,7 @@ const fromCalendarOpen = ref(false)
 const toCalendarOpen = ref(false)
 
 const triggerLabel = computed<string>(() => {
-  const preset = PRESETS.find((option) => option.value === metricStore.range)
+  const preset = RANGE_PRESETS.find((option) => option.value === metricStore.range)
   if (preset) return preset.label
   const from = dayjs(metricStore.rangeStart).format('MMM D, HH:mm')
   const to = dayjs(metricStore.rangeEnd).format('MMM D, HH:mm')
@@ -121,13 +110,18 @@ watch(
       <div class="flex flex-col">
         <div class="flex flex-col py-1">
           <button
-            v-for="option in PRESETS"
+            v-for="(option, index) in RANGE_PRESETS"
             :key="option.value"
             class="flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent"
             :class="metricStore.range === option.value ? 'font-medium text-foreground' : 'text-muted-foreground'"
             @click="onPresetClick(option.value)"
           >
-            {{ option.label }}
+            <span class="flex items-center gap-2">
+              <kbd class="flex size-4 items-center justify-center rounded border border-border bg-muted font-mono text-[10px] text-muted-foreground">
+                {{ index + 1 }}
+              </kbd>
+              {{ option.label }}
+            </span>
             <span
               v-if="metricStore.range === option.value"
               class="size-1.5 rounded-full bg-foreground"

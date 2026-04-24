@@ -2,12 +2,11 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTitle } from '@vueuse/core'
-import { Square } from 'lucide-vue-next'
 import { useProjectStore } from '@/stores/project.store'
 import { useBranchStore } from '@/stores/branch.store'
 import { useOrganizationStore } from '@/stores/organization.store'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
-import { Button } from '@/components/ui/button'
+import TimeWindowPicker from '@/elements/TimeWindowPicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +20,8 @@ const branchId = computed(() => route.params.branchId as string)
 const project = computed(() => projectStore.projects.find((p) => p.id === projectId.value))
 const branch = computed(() => branchStore.branches.find((b) => b.id === branchId.value))
 
+const isMetricsRoute = computed(() => route.name === 'projects.branches.metrics')
+
 useTitle(
   computed(() =>
     project.value && branch.value
@@ -28,15 +29,6 @@ useTitle(
       : 'neond',
   ),
 )
-
-async function stopEndpoint() {
-  if (!organizationStore.selectedOrganizationId || !branch.value) return
-  await branchStore.shutdownEndpoint(
-    organizationStore.selectedOrganizationId,
-    projectId.value,
-    branch.value.id,
-  )
-}
 </script>
 
 <template>
@@ -68,16 +60,7 @@ async function stopEndpoint() {
           <span class="font-mono text-xs break-all">{{ branch.id }}</span>
         </div>
       </div>
-      <Button
-        v-if="branch.endpoint_status === 'running'"
-        variant="outline"
-        size="sm"
-        class="cursor-pointer shrink-0"
-        @click="stopEndpoint"
-      >
-        <Square class="size-4" />
-        <span class="hidden sm:inline">Stop endpoint</span>
-      </Button>
+      <TimeWindowPicker v-if="isMetricsRoute" />
     </div>
 
     <div class="flex-1 min-h-0">
