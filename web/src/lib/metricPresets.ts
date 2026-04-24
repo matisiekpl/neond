@@ -35,7 +35,7 @@ export const metricCharts: MetricChartDefinition[] = [
   },
   {
     id: 'compute-ctl',
-    title: 'compute_ctl',
+    title: 'Compute Control Plane',
     unit: 'raw',
     series: [
       { slug: 'compute_ctl.up', label: 'Up' },

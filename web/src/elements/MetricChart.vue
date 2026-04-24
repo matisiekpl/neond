@@ -3,14 +3,14 @@ import { computed, nextTick, ref } from 'vue'
 import VChart from 'vue-echarts'
 import { connect, use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
-import { DataZoomInsideComponent, GridComponent, ToolboxComponent, TooltipComponent } from 'echarts/components'
+import { DataZoomInsideComponent, GridComponent, MarkAreaComponent, ToolboxComponent, TooltipComponent } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 import type { EChartsOption } from 'echarts'
 import { CHART_COLORS, formatMetricValue } from '@/lib/metricPresets'
 import { useMetricStore } from '@/stores/metric.store'
 import type { MetricChartDefinition } from '@/types/dto/metricChartDefinition'
 
-use([LineChart, GridComponent, TooltipComponent, DataZoomInsideComponent, ToolboxComponent, SVGRenderer])
+use([LineChart, GridComponent, TooltipComponent, DataZoomInsideComponent, MarkAreaComponent, ToolboxComponent, SVGRenderer])
 
 const CHART_GROUP = 'metrics'
 connect(CHART_GROUP)
@@ -25,6 +25,8 @@ const colors = computed(() =>
     (series, index) => series.color ?? CHART_COLORS[index % CHART_COLORS.length],
   ),
 )
+
+const isFullyDown = computed(() => metricStore.samples.length === 0 && !metricStore.loading)
 
 const chartRef = ref<InstanceType<typeof VChart> | null>(null)
 
@@ -50,6 +52,14 @@ function onDataZoom(event: ZoomEvent): void {
 }
 
 const option = computed<EChartsOption>(() => {
+  const downtimeMarkArea = {
+    silent: true,
+    itemStyle: { color: 'rgba(100, 116, 139, 0.12)' },
+    data: metricStore.downtimeRanges.map(
+      (range) => [{ xAxis: range.start }, { xAxis: range.end }] as [{ xAxis: number }, { xAxis: number }],
+    ),
+  }
+
   const series = props.chart.series.map((entry, index) => {
     const points = metricStore.seriesBySlug.get(entry.slug) ?? []
     const data: [number, number | null][] = []
@@ -69,6 +79,7 @@ const option = computed<EChartsOption>(() => {
       lineStyle: { width: 1.5 },
       color: colors.value[index],
       data,
+      ...(index === 0 ? { markArea: downtimeMarkArea } : {}),
     }
   })
 
@@ -121,7 +132,22 @@ const option = computed<EChartsOption>(() => {
       formatter: (params) => {
         const items = Array.isArray(params) ? params : [params]
         if (!items.length) return ''
-        const firstValue = (items[0] as unknown as { value: [number, number | null] }).value
+        const firstValue = (items[0] as unknown as { value: [number, number | null]; axisValue?: number }).value
+        const axisValue = (items[0] as unknown as { axisValue?: number }).axisValue
+        const timestamp = typeof axisValue === 'number' ? axisValue : firstValue[0]
+        const downtime = metricStore.downtimeRanges.find(
+          (range) => timestamp >= range.start && timestamp <= range.end,
+        )
+        if (downtime) {
+          const time = new Date(timestamp).toLocaleString('en-US')
+          return `<div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
+            <div style="font-weight:600;">${time}</div>
+            <div style="display:flex;align-items:center;gap:8px;color:#64748b;">
+              <span style="width:8px;height:8px;border-radius:2px;background:rgba(100,116,139,0.3);"></span>
+              <span>Endpoint inactive</span>
+            </div>
+          </div>`
+        }
         const time = new Date(firstValue[0]).toLocaleString('en-US')
         const rows = items
           .map((item) => {
@@ -163,7 +189,14 @@ const option = computed<EChartsOption>(() => {
       </div>
     </div>
     <div class="relative h-56">
+      <div
+        v-if="isFullyDown"
+        class="flex h-full items-center justify-center rounded-md bg-muted/30 text-center text-sm text-muted-foreground"
+      >
+        Endpoint was stopped during selected time window
+      </div>
       <VChart
+        v-else
         ref="chartRef"
         :group="CHART_GROUP"
         :option="option"
