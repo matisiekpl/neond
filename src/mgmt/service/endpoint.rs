@@ -9,6 +9,7 @@ use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointInfo, ComputeEndpoint
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::endpoint_response::EndpointResponse;
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::dto::metric_target::MetricTarget;
 use crate::mgmt::model::branch::Branch;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
@@ -464,6 +465,28 @@ impl EndpointService {
             .iter()
             .filter(|(_, e)| e.get_status() == ComputeEndpointStatus::Running)
             .map(|(id, e)| (*id, e.get_branch().slug.clone(), e.get_port()))
+            .collect()
+    }
+
+    pub async fn get_running_targets(&self) -> Vec<MetricTarget> {
+        let endpoints = self.endpoints.lock().await;
+        endpoints
+            .iter()
+            .filter(|(_, endpoint)| endpoint.get_status() == ComputeEndpointStatus::Running)
+            .filter_map(|(branch_id, endpoint)| {
+                let pid = endpoint.get_pid()?;
+                let metrics_port = endpoint.get_metrics_port()?;
+                let pg_port = endpoint.get_port();
+                if pg_port == 0 {
+                    return None;
+                }
+                Some(MetricTarget {
+                    branch_id: *branch_id,
+                    pid,
+                    pg_port,
+                    metrics_port,
+                })
+            })
             .collect()
     }
 

@@ -62,14 +62,25 @@ diesel::table! {
         updated_at -> Timestamp,
     }
 }
+diesel::table! {
+    compute_metric_samples (id) {
+        id -> Uuid,
+        branch_id -> Uuid,
+        recorded_at -> Timestamp,
+        slug -> Text,
+        value -> Double,
+    }
+}
 diesel::joinable!(memberships -> users (user_id));
 diesel::joinable!(memberships -> organizations (organization_id));
 diesel::joinable!(projects -> organizations (organization_id));
 diesel::joinable!(branches -> projects (project_id));
+diesel::joinable!(compute_metric_samples -> branches (branch_id));
 diesel::allow_tables_to_appear_in_same_query!(
     users,
     organizations,
     memberships,
     projects,
     branches,
+    compute_metric_samples,
 );

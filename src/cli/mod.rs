@@ -109,6 +109,12 @@ pub async fn run() -> Result<()> {
         }
     });
 
+    let metric_service = Arc::clone(services.metric());
+    tokio::spawn(
+        Arc::clone(&metric_service).run_collection_loop(shutdown_token.clone()),
+    );
+    tokio::spawn(metric_service.run_cleanup_loop(shutdown_token.clone()));
+
     serve(config.port, state)
         .await
         .map_err(|error| AppError::ApplicationStartupFailed {

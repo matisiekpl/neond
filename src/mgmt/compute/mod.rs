@@ -57,6 +57,8 @@ pub struct ComputeEndpoint {
     pg_version: PgVersion,
     port: Option<u16>,
     preferred_port: Option<u16>,
+    metrics_port: Option<u16>,
+    pid: Option<u32>,
     compute_dir: TempDir,
     child: Option<Child>,
     status: ComputeEndpointStatus,
@@ -88,6 +90,8 @@ impl ComputeEndpoint {
             pg_version,
             port: None,
             preferred_port,
+            metrics_port: None,
+            pid: None,
             compute_dir: pgdata_dir,
             child: None,
             status: ComputeEndpointStatus::Stopped,
@@ -158,6 +162,14 @@ impl ComputeEndpoint {
             }
         }
 
+        let metrics_port =
+            crate::utils::ports::allocate_random_port().map_err(|error| {
+                AppError::ComputeProcessStartupFailed {
+                    reason: format!("failed to allocate metrics port: {}", error),
+                }
+            })?;
+        self.metrics_port = Some(metrics_port);
+
         let pg_data_path = self.compute_dir.path().join("pg_data");
         let mut child = cmd
             .env_clear()
@@ -171,6 +183,8 @@ impl ComputeEndpoint {
             .arg(&connection_string)
             .arg("--config")
             .arg(path_str(&config_path)?)
+            .arg("--external-http-port")
+            .arg(metrics_port.to_string())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -179,6 +193,7 @@ impl ComputeEndpoint {
             })?;
 
         let pid = child.id();
+        self.pid = Some(pid);
         let stderr = child
             .stderr
             .take()
@@ -202,6 +217,8 @@ impl ComputeEndpoint {
             child.kill().ok();
             child.wait().ok();
             self.status = ComputeEndpointStatus::Failed;
+            self.pid = None;
+            self.metrics_port = None;
             return Err(AppError::ComputeProcessStartupFailed {
                 reason: e.to_string(),
             });
@@ -272,6 +289,8 @@ impl ComputeEndpoint {
         }
 
         self.status = ComputeEndpointStatus::Stopped;
+        self.pid = None;
+        self.metrics_port = None;
         tracing::info!("Compute endpoint {} stopped", self.branch.timeline_id);
         Ok(())
     }
@@ -282,6 +301,14 @@ impl ComputeEndpoint {
 
     pub fn get_port(&self) -> u16 {
         self.port.unwrap_or(0)
+    }
+
+    pub fn get_pid(&self) -> Option<u32> {
+        self.pid
+    }
+
+    pub fn get_metrics_port(&self) -> Option<u16> {
+        self.metrics_port
     }
 
     fn generate_certificates(&mut self) -> Result<()> {
@@ -437,7 +464,7 @@ impl ComputeEndpoint {
 
         conf.append("effective_io_concurrency", "100");
         conf.append("random_page_cost", "1.1");
-        conf.append("fsync", "on");
+        conf.append("fsync", "off");
         conf.append("synchronous_commit", "on");
 
         conf.append("wal_level", "logical");

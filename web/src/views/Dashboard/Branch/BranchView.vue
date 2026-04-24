@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTitle } from '@vueuse/core'
-import { Square } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import { Check, Copy } from 'lucide-vue-next'
 import { useProjectStore } from '@/stores/project.store'
 import { useBranchStore } from '@/stores/branch.store'
 import { useOrganizationStore } from '@/stores/organization.store'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
-import { Button } from '@/components/ui/button'
+import TimeWindowPicker from '@/elements/TimeWindowPicker.vue'
+
+const copied = ref(false)
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +24,16 @@ const branchId = computed(() => route.params.branchId as string)
 const project = computed(() => projectStore.projects.find((p) => p.id === projectId.value))
 const branch = computed(() => branchStore.branches.find((b) => b.id === branchId.value))
 
+const isMetricsRoute = computed(() => route.name === 'projects.branches.metrics')
+
+async function copyBranchId() {
+  if (!branch.value) return
+  await navigator.clipboard.writeText(branch.value.id)
+  copied.value = true
+  toast.success('Branch ID copied')
+  setTimeout(() => { copied.value = false }, 1500)
+}
+
 useTitle(
   computed(() =>
     project.value && branch.value
@@ -28,15 +41,6 @@ useTitle(
       : 'neond',
   ),
 )
-
-async function stopEndpoint() {
-  if (!organizationStore.selectedOrganizationId || !branch.value) return
-  await branchStore.shutdownEndpoint(
-    organizationStore.selectedOrganizationId,
-    projectId.value,
-    branch.value.id,
-  )
-}
 </script>
 
 <template>
@@ -58,26 +62,27 @@ async function stopEndpoint() {
   </div>
 
   <div v-else class="flex flex-col gap-6 h-full">
-    <div class="shrink-0 flex items-start justify-between gap-3">
+    <div class="shrink-0 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div class="min-w-0">
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <h1 class="text-lg font-semibold truncate">{{ branch.name }}</h1>
           <EndpointStatusBadge :status="branch.endpoint_status" />
         </div>
-        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-          <span class="font-mono text-xs break-all">{{ branch.id }}</span>
+        <div class="mt-1 flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <button
+            type="button"
+            class="group inline-flex max-w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded border border-border bg-muted/50 px-2 py-0.5 font-mono text-xs transition-colors hover:bg-muted"
+            :title="`Copy branch ID: ${branch.id}`"
+            @click="copyBranchId"
+          >
+            <span class="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground/70">ID</span>
+            <span class="truncate">{{ branch.id }}</span>
+            <Check v-if="copied" class="size-3 shrink-0 text-emerald-500" />
+            <Copy v-else class="size-3 shrink-0 opacity-50 group-hover:opacity-100" />
+          </button>
         </div>
       </div>
-      <Button
-        v-if="branch.endpoint_status === 'running'"
-        variant="outline"
-        size="sm"
-        class="cursor-pointer shrink-0"
-        @click="stopEndpoint"
-      >
-        <Square class="size-4" />
-        <span class="hidden sm:inline">Stop endpoint</span>
-      </Button>
+      <TimeWindowPicker v-if="isMetricsRoute" />
     </div>
 
     <div class="flex-1 min-h-0">

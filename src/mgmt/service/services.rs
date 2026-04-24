@@ -4,6 +4,7 @@ use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::daemon::DaemonService;
 use crate::mgmt::service::endpoint::EndpointService;
 use crate::mgmt::service::membership::MembershipService;
+use crate::mgmt::service::metric::MetricService;
 use crate::mgmt::service::organization::OrganizationService;
 use crate::mgmt::service::project::ProjectService;
 use crate::mgmt::service::sql::SqlService;
@@ -20,6 +21,7 @@ pub struct Services {
     endpoint: Arc<EndpointService>,
     sql: SqlService,
     daemon: Arc<DaemonService>,
+    metric: Arc<MetricService>,
 }
 
 impl Services {
@@ -76,6 +78,13 @@ impl Services {
             Arc::clone(&pageserver_client),
             Arc::clone(&safekeeper_client),
         );
+        let metric = Arc::new(MetricService::new(
+            Arc::new(repositories.metric().clone()),
+            Arc::clone(&endpoint),
+            Arc::new(repositories.branch().clone()),
+            Arc::new(repositories.project().clone()),
+            Arc::new(membership.clone()),
+        ));
         Self {
             user: UserService::new(Arc::new(repositories.user().clone()), Arc::new(repositories.membership().clone()), config.server_secret.clone()),
             organization: OrganizationService::new(
@@ -92,6 +101,7 @@ impl Services {
             sql,
             membership,
             daemon,
+            metric,
         }
     }
 
@@ -126,5 +136,9 @@ impl Services {
 
     pub fn daemon(&self) -> &Arc<DaemonService> {
         &self.daemon
+    }
+
+    pub fn metric(&self) -> &Arc<MetricService> {
+        &self.metric
     }
 }

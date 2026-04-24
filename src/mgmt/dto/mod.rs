@@ -29,3 +29,6 @@ pub mod execute_sql_request;
 pub mod execute_sql_response;
 pub mod lsn_request;
 pub mod lsn_response;
+pub mod metric_target;
+pub mod metric_sample;
+pub mod metric_range_request;

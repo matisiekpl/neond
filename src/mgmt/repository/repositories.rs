@@ -2,6 +2,7 @@ use crate::mgmt::dto::error::Result;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::db::get_pool;
 use crate::mgmt::repository::membership::MembershipRepository;
+use crate::mgmt::repository::metric::MetricRepository;
 use crate::mgmt::repository::organization::OrganizationRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::repository::user::UserRepository;
@@ -12,6 +13,7 @@ pub struct Repositories {
     organization: OrganizationRepository,
     membership: MembershipRepository,
     branch: BranchRepository,
+    metric: MetricRepository,
 }
 
 impl Repositories {
@@ -23,6 +25,7 @@ impl Repositories {
             organization: OrganizationRepository::new(pool.clone()),
             membership: MembershipRepository::new(pool.clone()),
             branch: BranchRepository::new(pool.clone()),
+            metric: MetricRepository::new(pool.clone()),
         })
     }
 
@@ -44,5 +47,9 @@ impl Repositories {
 
     pub fn branch(&self) -> &BranchRepository {
         &self.branch
+    }
+
+    pub fn metric(&self) -> &MetricRepository {
+        &self.metric
     }
 }

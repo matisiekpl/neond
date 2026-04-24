@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  Activity,
   Building2,
   Check,
   ChevronDown,
@@ -272,6 +273,19 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               <RouterLink :to="{ name: 'projects.branches.sql', params: { organizationId, projectId, branchId } }">
                 <Terminal />
                 <span>SQL</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="route.name === 'projects.branches.metrics'"
+              tooltip="Metrics"
+            >
+              <RouterLink :to="{ name: 'projects.branches.metrics', params: { organizationId, projectId, branchId } }">
+                <Activity />
+                <span>Monitoring</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
