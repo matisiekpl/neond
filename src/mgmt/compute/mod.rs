@@ -473,7 +473,7 @@ impl ComputeEndpoint {
 
         conf.append("effective_io_concurrency", "100");
         conf.append("random_page_cost", "1.1");
-        conf.append("fsync", "on");
+        conf.append("fsync", "off");
         conf.append("synchronous_commit", "on");
 
         conf.append("wal_level", "logical");
