@@ -18,8 +18,8 @@ const projectId = computed(() => route.params.projectId as string)
 const branchId = computed(() => route.params.branchId as string)
 const organizationId = computed(() => organizationStore.selectedOrganizationId)
 
-const customFromLabel = computed(() => new Date(metricStore.rangeStart).toLocaleString())
-const customToLabel = computed(() => new Date(metricStore.rangeEnd).toLocaleString())
+const customFromLabel = computed(() => new Date(metricStore.rangeStart).toLocaleString('en-US'))
+const customToLabel = computed(() => new Date(metricStore.rangeEnd).toLocaleString('en-US'))
 
 function resetToDefault() {
   metricStore.setRange('30m')

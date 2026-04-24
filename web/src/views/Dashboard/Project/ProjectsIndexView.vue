@@ -100,7 +100,7 @@ async function confirmDelete() {
 }
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 </script>
 

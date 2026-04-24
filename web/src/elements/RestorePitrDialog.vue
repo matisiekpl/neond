@@ -177,7 +177,7 @@ function onCancel() {
                     variant="outline"
                     class="w-40 justify-between font-normal cursor-pointer"
                   >
-                    {{ selectedAt.toDate().toLocaleDateString() }}
+                    {{ selectedAt.toDate().toLocaleDateString('en-US') }}
                     <ChevronDownIcon class="size-4 opacity-60" />
                   </Button>
                 </PopoverTrigger>

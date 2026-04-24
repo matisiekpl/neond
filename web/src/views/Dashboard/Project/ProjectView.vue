@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, RotateCcw, Square, Trash2,
+  BookDown, Check, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, RotateCcw, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -97,7 +97,7 @@ function flattenTree(nodes: BranchNode[], depth = 0): { branch: BranchNode; dept
 const rows = computed(() => flattenTree(buildTree(branchStore.branches)))
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'})
+  return new Date(d).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})
 }
 
 const createOpen = ref(false)
@@ -269,6 +269,16 @@ function copyConnectionString(branch: Branch) {
     toast.success('Connection string copied')
   }
 }
+
+const projectIdCopied = ref(false)
+
+async function copyProjectId() {
+  if (!project.value) return
+  await navigator.clipboard.writeText(project.value.id)
+  projectIdCopied.value = true
+  toast.success('Project ID copied')
+  setTimeout(() => { projectIdCopied.value = false }, 1500)
+}
 </script>
 
 <template>
@@ -299,9 +309,18 @@ function copyConnectionString(branch: Branch) {
       <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
         <span>PostgreSQL {{ project.pg_version.replace(/^V/i, '') }}</span>
         <span>·</span>
-        <span>Created {{ new Date(project.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
-        <span>·</span>
-        <span class="font-mono text-xs">{{ project.id }}</span>
+        <span>Created {{ new Date(project.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
+        <button
+          type="button"
+          class="group inline-flex cursor-pointer items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-0.5 font-mono text-xs transition-colors hover:bg-muted"
+          :title="`Copy project ID: ${project.id}`"
+          @click="copyProjectId"
+        >
+          <span class="text-[10px] uppercase tracking-wider text-muted-foreground/70">ID</span>
+          <span class="break-all">{{ project.id }}</span>
+          <Check v-if="projectIdCopied" class="size-3 text-emerald-500" />
+          <Copy v-else class="size-3 opacity-50 group-hover:opacity-100" />
+        </button>
       </div>
     </div>
 

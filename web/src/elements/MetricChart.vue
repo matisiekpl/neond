@@ -103,7 +103,7 @@ const option = computed<EChartsOption>(() => {
       axisLabel: {
         hideOverlap: true,
         formatter: (value: number) =>
-          new Date(value).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+          new Date(value).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       },
     },
     yAxis: {
@@ -122,7 +122,7 @@ const option = computed<EChartsOption>(() => {
         const items = Array.isArray(params) ? params : [params]
         if (!items.length) return ''
         const firstValue = (items[0] as unknown as { value: [number, number | null] }).value
-        const time = new Date(firstValue[0]).toLocaleString()
+        const time = new Date(firstValue[0]).toLocaleString('en-US')
         const rows = items
           .map((item) => {
             const typed = item as unknown as { value: [number, number | null]; color: string; seriesName: string }

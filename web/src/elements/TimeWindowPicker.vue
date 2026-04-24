@@ -138,7 +138,7 @@ watch(
               <Popover v-model:open="fromCalendarOpen">
                 <PopoverTrigger as-child>
                   <Button variant="outline" class="h-8 flex-1 cursor-pointer justify-between px-2 text-xs font-normal">
-                    {{ fromDayjs.toDate().toLocaleDateString() }}
+                    {{ fromDayjs.toDate().toLocaleDateString('en-US')}}
                     <ChevronDownIcon class="size-3 opacity-60" />
                   </Button>
                 </PopoverTrigger>
@@ -161,7 +161,7 @@ watch(
               <Popover v-model:open="toCalendarOpen">
                 <PopoverTrigger as-child>
                   <Button variant="outline" class="h-8 flex-1 cursor-pointer justify-between px-2 text-xs font-normal">
-                    {{ toDayjs.toDate().toLocaleDateString() }}
+                    {{ toDayjs.toDate().toLocaleDateString('en-US')}}
                     <ChevronDownIcon class="size-3 opacity-60" />
                   </Button>
                 </PopoverTrigger>
