@@ -10,8 +10,6 @@ use crate::mgmt::handler::AppState;
 use crate::mgmt::handler::{branch, daemon, endpoint, metric, organization, project, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
-    // TODO(matisiekpl): display tenant size
-    // TODO(matisiekpl): add ability to detach ancestor
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
     let shutdown_token = state.services.daemon().shutdown_token();
@@ -81,6 +79,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/reset",
             post(branch::reset_to_parent),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/detach",
+            post(branch::detach),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/password",

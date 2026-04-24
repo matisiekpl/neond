@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Check, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, RotateCcw, Square, Trash2,
+  BookDown, Check, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, RotateCcw, Scissors, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -181,6 +181,14 @@ function openResetToParent(branch: Branch) {
   resetOpen.value = true
 }
 
+const detachOpen = ref(false)
+const detachBranch = ref<Branch | null>(null)
+
+function openDetach(branch: Branch) {
+  detachBranch.value = branch
+  detachOpen.value = true
+}
+
 async function submitCreate() {
   if (!organizationStore.selectedOrganizationId || !projectId.value) return
   const trimmed = createName.value.trim()
@@ -245,6 +253,15 @@ async function confirmResetToParent() {
     resetOpen.value = false
   } finally {
     resetting.value = false
+  }
+}
+
+async function confirmDetach() {
+  if (!organizationStore.selectedOrganizationId || !projectId.value || !detachBranch.value) return
+  try {
+    await branchStore.detachAncestor(organizationStore.selectedOrganizationId, projectId.value, detachBranch.value.id)
+    detachOpen.value = false
+  } catch {
   }
 }
 
@@ -490,11 +507,17 @@ async function copyProjectId() {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       v-if="branch.parent_branch_id"
-                      class="text-destructive focus:text-destructive"
                       @click="openResetToParent(branch)"
                     >
                       <RotateCcw class="size-4"/>
                       Reset to parent
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      v-if="branch.parent_branch_id"
+                      @click="openDetach(branch)"
+                    >
+                      <Scissors class="size-4"/>
+                      Detach from ancestor
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       class="text-destructive focus:text-destructive"
@@ -511,6 +534,31 @@ async function copyProjectId() {
         </Table>
       </div>
     </div>
+
+    <AlertDialog
+      :open="detachOpen"
+      @update:open="(value: boolean) => { if (!branchStore.detaching) detachOpen = value }"
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Detach from ancestor?</AlertDialogTitle>
+          <AlertDialogDescription>
+            <b>{{ detachBranch?.name }}</b> will be permanently separated from its parent. Its data will be copied so it no longer depends on the parent branch. This may take a while and cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="branchStore.detaching">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            class="cursor-pointer"
+            :disabled="branchStore.detaching"
+            @click="confirmDetach"
+          >
+            <Loader2 v-if="branchStore.detaching" class="mr-1.5 size-3.5 animate-spin"/>
+            Detach
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <AlertDialog v-model:open="resetOpen">
       <AlertDialogContent>

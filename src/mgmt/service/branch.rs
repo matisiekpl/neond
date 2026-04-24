@@ -236,13 +236,12 @@ impl BranchService {
                     ForceAwaitLogicalSize::Yes,
                 )
                 .await
-                .map_err(|error| AppError::BranchListingFailed {
-                    reason: error.to_string(),
-                })?;
+                .ok();
 
             let endpoint_info = self.endpoint_service.get_endpoint_info(b.id).await;
             let ancestor_timeline_id = timeline_info
-                .ancestor_timeline_id
+                .as_ref()
+                .and_then(|info| info.ancestor_timeline_id)
                 .and_then(|id| Uuid::from_str(id.to_string().as_str()).ok());
             results.push(BranchResponse {
                 id: b.id,
@@ -252,14 +251,23 @@ impl BranchService {
                 parent_branch_id: b.parent_branch_id,
                 timeline_id: b.timeline_id,
                 ancestor_timeline_id,
-                ancestor_lsn: timeline_info.ancestor_lsn,
+                ancestor_lsn: timeline_info.as_ref().and_then(|info| info.ancestor_lsn),
                 endpoint_status: endpoint_info
                     .clone()
                     .map(|info| info.status)
                     .unwrap_or(ComputeEndpointStatus::Stopped),
-                remote_consistent_lsn_visible: timeline_info.remote_consistent_lsn_visible,
-                last_record_lsn: timeline_info.last_record_lsn,
-                current_logical_size: timeline_info.current_logical_size,
+                remote_consistent_lsn_visible: timeline_info
+                    .as_ref()
+                    .map(|info| info.remote_consistent_lsn_visible)
+                    .unwrap_or_default(),
+                last_record_lsn: timeline_info
+                    .as_ref()
+                    .map(|info| info.last_record_lsn)
+                    .unwrap_or_default(),
+                current_logical_size: timeline_info
+                    .as_ref()
+                    .map(|info| info.current_logical_size)
+                    .unwrap_or(0),
                 connection_string: match endpoint_info {
                     Some(info) => Some(b.get_connection_string(self.config.clone(), info.port)),
                     None => None,
@@ -999,6 +1007,101 @@ impl BranchService {
             password: inserted.password.clone(),
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
+        })
+    }
+
+    pub async fn detach_ancestor(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+    ) -> Result<BranchResponse> {
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        if branch.parent_branch_id.is_none() {
+            return Err(AppError::BranchAlreadyDetached);
+        }
+
+        let timeline_id =
+            TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+                .map_err(|_| AppError::TimelineIdInvalid {
+                    value: branch.timeline_id.to_string(),
+                })?;
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
+        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+
+        let detached = self
+            .pageserver_client
+            .timeline_detach_ancestor(tenant_shard_id, timeline_id, None)
+            .await
+            .map_err(|error| AppError::DetachAncestorFailed {
+                reason: error.to_string(),
+            })?;
+
+        let reparented_timeline_ids: HashSet<Uuid> = detached
+            .reparented_timelines
+            .iter()
+            .filter_map(|id| Uuid::from_str(id.to_string().as_str()).ok())
+            .collect();
+
+        let updated = self
+            .branch_repo
+            .detach_ancestor_swap(branch.id, &reparented_timeline_ids)
+            .await?;
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(updated.id).await;
+
+        let (ancestor_timeline_id, ancestor_lsn) =
+            self.fetch_ancestor(tenant_id, timeline_id).await;
+
+        Ok(BranchResponse {
+            id: updated.id,
+            project_id: updated.project_id,
+            name: updated.name.clone(),
+            slug: updated.slug.clone(),
+            parent_branch_id: updated.parent_branch_id,
+            timeline_id: updated.timeline_id,
+            ancestor_timeline_id,
+            ancestor_lsn,
+            endpoint_status: endpoint_info
+                .clone()
+                .map(|info| info.status)
+                .unwrap_or(ComputeEndpointStatus::Stopped),
+            remote_consistent_lsn_visible: Default::default(),
+            last_record_lsn: Default::default(),
+            current_logical_size: 0,
+            connection_string: endpoint_info
+                .map(|info| updated.get_connection_string(self.config.clone(), info.port)),
+            password: updated.password.clone(),
+            created_at: updated.created_at,
+            updated_at: updated.updated_at,
         })
     }
 

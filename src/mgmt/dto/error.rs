@@ -57,6 +57,7 @@ pub enum AppError {
     PitrEndpointRelaunchFailed { reason: String },
     PitrConcurrentEndpointOperation,
     DetachAncestorFailed { reason: String },
+    BranchAlreadyDetached,
     LsnResolutionFailed { reason: String },
     DurabilityCheckFailed { reason: String },
     TenantIdInvalid { value: String },
@@ -221,6 +222,9 @@ impl fmt::Display for AppError {
             AppError::DetachAncestorFailed { reason } => {
                 write!(f, "Detach ancestor failed: {}", reason)
             }
+            AppError::BranchAlreadyDetached => {
+                write!(f, "Branch has no ancestor to detach from")
+            }
             AppError::LsnResolutionFailed { reason } => {
                 write!(f, "LSN resolution failed: {}", reason)
             }
@@ -325,7 +329,8 @@ impl IntoResponse for AppError {
             | AppError::PortRangeMisconfigured { .. }
             | AppError::RegistrationFailed { .. }
             | AppError::PitrLsnInvalid { .. }
-            | AppError::PitrLsnOutOfRange { .. } => StatusCode::BAD_REQUEST,
+            | AppError::PitrLsnOutOfRange { .. }
+            | AppError::BranchAlreadyDetached => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(json!({ "message": self.to_string() }))).into_response()

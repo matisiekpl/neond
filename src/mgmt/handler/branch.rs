@@ -81,6 +81,19 @@ pub async fn reset_to_parent(
     Ok((StatusCode::OK, Json(branch)))
 }
 
+pub async fn detach(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let branch = state
+        .services
+        .branch()
+        .detach_ancestor(user_id, organization_id, project_id, branch_id)
+        .await?;
+    Ok((StatusCode::OK, Json(branch)))
+}
+
 pub async fn change_password(
     State(state): State<Arc<AppState>>,
     UserId(user_id): UserId,

@@ -8,6 +8,7 @@ import type {Branch} from '@/types/models/branch'
 export const useBranchStore = defineStore('branch', () => {
     const branches = ref<Branch[]>([])
     const loading = ref(false)
+    const detaching = ref(false)
 
     function reset(): void {
         branches.value = []
@@ -113,5 +114,19 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
-    return {branches, loading, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, changePassword}
+    async function detachAncestor(organizationId: string, projectId: string, branchId: string): Promise<void> {
+        detaching.value = true
+        try {
+            await branchesApi.detach(organizationId, projectId, branchId)
+            await fetch(organizationId, projectId)
+            toast.success('Branch detached from ancestor')
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        } finally {
+            detaching.value = false
+        }
+    }
+
+    return {branches, loading, detaching, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, detachAncestor, changePassword}
 })

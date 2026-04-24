@@ -66,4 +66,11 @@ export const branchesApi = {
     )
     return response.data
   },
+
+  async detach(organizationId: string, projectId: string, branchId: string): Promise<Branch> {
+    const response = await api.post<Branch>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/detach`,
+    )
+    return response.data
+  },
 }

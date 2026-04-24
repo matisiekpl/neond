@@ -227,6 +227,63 @@ impl BranchRepository {
         .await
     }
 
+    pub async fn detach_ancestor_swap(
+        &self,
+        branch_id: Uuid,
+        reparented_timeline_ids: &HashSet<Uuid>,
+    ) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|error| AppError::DetachAncestorFailed { reason: error.to_string() })?;
+
+        let reparented_ids: Vec<Uuid> = reparented_timeline_ids.iter().copied().collect();
+
+        conn.transaction::<Branch, AppError, _>(|conn| {
+            async move {
+                let current: Branch = branches::table
+                    .filter(branches::id.eq(branch_id))
+                    .first(conn)
+                    .await
+                    .map_err(|error| match error {
+                        diesel::result::Error::NotFound => AppError::NotFound,
+                        other => AppError::DetachAncestorFailed { reason: other.to_string() },
+                    })?;
+
+                let old_parent_id = current
+                    .parent_branch_id
+                    .ok_or(AppError::BranchAlreadyDetached)?;
+
+                diesel::update(branches::table.filter(branches::id.eq(branch_id)))
+                    .set(branches::parent_branch_id.eq(None::<Uuid>))
+                    .execute(conn)
+                    .await
+                    .map_err(|error| AppError::DetachAncestorFailed { reason: error.to_string() })?;
+
+                if !reparented_ids.is_empty() {
+                    diesel::update(
+                        branches::table
+                            .filter(branches::parent_branch_id.eq(old_parent_id))
+                            .filter(branches::id.ne(branch_id))
+                            .filter(branches::timeline_id.eq_any(&reparented_ids)),
+                    )
+                    .set(branches::parent_branch_id.eq(branch_id))
+                    .execute(conn)
+                    .await
+                    .map_err(|error| AppError::DetachAncestorFailed { reason: error.to_string() })?;
+                }
+
+                let updated: Branch = branches::table
+                    .filter(branches::id.eq(branch_id))
+                    .first(conn)
+                    .await
+                    .map_err(|error| AppError::DetachAncestorFailed { reason: error.to_string() })?;
+
+                Ok(updated)
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+
     pub async fn reset_to_parent_swap(
         &self,
         old_id: Uuid,
