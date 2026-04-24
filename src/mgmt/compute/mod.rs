@@ -162,21 +162,12 @@ impl ComputeEndpoint {
             }
         }
 
-        let metrics_port = {
-            let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|error| {
+        let metrics_port =
+            crate::utils::ports::allocate_random_port().map_err(|error| {
                 AppError::ComputeProcessStartupFailed {
                     reason: format!("failed to allocate metrics port: {}", error),
                 }
             })?;
-            let allocated = listener
-                .local_addr()
-                .map_err(|error| AppError::ComputeProcessStartupFailed {
-                    reason: format!("failed to read allocated metrics port: {}", error),
-                })?
-                .port();
-            drop(listener);
-            allocated
-        };
         self.metrics_port = Some(metrics_port);
 
         let pg_data_path = self.compute_dir.path().join("pg_data");
