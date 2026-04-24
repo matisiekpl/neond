@@ -26,7 +26,21 @@ const colors = computed(() =>
   ),
 )
 
-const isFullyDown = computed(() => metricStore.samples.length === 0 && !metricStore.loading)
+const isFullyDown = computed(() => {
+  if (metricStore.loading) return false
+  if (metricStore.samples.length === 0) return true
+  const rangeStart = metricStore.rangeStart
+  const rangeEnd = metricStore.rangeEnd
+  if (typeof rangeStart !== 'number' || typeof rangeEnd !== 'number') return false
+  const sorted = [...metricStore.downtimeRanges].sort((a, b) => a.start - b.start)
+  let covered = rangeStart
+  for (const range of sorted) {
+    if (range.start > covered) break
+    covered = Math.max(covered, range.end)
+    if (covered >= rangeEnd) return true
+  }
+  return false
+})
 
 const chartRef = ref<InstanceType<typeof VChart> | null>(null)
 
