@@ -164,10 +164,27 @@ impl MetricService {
 
     async fn sample_process(&self, target: &MetricTarget) -> Vec<(&'static str, f64)> {
         let system = self.system.lock().await;
-        let root_pid = Pid::from_u32(target.pid);
+        let compute_ctl_pid = Pid::from_u32(target.pid);
+
+        let postgres_root = system
+            .processes()
+            .iter()
+            .find(|(_, process)| {
+                process.parent() == Some(compute_ctl_pid)
+                    && process
+                        .name()
+                        .to_string_lossy()
+                        .to_lowercase()
+                        .contains("postgres")
+            })
+            .map(|(pid, _)| *pid);
+
+        let Some(postgres_root) = postgres_root else {
+            return Vec::new();
+        };
 
         let mut pids_to_include: HashSet<Pid> = HashSet::new();
-        pids_to_include.insert(root_pid);
+        pids_to_include.insert(postgres_root);
 
         let mut changed = true;
         while changed {

@@ -285,7 +285,7 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
             >
               <RouterLink :to="{ name: 'projects.branches.metrics', params: { organizationId, projectId, branchId } }">
                 <Activity />
-                <span>Metrics</span>
+                <span>Monitoring</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
