@@ -140,10 +140,10 @@ const option = computed<EChartsOption>(() => {
         )
         if (downtime) {
           const time = new Date(timestamp).toLocaleString('en-US')
-          return `<div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
-            <div style="font-weight:600;">${time}</div>
-            <div style="display:flex;align-items:center;gap:8px;color:#64748b;">
-              <span style="width:8px;height:8px;border-radius:2px;background:rgba(100,116,139,0.3);"></span>
+          return `<div class="flex flex-col gap-1 text-xs">
+            <div class="font-semibold">${time}</div>
+            <div class="flex items-center gap-2 text-slate-500">
+              <span class="size-2 rounded-sm" style="background:rgba(100,116,139,0.3);"></span>
               <span>Endpoint inactive</span>
             </div>
           </div>`
@@ -155,16 +155,16 @@ const option = computed<EChartsOption>(() => {
             const value = typed.value[1]
             if (value === null) return ''
             const formatted = formatMetricValue(value, props.chart.unit)
-            return `<div style="display:flex;align-items:center;gap:8px;">
-              <span style="width:8px;height:8px;border-radius:2px;background:${typed.color};"></span>
-              <span style="flex:1;">${typed.seriesName}</span>
-              <span style="font-family:var(--font-mono);font-weight:500;">${formatted}</span>
+            return `<div class="flex items-center gap-2">
+              <span class="size-2 rounded-sm" style="background:${typed.color};"></span>
+              <span class="flex-1">${typed.seriesName}</span>
+              <span class="font-mono font-medium">${formatted}</span>
             </div>`
           })
           .filter(Boolean)
           .join('')
-        return `<div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
-          <div style="font-weight:600;">${time}</div>${rows}
+        return `<div class="flex flex-col gap-1 text-xs">
+          <div class="font-semibold">${time}</div>${rows}
         </div>`
       },
     },
