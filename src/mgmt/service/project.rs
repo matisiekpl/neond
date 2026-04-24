@@ -1,11 +1,13 @@
 use neon_pageserver_api::controller_api::TenantCreateRequest;
-use neon_pageserver_api::models::{FieldPatch, TenantConfig, TenantConfigPatch, TenantConfigPatchRequest};
-use std::time::Duration;
+use neon_pageserver_api::models::{
+    FieldPatch, TenantConfig, TenantConfigPatch, TenantConfigPatchRequest,
+};
 use neon_utils::id::TenantId;
 use neon_utils::shard::TenantShardId;
 use reqwest::Method;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::mgmt::dto::config::Config;
@@ -69,10 +71,11 @@ impl ProjectService {
             .await?;
 
         let tenant_id = TenantId::generate();
-        let project_id = Uuid::from_str(tenant_id.to_string().as_str())
-            .map_err(|error| AppError::ProjectCreationFailed {
+        let project_id = Uuid::from_str(tenant_id.to_string().as_str()).map_err(|error| {
+            AppError::ProjectCreationFailed {
                 reason: format!("Invalid project id: {error}"),
-            })?;
+            }
+        })?;
         let pg_version = req.pg_version.unwrap_or(PgVersion::V17);
         let project = self
             .project_repo
@@ -85,11 +88,11 @@ impl ProjectService {
             shard_parameters: Default::default(),
             placement_policy: None,
             config: TenantConfig {
-                gc_period: Some(Duration::from_secs(60 * 60)),            // 1h
-                gc_horizon: Some(64 * 1024 * 1024),                       // 64 MB
+                gc_period: Some(Duration::from_secs(60 * 60)), // 1h
+                gc_horizon: Some(64 * 1024 * 1024),            // 64 MB
                 pitr_interval: Some(Duration::from_secs(7 * 24 * 60 * 60)), // 7 days
-                checkpoint_distance: Some(256 * 1024 * 1024),             // 256 MB
-                checkpoint_timeout: Some(Duration::from_secs(5 * 60)),    // 5m
+                checkpoint_distance: Some(256 * 1024 * 1024),  // 256 MB
+                checkpoint_timeout: Some(Duration::from_secs(5 * 60)), // 5m
                 ..Default::default()
             },
         };
@@ -127,6 +130,7 @@ impl ProjectService {
             pitr_interval: None,
             checkpoint_distance: None,
             checkpoint_timeout: None,
+            size: None,
         })
     }
 
@@ -145,9 +149,11 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
-        let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::TenantIdInvalid {
-                value: project.id.to_string(),
+        let tenant_id =
+            TenantId::from_str(project.id.as_simple().to_string().as_str()).map_err(|_| {
+                AppError::TenantIdInvalid {
+                    value: project.id.to_string(),
+                }
             })?;
         let tenant_shard_id = TenantShardId::unsharded(tenant_id);
 
@@ -193,6 +199,8 @@ impl ProjectService {
                 (None, None, None, None, None)
             };
 
+        let size = self.fetch_physical_size(project.id).await;
+
         Ok(ProjectResponse {
             id: project.id,
             organization_id: project.organization_id,
@@ -205,6 +213,7 @@ impl ProjectService {
             pitr_interval,
             checkpoint_distance,
             checkpoint_timeout,
+            size,
         })
     }
 
@@ -221,9 +230,14 @@ impl ProjectService {
 
         let projects = self.project_repo.list_by_org_id(org_id).await?;
 
+        let sizes =
+            futures_util::future::join_all(projects.iter().map(|p| self.fetch_physical_size(p.id)))
+                .await;
+
         Ok(projects
             .into_iter()
-            .map(|p| ProjectResponse {
+            .zip(sizes)
+            .map(|(p, size)| ProjectResponse {
                 id: p.id,
                 organization_id: p.organization_id,
                 name: p.name,
@@ -235,6 +249,7 @@ impl ProjectService {
                 pitr_interval: None,
                 checkpoint_distance: None,
                 checkpoint_timeout: None,
+                size,
             })
             .collect())
     }
@@ -275,17 +290,28 @@ impl ProjectService {
             || req.checkpoint_timeout.is_some();
 
         if has_config {
-            let tenant_id = TenantId::from_str(id.as_simple().to_string().as_str())
-                .map_err(|_| AppError::TenantIdInvalid {
-                    value: id.to_string(),
+            let tenant_id =
+                TenantId::from_str(id.as_simple().to_string().as_str()).map_err(|_| {
+                    AppError::TenantIdInvalid {
+                        value: id.to_string(),
+                    }
                 })?;
 
             let config = TenantConfigPatch {
                 gc_period: req.gc_period.map(FieldPatch::Upsert).unwrap_or_default(),
                 gc_horizon: req.gc_horizon.map(FieldPatch::Upsert).unwrap_or_default(),
-                pitr_interval: req.pitr_interval.map(FieldPatch::Upsert).unwrap_or_default(),
-                checkpoint_distance: req.checkpoint_distance.map(FieldPatch::Upsert).unwrap_or_default(),
-                checkpoint_timeout: req.checkpoint_timeout.map(FieldPatch::Upsert).unwrap_or_default(),
+                pitr_interval: req
+                    .pitr_interval
+                    .map(FieldPatch::Upsert)
+                    .unwrap_or_default(),
+                checkpoint_distance: req
+                    .checkpoint_distance
+                    .map(FieldPatch::Upsert)
+                    .unwrap_or_default(),
+                checkpoint_timeout: req
+                    .checkpoint_timeout
+                    .map(FieldPatch::Upsert)
+                    .unwrap_or_default(),
                 ..Default::default()
             };
 
@@ -316,13 +342,21 @@ impl ProjectService {
             return Err(AppError::NotFound);
         }
 
-        let tenant_id = TenantId::from_str(project.id.as_simple().to_string().as_str())
-            .map_err(|_| AppError::TenantIdInvalid {
-                value: project.id.to_string(),
+        let tenant_id =
+            TenantId::from_str(project.id.as_simple().to_string().as_str()).map_err(|_| {
+                AppError::TenantIdInvalid {
+                    value: project.id.to_string(),
+                }
             })?;
 
-        let branches = self.branch_service.list(user_id, org_id, project.id).await?;
-        for branch in branches.into_iter().filter(|b| b.parent_branch_id.is_none()) {
+        let branches = self
+            .branch_service
+            .list(user_id, org_id, project.id)
+            .await?;
+        for branch in branches
+            .into_iter()
+            .filter(|b| b.parent_branch_id.is_none())
+        {
             self.branch_service
                 .delete(user_id, org_id, project.id, branch.id)
                 .await?;
@@ -373,5 +407,26 @@ impl ProjectService {
         }
 
         Ok(())
+    }
+
+    async fn fetch_physical_size(&self, project_id: Uuid) -> Option<u64> {
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str()).ok()?;
+        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
+
+        let token = self
+            .config
+            .component_auth
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None)
+            .ok()?;
+
+        let response = reqwest::Client::new()
+            .get(format!("http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}"))
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .ok()?;
+
+        let value: serde_json::Value = response.json().await.ok()?;
+        value.get("current_physical_size").and_then(|v| v.as_u64())
     }
 }

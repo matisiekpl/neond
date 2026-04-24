@@ -310,6 +310,10 @@ async function copyProjectId() {
         <span>PostgreSQL {{ project.pg_version.replace(/^V/i, '') }}</span>
         <span>·</span>
         <span>Created {{ new Date(project.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
+        <template v-if="project.size !== undefined">
+          <span>·</span>
+          <span>{{ formatBytes(project.size) }}</span>
+        </template>
         <button
           type="button"
           class="group inline-flex cursor-pointer items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-0.5 font-mono text-xs transition-colors hover:bg-muted"

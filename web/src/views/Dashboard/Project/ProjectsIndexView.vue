@@ -6,6 +6,7 @@ import { MoreHorizontal, Loader2 } from 'lucide-vue-next'
 import { useProjectStore } from '@/stores/project.store'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { getAppError } from '@/api/utils'
+import { formatBytes } from '@/lib/utils'
 import CreateProjectDialog from '@/elements/CreateProjectDialog.vue'
 import {
   AlertDialog,
@@ -136,7 +137,10 @@ function formatDate(d: string) {
               <CardDescription>PostgreSQL {{ project.pg_version.replace(/^V/i, '') }}</CardDescription>
             </CardHeader>
             <CardContent>
-              <p class="text-xs text-muted-foreground">Created {{ formatDate(project.created_at) }}</p>
+              <p class="text-xs text-muted-foreground">
+                Created {{ formatDate(project.created_at) }}
+                <template v-if="project.size !== undefined"> · {{ formatBytes(project.size) }}</template>
+              </p>
             </CardContent>
           </Card>
         </RouterLink>
