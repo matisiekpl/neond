@@ -36,6 +36,10 @@ const fullDowntimeLabel = computed(() =>
     : 'Daemon inactive during selected time window',
 )
 
+const hasNoData = computed(() =>
+  props.chart.series.every((entry) => (metricStore.seriesBySlug.get(entry.slug) ?? []).length === 0),
+)
+
 const chartRef = ref<InstanceType<typeof VChart> | null>(null)
 
 async function enableRangeSelect(): Promise<void> {
@@ -201,6 +205,12 @@ const option = computed<EChartsOption>(() => {
         class="flex h-full items-center justify-center rounded-md bg-muted/30 text-center text-sm text-muted-foreground"
       >
         {{ fullDowntimeLabel }}
+      </div>
+      <div
+        v-else-if="hasNoData"
+        class="flex h-full items-center justify-center rounded-md bg-muted/30 text-center text-sm text-muted-foreground"
+      >
+        No data available for selected time window
       </div>
       <VChart
         v-else
