@@ -7,12 +7,11 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
 use crate::mgmt::handler::AppState;
-use crate::mgmt::handler::{branch, daemon, endpoint, metric, organization, project, sql, user};
+use crate::mgmt::handler::{branch, daemon, endpoint, metric, organization, project, prometheus, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
-    // TODO(matisiekpl): add prometheus metrics
     // TODO(matisiekpl): add cmd+k command panel
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
@@ -110,10 +109,11 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             "/daemon/shutdown",
             post(daemon::shutdown).delete(daemon::cancel_shutdown),
         )
-        .with_state(state);
+        .with_state(state.clone());
 
     let app = Router::new()
         .nest("/api", api)
+        .route("/metrics", get(prometheus::scrape).with_state(state))
         .layer(CorsLayer::permissive());
 
     #[cfg(not(debug_assertions))]
