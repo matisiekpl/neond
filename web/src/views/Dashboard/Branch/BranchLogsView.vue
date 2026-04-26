@@ -26,7 +26,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
-    <LogsTextarea />
+  <div class="flex flex-col w-[calc(100vw-2rem)] md:w-[calc(100vw-19rem)]">
+    <LogsTextarea :compact="true" />
   </div>
 </template>

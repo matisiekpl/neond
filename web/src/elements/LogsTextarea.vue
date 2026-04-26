@@ -4,6 +4,8 @@ import { useLogsStore } from '@/stores/logs.store'
 import { Button } from '@/components/ui/button'
 import { Copy, Trash2 } from 'lucide-vue-next'
 
+const { compact } = defineProps<{ compact?: boolean }>()
+
 const logsStore = useLogsStore()
 const containerRef = ref<HTMLPreElement | null>(null)
 const isAtBottom = ref(true)
@@ -41,7 +43,7 @@ function clearLogs() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full gap-2">
+  <div class="flex flex-col gap-2">
     <div class="flex items-center justify-between">
       <span class="text-sm text-muted-foreground">
         {{ logsStore.connected ? 'Connected' : 'Disconnected' }} &mdash;
@@ -60,7 +62,8 @@ function clearLogs() {
     </div>
     <pre
       ref="containerRef"
-      class="flex-1 overflow-auto rounded-md border bg-black text-green-400 font-mono text-xs p-4 whitespace-pre leading-5"
+      :class="compact ? 'h-[calc(100vh-15rem)]' : 'h-[calc(100vh-10rem)]'"
+      class="border rounded-lg overflow-auto w-full bg-black text-green-400 font-mono text-xs p-4 whitespace-pre leading-5"
       @scroll="onScroll"
     >{{ text || 'No logs yet.' }}</pre>
   </div>
