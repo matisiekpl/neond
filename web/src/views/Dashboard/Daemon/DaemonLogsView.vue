@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useTitle } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useLogsStore } from '@/stores/logs.store'
 import { type DaemonLogComponent } from '@/api/logs'
 import LogsTextarea from '@/elements/LogsTextarea.vue'
 
-useTitle('Daemon logs — neond')
-
 const route = useRoute()
+
+useTitle(computed(() => `Daemon — Logs — ${route.params.component} — neond`))
 const logsStore = useLogsStore()
 
 function start() {

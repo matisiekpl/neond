@@ -6,7 +6,7 @@ import { useOrganizationStore } from '@/stores/organization.store'
 import { useLogsStore } from '@/stores/logs.store'
 import LogsTextarea from '@/elements/LogsTextarea.vue'
 
-useTitle('Compute endpoint logs — neond')
+useTitle('Logs — neond')
 
 const route = useRoute()
 const organizationStore = useOrganizationStore()
