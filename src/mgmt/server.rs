@@ -102,10 +102,7 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",
             post(sql::execute),
         )
-        .route(
-            "/organizations/{org_id}/daemon/metrics",
-            get(metric::list_daemon),
-        )
+        .route("/daemon/metrics", get(metric::list_daemon))
         .route("/daemon", get(daemon::get))
         .route(
             "/daemon/shutdown",

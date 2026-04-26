@@ -135,15 +135,9 @@ impl MetricService {
 
     pub async fn list_daemon(
         &self,
-        user_id: Uuid,
-        organization_id: Uuid,
         from: NaiveDateTime,
         to: NaiveDateTime,
     ) -> Result<Vec<ComputeMetricSample>> {
-        self.membership_service
-            .verify_membership(user_id, organization_id)
-            .await?;
-
         self.metric_repo.list_daemon(from, to).await
     }
 

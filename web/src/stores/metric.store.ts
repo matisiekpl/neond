@@ -47,12 +47,12 @@ export const useMetricStore = defineStore('metric', () => {
   const rangeEnd = ref<number>(Date.now())
   const mode = ref<MetricMode>('branch')
   const branchScope = ref<{ organizationId: string; projectId: string; branchId: string } | null>(null)
-  const daemonScope = ref<{ organizationId: string } | null>(null)
+  const daemonScope = ref<boolean>(false)
 
   const { pause, resume } = useIntervalFn(() => fetch(true), COLLECTION_INTERVAL_MS, { immediate: false })
 
   const canFetch = computed(() =>
-    mode.value === 'branch' ? branchScope.value !== null : daemonScope.value !== null,
+    mode.value === 'branch' ? branchScope.value !== null : daemonScope.value,
   )
 
   async function fetch(silent = false): Promise<void> {
@@ -74,7 +74,7 @@ export const useMetricStore = defineStore('metric', () => {
         const { organizationId, projectId, branchId } = branchScope.value
         samples.value = await metricsApi.listForBranch(organizationId, projectId, branchId, from, to)
       } else if (mode.value === 'daemon' && daemonScope.value) {
-        samples.value = await metricsApi.listDaemon(daemonScope.value.organizationId, from, to)
+        samples.value = await metricsApi.listDaemon(from, to)
       }
     } catch (error) {
       toast.error(getAppError(error))
@@ -91,10 +91,10 @@ export const useMetricStore = defineStore('metric', () => {
     if (range.value !== null) resume()
   }
 
-  function startDaemonPolling(organizationId: string): void {
+  function startDaemonPolling(): void {
     stopPolling()
     mode.value = 'daemon'
-    daemonScope.value = { organizationId }
+    daemonScope.value = true
     fetch()
     if (range.value !== null) resume()
   }
@@ -102,7 +102,7 @@ export const useMetricStore = defineStore('metric', () => {
   function stopPolling(): void {
     pause()
     branchScope.value = null
-    daemonScope.value = null
+    daemonScope.value = false
   }
 
   function setRange(next: MetricRange): void {

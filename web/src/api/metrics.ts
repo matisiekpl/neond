@@ -20,11 +20,10 @@ export const metricsApi = {
     return response.data
   },
 
-  async listDaemon(organizationId: string, from: Date, to: Date): Promise<MetricSample[]> {
-    const response = await api.get<MetricSample[]>(
-      `organizations/${organizationId}/daemon/metrics`,
-      { params: { from: toNaiveUtc(from), to: toNaiveUtc(to) } },
-    )
+  async listDaemon(from: Date, to: Date): Promise<MetricSample[]> {
+    const response = await api.get<MetricSample[]>(`daemon/metrics`, {
+      params: { from: toNaiveUtc(from), to: toNaiveUtc(to) },
+    })
     return response.data
   },
 }

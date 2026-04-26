@@ -44,8 +44,7 @@ pub async fn list_for_branch(
 
 pub async fn list_daemon(
     State(state): State<Arc<AppState>>,
-    UserId(user_id): UserId,
-    Path(organization_id): Path<Uuid>,
+    UserId(_): UserId,
     Query(range): Query<MetricRangeRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let now = Utc::now().naive_utc();
@@ -55,7 +54,7 @@ pub async fn list_daemon(
     let samples = state
         .services
         .metric()
-        .list_daemon(user_id, organization_id, from, to)
+        .list_daemon(from, to)
         .await?;
 
     let response: Vec<MetricSample> = samples
