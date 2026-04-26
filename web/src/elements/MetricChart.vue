@@ -107,8 +107,7 @@ const option = computed<EChartsOption>(() => {
         type: 'inside',
         xAxisIndex: 0,
         filterMode: 'none',
-        zoomOnMouseWheel: false,
-        moveOnMouseMove: false,
+        disabled: true,
       },
     ],
     xAxis: {
