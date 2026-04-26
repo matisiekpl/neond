@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   Clipboard,
   Database,
-  GitBranch,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -32,7 +31,6 @@ import {
 } from '@/components/ui/command'
 import { useCommandPalette } from '@/composables/useCommandPalette'
 import { useAuthStore } from '@/stores/auth.store'
-import { useOrganizationStore } from '@/stores/organization.store'
 import { useProjectStore } from '@/stores/project.store'
 import { useBranchStore } from '@/stores/branch.store'
 import CreateProjectDialog from '@/elements/CreateProjectDialog.vue'
@@ -43,7 +41,6 @@ const { open } = useCommandPalette()
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const organizationStore = useOrganizationStore()
 const projectStore = useProjectStore()
 const branchStore = useBranchStore()
 const isDark = useDark()
@@ -57,7 +54,6 @@ const shutdownDaemonOpen = ref(false)
 
 const organizationId = computed(() => route.params.organizationId as string)
 const projectId = computed(() => route.params.projectId as string | undefined)
-const branchId = computed(() => route.params.branchId as string | undefined)
 
 const daemonLogComponents = [
   'storage_broker',
