@@ -40,6 +40,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from '@/components/ui/sidebar'
 
@@ -139,6 +142,16 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
                 <span>Daemon</span>
               </RouterLink>
             </SidebarMenuButton>
+            <SidebarMenuSub v-if="route.name === 'daemon' || String(route.name).startsWith('daemon.')">
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton as-child :is-active="route.name === 'daemon.monitoring'">
+                  <RouterLink :to="{ name: 'daemon.monitoring', params: { organizationId } }">
+                    <Activity />
+                    <span>Monitoring</span>
+                  </RouterLink>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            </SidebarMenuSub>
           </SidebarMenuItem>
           <SidebarMenuItem v-if="authStore.user?.is_admin">
             <SidebarMenuButton

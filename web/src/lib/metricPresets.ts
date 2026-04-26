@@ -43,6 +43,39 @@ export const metricCharts: MetricChartDefinition[] = [
       { slug: 'compute_ctl.pagestream_errors_total', label: 'Pagestream errors' },
     ],
   },
+  {
+    id: 'pageserver-layers',
+    title: 'Pageserver layers',
+    unit: 'bytes',
+    series: [
+      { slug: 'pageserver.timeline.layer_bytes', label: 'Layer bytes' },
+    ],
+  },
+  {
+    id: 'pageserver-layer-count',
+    title: 'Pageserver layer count',
+    unit: 'count',
+    series: [
+      { slug: 'pageserver.timeline.layer_count', label: 'Layers' },
+      { slug: 'pageserver.timeline.directory_entries', label: 'Directory entries' },
+    ],
+  },
+  {
+    id: 'pageserver-activity',
+    title: 'Pageserver activity',
+    unit: 'count',
+    series: [
+      { slug: 'pageserver.timeline.smgr_query_started_count', label: 'SMGR queries' },
+    ],
+  },
+  {
+    id: 'pageserver-downloads',
+    title: 'On-demand downloads',
+    unit: 'bytes',
+    series: [
+      { slug: 'pageserver.timeline.ondemand_download_bytes_total', label: 'Downloaded bytes' },
+    ],
+  },
 ]
 
 export function formatMetricValue(value: number, unit: MetricUnit): string {

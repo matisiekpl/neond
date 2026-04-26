@@ -73,6 +73,17 @@ impl BranchRepository {
             .map_err(Into::into)
     }
 
+    pub async fn find_by_timeline_id(&self, timeline_id: Uuid) -> Result<Option<Branch>> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        branches::table
+            .filter(branches::timeline_id.eq(timeline_id))
+            .first::<Branch>(conn)
+            .await
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub async fn find_by_id(&self, id: Uuid) -> Result<Option<Branch>> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

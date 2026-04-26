@@ -47,7 +47,27 @@ impl MetricRepository {
             .await
             .map_err(|error| AppError::Internal(error.to_string()))?;
         compute_metric_samples::table
-            .filter(compute_metric_samples::branch_id.eq(branch_id))
+            .filter(compute_metric_samples::branch_id.eq(Some(branch_id)))
+            .filter(compute_metric_samples::recorded_at.ge(from))
+            .filter(compute_metric_samples::recorded_at.le(to))
+            .order(compute_metric_samples::recorded_at.asc())
+            .load::<ComputeMetricSample>(connection)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn list_daemon(
+        &self,
+        from: NaiveDateTime,
+        to: NaiveDateTime,
+    ) -> Result<Vec<ComputeMetricSample>> {
+        let connection = &mut self
+            .pool
+            .get()
+            .await
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        compute_metric_samples::table
+            .filter(compute_metric_samples::branch_id.is_null())
             .filter(compute_metric_samples::recorded_at.ge(from))
             .filter(compute_metric_samples::recorded_at.le(to))
             .order(compute_metric_samples::recorded_at.asc())

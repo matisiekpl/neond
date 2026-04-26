@@ -1,11 +1,15 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { toast } from 'vue-sonner'
+import { useIntervalFn } from '@vueuse/core'
 import { metricsApi } from '@/api/metrics'
 import { getAppError } from '@/api/utils'
 import type { MetricSample } from '@/types/dto/metricSample'
 
 export type MetricRange = '5m' | '15m' | '30m' | '1h' | '3h' | '6h' | '12h' | '24h'
+export type MetricMode = 'branch' | 'daemon'
+
+const CPU_PERCENT = 'cpu.percent'
 
 export const RANGE_PRESETS: { value: MetricRange; label: string }[] = [
   { value: '5m', label: 'Last 5 minutes' },
@@ -33,7 +37,6 @@ const COLLECTION_INTERVAL_MS = 10_000
 const DOWNTIME_THRESHOLD_MS = 2 * COLLECTION_INTERVAL_MS
 
 export type DowntimeRange = { start: number; end: number }
-
 export type MetricSeriesPoint = { x: number; y: number }
 
 export const useMetricStore = defineStore('metric', () => {
@@ -42,10 +45,18 @@ export const useMetricStore = defineStore('metric', () => {
   const range = ref<MetricRange | null>('30m')
   const rangeStart = ref<number>(Date.now() - rangeDurationMs['30m'])
   const rangeEnd = ref<number>(Date.now())
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  let currentScope: { organizationId: string; projectId: string; branchId: string } | null = null
+  const mode = ref<MetricMode>('branch')
+  const branchScope = ref<{ organizationId: string; projectId: string; branchId: string } | null>(null)
+  const daemonScope = ref<{ organizationId: string } | null>(null)
 
-  async function fetch(organizationId: string, projectId: string, branchId: string, silent = false): Promise<void> {
+  const { pause, resume } = useIntervalFn(() => fetch(true), COLLECTION_INTERVAL_MS, { immediate: false })
+
+  const canFetch = computed(() =>
+    mode.value === 'branch' ? branchScope.value !== null : daemonScope.value !== null,
+  )
+
+  async function fetch(silent = false): Promise<void> {
+    if (!canFetch.value) return
     if (!silent) loading.value = true
     try {
       let from: Date
@@ -59,7 +70,12 @@ export const useMetricStore = defineStore('metric', () => {
         from = new Date(rangeStart.value)
         to = new Date(rangeEnd.value)
       }
-      samples.value = await metricsApi.list(organizationId, projectId, branchId, from, to)
+      if (mode.value === 'branch' && branchScope.value) {
+        const { organizationId, projectId, branchId } = branchScope.value
+        samples.value = await metricsApi.listForBranch(organizationId, projectId, branchId, from, to)
+      } else if (mode.value === 'daemon' && daemonScope.value) {
+        samples.value = await metricsApi.listDaemon(daemonScope.value.organizationId, from, to)
+      }
     } catch (error) {
       toast.error(getAppError(error))
     } finally {
@@ -67,59 +83,46 @@ export const useMetricStore = defineStore('metric', () => {
     }
   }
 
-  function startInterval(): void {
-    if (pollTimer || !currentScope) return
-    pollTimer = setInterval(() => {
-      if (!currentScope) return
-      fetch(currentScope.organizationId, currentScope.projectId, currentScope.branchId, true)
-    }, COLLECTION_INTERVAL_MS)
-  }
-
-  function stopInterval(): void {
-    if (pollTimer) {
-      clearInterval(pollTimer)
-      pollTimer = null
-    }
-  }
-
-  function startPolling(organizationId: string, projectId: string, branchId: string): void {
+  function startBranchPolling(organizationId: string, projectId: string, branchId: string): void {
     stopPolling()
-    currentScope = { organizationId, projectId, branchId }
-    fetch(organizationId, projectId, branchId)
-    if (range.value !== null) {
-      startInterval()
-    }
+    mode.value = 'branch'
+    branchScope.value = { organizationId, projectId, branchId }
+    fetch()
+    if (range.value !== null) resume()
+  }
+
+  function startDaemonPolling(organizationId: string): void {
+    stopPolling()
+    mode.value = 'daemon'
+    daemonScope.value = { organizationId }
+    fetch()
+    if (range.value !== null) resume()
   }
 
   function stopPolling(): void {
-    stopInterval()
-    currentScope = null
+    pause()
+    branchScope.value = null
+    daemonScope.value = null
   }
 
   function setRange(next: MetricRange): void {
     range.value = next
-    startInterval()
-    if (currentScope) {
-      fetch(currentScope.organizationId, currentScope.projectId, currentScope.branchId)
-    }
+    resume()
+    fetch()
   }
 
   function setCustomRange(from: Date, to: Date): void {
     range.value = null
     rangeStart.value = from.getTime()
     rangeEnd.value = to.getTime()
-    stopInterval()
-    if (currentScope) {
-      fetch(currentScope.organizationId, currentScope.projectId, currentScope.branchId)
-    }
+    pause()
+    fetch()
   }
 
   const isLive = computed<boolean>(() => range.value !== null)
 
   function refresh(): void {
-    if (currentScope) {
-      fetch(currentScope.organizationId, currentScope.projectId, currentScope.branchId)
-    }
+    fetch()
   }
 
   const seriesBySlug = computed<Map<string, MetricSeriesPoint[]>>(() => {
@@ -138,8 +141,11 @@ export const useMetricStore = defineStore('metric', () => {
   const downtimeRanges = computed<DowntimeRange[]>(() => {
     const start = rangeStart.value
     const end = rangeEnd.value
+    const downtimeSamples = mode.value === 'branch'
+      ? samples.value.filter((sample) => sample.slug === CPU_PERCENT)
+      : samples.value
     const timestamps = Array.from(
-      new Set(samples.value.map((sample) => new Date(sample.recorded_at + 'Z').getTime())),
+      new Set(downtimeSamples.map((sample) => new Date(sample.recorded_at + 'Z').getTime())),
     ).sort((a, b) => a - b)
 
     if (timestamps.length === 0) {
@@ -164,6 +170,18 @@ export const useMetricStore = defineStore('metric', () => {
     return ranges
   })
 
+  const isFullyDown = computed<boolean>(() => {
+    if (loading.value) return false
+    const sorted = [...downtimeRanges.value].sort((a, b) => a.start - b.start)
+    let covered = rangeStart.value
+    for (const range of sorted) {
+      if (range.start > covered) break
+      covered = Math.max(covered, range.end)
+      if (covered >= rangeEnd.value) return true
+    }
+    return false
+  })
+
   function reset(): void {
     stopPolling()
     samples.value = []
@@ -177,15 +195,18 @@ export const useMetricStore = defineStore('metric', () => {
     range,
     rangeStart,
     rangeEnd,
+    mode,
     isLive,
     fetch,
     refresh,
-    startPolling,
+    startBranchPolling,
+    startDaemonPolling,
     stopPolling,
     setRange,
     setCustomRange,
     seriesBySlug,
     downtimeRanges,
+    isFullyDown,
     reset,
   }
 })

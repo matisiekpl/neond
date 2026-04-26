@@ -6,7 +6,7 @@ function toNaiveUtc(date: Date): string {
 }
 
 export const metricsApi = {
-  async list(
+  async listForBranch(
     organizationId: string,
     projectId: string,
     branchId: string,
@@ -15,6 +15,14 @@ export const metricsApi = {
   ): Promise<MetricSample[]> {
     const response = await api.get<MetricSample[]>(
       `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/endpoint/metrics`,
+      { params: { from: toNaiveUtc(from), to: toNaiveUtc(to) } },
+    )
+    return response.data
+  },
+
+  async listDaemon(organizationId: string, from: Date, to: Date): Promise<MetricSample[]> {
+    const response = await api.get<MetricSample[]>(
+      `organizations/${organizationId}/daemon/metrics`,
       { params: { from: toNaiveUtc(from), to: toNaiveUtc(to) } },
     )
     return response.data

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
 import { daemonApi } from '@/api/daemon'
 import type { DaemonState } from '@/types/models/daemon'
 import { toast } from 'vue-sonner'
@@ -10,7 +11,8 @@ export const useDaemonStore = defineStore('daemon', () => {
   const loading = ref(false)
   const shuttingDownSubmitting = ref(false)
   const cancellingSubmitting = ref(false)
-  let intervalId: ReturnType<typeof setInterval> | null = null
+
+  const { pause, resume } = useIntervalFn(fetch, 1000, { immediate: false })
 
   async function fetch() {
     loading.value = true
@@ -47,14 +49,11 @@ export const useDaemonStore = defineStore('daemon', () => {
 
   function startPolling() {
     fetch()
-    intervalId = setInterval(fetch, 1000)
+    resume()
   }
 
   function stopPolling() {
-    if (intervalId !== null) {
-      clearInterval(intervalId)
-      intervalId = null
-    }
+    pause()
   }
 
   return { state, loading, shuttingDownSubmitting, cancellingSubmitting, startPolling, stopPolling, shutdown, cancelShutdown }
