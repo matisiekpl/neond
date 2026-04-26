@@ -7,6 +7,7 @@ import {SidebarTrigger} from '@/components/ui/sidebar'
 import {Button} from '@/components/ui/button'
 import {useDark, useToggle} from '@vueuse/core'
 import {Sun, Moon} from 'lucide-vue-next'
+import {useCommandPalette} from '@/composables/useCommandPalette'
 
 const route = useRoute()
 const projectStore = useProjectStore()
@@ -47,13 +48,18 @@ const title = computed(() => {
 
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
+const { open: commandOpen } = useCommandPalette()
 </script>
 
 <template>
   <header class="flex h-12 shrink-0 items-center gap-2 border-b px-2" :class="{dark: isDark}">
     <SidebarTrigger class="cursor-pointer"/>
     <span class="text-sm font-medium">{{ title }}</span>
-    <Button variant="ghost" size="icon" class="ml-auto cursor-pointer" @click="toggleDark()">
+    <Button variant="outline" size="sm" class="ml-auto cursor-pointer gap-2 text-muted-foreground" @click="commandOpen = true">
+      <span class="text-sm">Search…</span>
+      <kbd class="pointer-events-none hidden select-none items-center gap-1 rounded border bg-muted px-1.5 py-0.5 font-mono text-xs sm:flex">⌘K</kbd>
+    </Button>
+    <Button variant="ghost" size="icon" class="cursor-pointer" @click="toggleDark()">
       <Sun v-if="isDark" class="size-4"/>
       <Moon v-else class="size-4"/>
     </Button>

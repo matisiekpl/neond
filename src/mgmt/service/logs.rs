@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-const MAX_BUFFER_LINES: usize = 5000;
+const MAX_BUFFER_LINES: usize = 500;
 const BROADCAST_CAPACITY: usize = 256;
 
 #[derive(Debug, Clone, Serialize)]

@@ -16,10 +16,18 @@ const forwarded = useForwardProps(delegatedProps)
   <ListboxContent
     data-slot="command-list"
     v-bind="forwarded"
-    :class="cn('no-scrollbar max-h-72 scroll-py-0 outline-none overflow-x-hidden overflow-y-auto', props.class)"
+    :class="cn('no-scrollbar max-h-[380px] scroll-py-1 outline-none overflow-x-hidden overflow-y-auto', props.class)"
   >
     <div role="presentation">
       <slot />
     </div>
   </ListboxContent>
 </template>
+
+<style>
+[data-slot="command-group"]:not([hidden]) + [data-slot="command-group"]:not([hidden]) {
+  border-top: 1px solid hsl(var(--border));
+  margin-top: 4px;
+  padding-top: 4px;
+}
+</style>
