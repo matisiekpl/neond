@@ -27,6 +27,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 RANGE_PRESETS.forEach((preset, index) => {
   onKeyStroke(String(index + 1), (event) => {
     if (isTypingTarget(event.target)) return
+    if (event.metaKey || event.ctrlKey) return
     event.preventDefault()
     metricStore.setRange(preset.value)
   })
@@ -34,6 +35,7 @@ RANGE_PRESETS.forEach((preset, index) => {
 
 onKeyStroke(['r', 'R'], (event) => {
   if (isTypingTarget(event.target)) return
+  if (event.metaKey || event.ctrlKey) return
   if (metricStore.isLive) return
   event.preventDefault()
   resetToDefault()
