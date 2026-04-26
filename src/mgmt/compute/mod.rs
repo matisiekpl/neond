@@ -19,9 +19,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
 use std::str::FromStr;
 use tempfile::TempDir;
 
+use crate::mgmt::service::logs::{LogChannel, LogStream, LogsService};
 use crate::utils::stdout::wait_for_output_timeout;
 
 use crate::mgmt::model::branch::Branch;
@@ -64,6 +66,7 @@ pub struct ComputeEndpoint {
     status: ComputeEndpointStatus,
     channel_binding_signature: Option<Vec<u8>>,
     config: Config,
+    logs_service: Arc<LogsService>,
 }
 
 #[derive(Clone)]
@@ -78,6 +81,7 @@ impl ComputeEndpoint {
         branch: Branch,
         pg_version: PgVersion,
         preferred_port: Option<u16>,
+        logs_service: Arc<LogsService>,
     ) -> Result<Self> {
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))
             .map_err(|error| AppError::ComputeStartupFailed {
@@ -96,6 +100,7 @@ impl ComputeEndpoint {
             child: None,
             status: ComputeEndpointStatus::Stopped,
             channel_binding_signature: None,
+            logs_service,
         })
     }
 
@@ -194,18 +199,46 @@ impl ComputeEndpoint {
 
         let pid = child.id();
         self.pid = Some(pid);
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AppError::ComputeProcessStartupFailed {
+                reason: "stdout was not piped".to_string(),
+            })?;
+
         let stderr = child
             .stderr
             .take()
             .ok_or_else(|| AppError::ComputeProcessStartupFailed {
                 reason: "stderr was not piped".to_string(),
             })?;
+
+        let branch_id = self.branch.id;
+
+        let stdout_logs = Arc::clone(&self.logs_service);
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(stdout);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    stdout_logs.ingest(LogChannel::ComputeEndpoint(branch_id), line, LogStream::Stdout);
+                }
+            }
+        });
+
+        let stderr_logs = Arc::clone(&self.logs_service);
+        let stderr_sink: Box<dyn Fn(String) + Send + 'static> = Box::new(move |line: String| {
+            stderr_logs.ingest(LogChannel::ComputeEndpoint(branch_id), line, LogStream::Stderr);
+        });
+
         let result = wait_for_output_timeout(
             stderr,
             "listening on IPv4 address",
             true,
             true,
             Some(std::time::Duration::from_secs(50)),
+            Some(stderr_sink),
         );
 
         if let Err(e) = result {

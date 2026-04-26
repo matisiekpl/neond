@@ -7,7 +7,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
 use crate::mgmt::handler::AppState;
-use crate::mgmt::handler::{branch, daemon, endpoint, metric, organization, project, prometheus, sql, user};
+use crate::mgmt::handler::{branch, daemon, endpoint, logs, metric, organization, project, prometheus, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add ability to see compute endpoint logs
@@ -100,10 +100,15 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             get(metric::list_for_branch),
         )
         .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/logs",
+            get(logs::stream_endpoint),
+        )
+        .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",
             post(sql::execute),
         )
         .route("/daemon/metrics", get(metric::list_daemon))
+        .route("/daemon/logs/{component}", get(logs::stream_daemon))
         .route("/daemon", get(daemon::get))
         .route(
             "/daemon/shutdown",

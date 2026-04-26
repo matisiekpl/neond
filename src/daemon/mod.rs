@@ -8,6 +8,7 @@ use crate::daemon::backup::BackupService;
 use crate::daemon::process::ProcessControl;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::service::logs::{LogChannel, LogsService};
 use neon_utils::auth::Scope;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -30,7 +31,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    pub fn new(config: Config, backup: Arc<BackupService>) -> Result<Self> {
+    pub fn new(config: Config, backup: Arc<BackupService>, logs_service: Arc<LogsService>) -> Result<Self> {
         let verbose = cfg!(debug_assertions);
 
         let pageserver_working_directory = config.daemon_directory.join("pageserver");
@@ -43,7 +44,7 @@ impl Daemon {
             "storage_controller_pg_data",
             5431,
             config.server_secret.clone(),
-        );
+        ).with_logs(Arc::clone(&logs_service), LogChannel::StorageControllerDb);
         let management_postgres = postgres::Postgres::new(
             "management_db",
             config.daemon_directory.clone(),
@@ -51,7 +52,7 @@ impl Daemon {
             "management_pg_data",
             5430,
             config.server_secret.clone(),
-        );
+        ).with_logs(Arc::clone(&logs_service), LogChannel::ManagementDb);
 
         let component_auth = &config.component_auth;
         let public_key_path = component_auth
@@ -70,7 +71,7 @@ impl Daemon {
             config.daemon_directory.clone(),
             "listening",
             verbose,
-        );
+        ).with_logs(Arc::clone(&logs_service), LogChannel::StorageBroker);
 
         let pageserver_api_token = component_auth.generate_token(Scope::PageServerApi, None)?;
         let admin_token = component_auth.generate_token(Scope::Admin, None)?;
@@ -104,7 +105,7 @@ impl Daemon {
             config.daemon_directory.clone(),
             "Serving HTTP on 127.0.0.1:1234",
             verbose,
-        );
+        ).with_logs(Arc::clone(&logs_service), LogChannel::StorageController);
 
         let safekeeper_dir_str = safekeeper_working_directory
             .to_str()
@@ -139,7 +140,7 @@ impl Daemon {
             config.daemon_directory.clone(),
             "starting safekeeper WAL service on",
             verbose,
-        );
+        ).with_logs(Arc::clone(&logs_service), LogChannel::Safekeeper);
 
         let pageserver_dir_str = pageserver_working_directory
             .to_str()
@@ -160,7 +161,7 @@ impl Daemon {
             config.daemon_directory.clone(),
             "Starting pageserver http handler on 127.0.0.1:9898",
             verbose,
-        );
+        ).with_logs(Arc::clone(&logs_service), LogChannel::Pageserver);
 
         Ok(Daemon {
             config,

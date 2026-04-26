@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Plus,
+  ScrollText,
   Settings,
   Terminal,
   Users,
@@ -163,6 +164,26 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
                   </RouterLink>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton as-child :is-active="route.name === 'daemon.logs'">
+                  <RouterLink :to="{ name: 'daemon.logs', params: { organizationId, component: 'storage_broker' } }">
+                    <ScrollText />
+                    <span>Logs</span>
+                  </RouterLink>
+                </SidebarMenuSubButton>
+                <SidebarMenuSub v-if="route.name === 'daemon.logs'">
+                  <SidebarMenuSubItem v-for="component in ['storage_broker', 'storage_controller', 'pageserver', 'safekeeper', 'storage_controller_db', 'management_db']" :key="component">
+                    <SidebarMenuSubButton
+                      as-child
+                      :is-active="route.params.component === component"
+                    >
+                      <RouterLink :to="{ name: 'daemon.logs', params: { organizationId, component } }">
+                        <span>{{ component }}</span>
+                      </RouterLink>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </SidebarMenuSubItem>
             </SidebarMenuSub>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -299,6 +320,18 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               <RouterLink :to="{ name: 'projects.branches.metrics', params: { organizationId, projectId, branchId } }">
                 <Activity />
                 <span>Monitoring</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="route.name === 'projects.branches.logs'"
+              tooltip="Logs"
+            >
+              <RouterLink :to="{ name: 'projects.branches.logs', params: { organizationId, projectId, branchId } }">
+                <ScrollText />
+                <span>Logs</span>
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

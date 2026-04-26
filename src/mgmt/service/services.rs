@@ -3,6 +3,7 @@ use crate::mgmt::repository::Repositories;
 use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::daemon::DaemonService;
 use crate::mgmt::service::endpoint::EndpointService;
+use crate::mgmt::service::logs::LogsService;
 use crate::mgmt::service::membership::MembershipService;
 use crate::mgmt::service::metric::MetricService;
 use crate::mgmt::service::organization::OrganizationService;
@@ -22,6 +23,7 @@ pub struct Services {
     sql: SqlService,
     daemon: Arc<DaemonService>,
     metric: Arc<MetricService>,
+    logs: Arc<LogsService>,
 }
 
 impl Services {
@@ -31,6 +33,7 @@ impl Services {
         safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
         config: Config,
         shutdown_token: CancellationToken,
+        logs: Arc<LogsService>,
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
         let endpoint = Arc::new(EndpointService::new(
@@ -38,6 +41,7 @@ impl Services {
             Arc::new(repositories.branch().clone()),
             Arc::new(repositories.project().clone()),
             Arc::new(membership.clone()),
+            Arc::clone(&logs),
         ));
         let branch = BranchService::new(
             Arc::new(repositories.branch().clone()),
@@ -77,6 +81,7 @@ impl Services {
             Arc::clone(&endpoint),
             Arc::clone(&pageserver_client),
             Arc::clone(&safekeeper_client),
+            Arc::clone(&logs),
         );
         let metric = Arc::new(MetricService::new(
             Arc::new(repositories.metric().clone()),
@@ -102,6 +107,7 @@ impl Services {
             membership,
             daemon,
             metric,
+            logs,
         }
     }
 
@@ -140,5 +146,9 @@ impl Services {
 
     pub fn metric(&self) -> &Arc<MetricService> {
         &self.metric
+    }
+
+    pub fn logs(&self) -> &Arc<LogsService> {
+        &self.logs
     }
 }

@@ -1,11 +1,13 @@
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::service::logs::{LogChannel, LogStream, LogsService};
 use crate::utils::death;
-use crate::utils::stdout::wait_for_output;
+use crate::utils::stdout::wait_for_output_timeout;
 use nix::sys::signal::{Signal::SIGINT, kill};
 use nix::unistd::Pid;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use tempfile::NamedTempFile;
 
 pub struct Postgres {
@@ -18,6 +20,8 @@ pub struct Postgres {
     process: Option<std::process::Child>,
     verbose: bool,
     password: String,
+    logs_service: Option<Arc<LogsService>>,
+    log_channel: Option<LogChannel>,
 }
 
 impl Postgres {
@@ -41,7 +45,15 @@ impl Postgres {
             process: None,
             verbose: cfg!(debug_assertions),
             password,
+            logs_service: None,
+            log_channel: None,
         }
+    }
+
+    pub fn with_logs(mut self, logs_service: Arc<LogsService>, channel: LogChannel) -> Self {
+        self.logs_service = Some(logs_service);
+        self.log_channel = Some(channel);
+        self
     }
 
     pub fn init(&self) -> Result<()> {
@@ -123,7 +135,17 @@ impl Postgres {
             .ok_or_else(|| AppError::PostgresStartupFailed {
                 reason: "stderr was not piped".to_string(),
             })?;
-        wait_for_output(stderr, "connections", self.verbose, self.verbose).map_err(|error| {
+
+        let stderr_sink: Option<Box<dyn Fn(String) + Send + 'static>> =
+            self.logs_service.as_ref().map(|logs| {
+                let logs = Arc::clone(logs);
+                let channel = self.log_channel.clone().unwrap();
+                Box::new(move |line: String| {
+                    logs.ingest(channel.clone(), line, LogStream::Stderr);
+                }) as Box<dyn Fn(String) + Send + 'static>
+            });
+
+        wait_for_output_timeout(stderr, "connections", self.verbose, self.verbose, None, stderr_sink).map_err(|error| {
             AppError::PostgresStartupFailed {
                 reason: error.to_string(),
             }

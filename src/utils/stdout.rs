@@ -8,7 +8,7 @@ pub fn wait_for_output<R: Read + Send + 'static>(
     verbose: bool,
     verbose_after_catch: bool,
 ) -> Result<(), anyhow::Error> {
-    wait_for_output_timeout(stdout, needle, verbose, verbose_after_catch, None)
+    wait_for_output_timeout(stdout, needle, verbose, verbose_after_catch, None, None)
 }
 
 pub fn wait_for_output_timeout<R: Read + Send + 'static>(
@@ -17,6 +17,7 @@ pub fn wait_for_output_timeout<R: Read + Send + 'static>(
     verbose: bool,
     verbose_after_catch: bool,
     timeout: Option<Duration>,
+    sink: Option<Box<dyn Fn(String) + Send + 'static>>,
 ) -> Result<(), anyhow::Error> {
     let reader = BufReader::new(stdout);
     let needle = needle.to_string();
@@ -36,6 +37,9 @@ pub fn wait_for_output_timeout<R: Read + Send + 'static>(
             }
             if verbose && !caught {
                 println!("{}", line);
+            }
+            if let Some(ref sink_fn) = sink {
+                sink_fn(line.clone());
             }
             if line.contains(&needle) && !caught {
                 caught = true;
