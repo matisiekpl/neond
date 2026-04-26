@@ -9,6 +9,7 @@ import { useBranchStore } from '@/stores/branch.store'
 import { Loader2 } from 'lucide-vue-next'
 import AppSidebar from '@/elements/AppSidebar.vue'
 import AppMainHeader from '@/elements/AppMainHeader.vue'
+import CommandPalette from '@/elements/CommandPalette.vue'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 const authStore = useAuthStore()
@@ -100,5 +101,6 @@ const showLayout = computed(
         </div>
       </SidebarInset>
     </SidebarProvider>
+    <CommandPalette />
   </template>
 </template>

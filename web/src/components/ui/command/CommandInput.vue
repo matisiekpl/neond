@@ -6,7 +6,6 @@ import { reactiveOmit } from '@vueuse/core'
 import { SearchIcon } from 'lucide-vue-next'
 import { ListboxFilter, useForwardProps } from 'reka-ui'
 import { cn } from '@/lib/utils'
-import { InputGroup, InputGroupAddon } from '@/components/ui/input-group'
 import { useCommand } from '.'
 
 defineOptions({
@@ -27,19 +26,15 @@ const { filterState } = useCommand()
 <template>
   <div
     data-slot="command-input-wrapper"
-    class="border-b pb-0"
+    class="flex items-center gap-2 border-b px-3"
   >
-    <InputGroup class="bg-input/30 border-input/30 h-8 border-none shadow-none! *:data-[slot=input-group-addon]:pl-2!">
-      <ListboxFilter
-        v-bind="{ ...forwardedProps, ...$attrs }"
-        v-model="filterState.search"
-        data-slot="command-input"
-        auto-focus
-        :class="cn('w-full text-xs outline-hidden disabled:cursor-not-allowed disabled:opacity-50', props.class)"
-      />
-      <InputGroupAddon>
-        <SearchIcon class="size-4 shrink-0 opacity-50" />
-      </InputGroupAddon>
-    </InputGroup>
+    <SearchIcon class="size-4 shrink-0 opacity-50" />
+    <ListboxFilter
+      v-bind="{ ...forwardedProps, ...$attrs }"
+      v-model="filterState.search"
+      data-slot="command-input"
+      auto-focus
+      :class="cn('placeholder:text-muted-foreground flex h-10 w-full bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50', props.class)"
+    />
   </div>
 </template>

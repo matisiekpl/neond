@@ -10,7 +10,6 @@ use crate::mgmt::handler::AppState;
 use crate::mgmt::handler::{branch, daemon, endpoint, logs, metric, organization, project, prometheus, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
-    // TODO(matisiekpl): add cmd+k command panel
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
