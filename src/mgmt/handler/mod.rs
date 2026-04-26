@@ -3,6 +3,7 @@ pub mod branch;
 pub mod daemon;
 pub mod endpoint;
 pub mod metric;
+pub mod prometheus;
 pub mod organization;
 pub mod project;
 pub mod sql;

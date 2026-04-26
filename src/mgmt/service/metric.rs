@@ -4,11 +4,12 @@ use std::time::Duration;
 
 use chrono::{NaiveDateTime, Utc};
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::dto::metric_snapshot::{BranchLabelMap, BranchLabels, LatestMetricKey, LatestMetrics, MetricSnapshot};
 use crate::mgmt::dto::metric_target::MetricTarget;
 use crate::mgmt::model::compute_metric_sample::{ComputeMetricSample, NewComputeMetricSample};
 use crate::mgmt::repository::branch::BranchRepository;
@@ -72,6 +73,7 @@ pub struct MetricService {
     membership_service: Arc<MembershipService>,
     http_client: reqwest::Client,
     system: Arc<Mutex<System>>,
+    snapshot: Arc<RwLock<MetricSnapshot>>,
 }
 
 impl MetricService {
@@ -94,6 +96,7 @@ impl MetricService {
             membership_service,
             http_client,
             system: Arc::new(Mutex::new(System::new())),
+            snapshot: Arc::new(RwLock::new(MetricSnapshot::default())),
         }
     }
 
@@ -161,17 +164,25 @@ impl MetricService {
 
         let recorded_at = Utc::now().naive_utc();
         let mut batch: Vec<NewComputeMetricSample> = Vec::new();
+        let mut latest_samples: LatestMetrics = HashMap::new();
+        let mut seen_branch_ids: HashSet<Uuid> = HashSet::new();
 
         for target in &targets {
             let process_samples = self.sample_process(target).await;
             let http_samples = self.sample_compute_ctl(target).await;
             let sql_samples = self.sample_pg_connections(target).await;
 
+            seen_branch_ids.insert(target.branch_id);
+
             for (slug, value) in process_samples
                 .into_iter()
                 .chain(http_samples.into_iter())
                 .chain(sql_samples.into_iter())
             {
+                latest_samples.insert(
+                    LatestMetricKey { slug: slug.to_string(), branch_id: Some(target.branch_id) },
+                    value,
+                );
                 batch.push(NewComputeMetricSample {
                     id: Uuid::new_v4(),
                     branch_id: Some(target.branch_id),
@@ -184,6 +195,11 @@ impl MetricService {
 
         let pageserver_timeline_samples = self.sample_pageserver_timeline_metrics().await;
         for (branch_id, slug, value) in pageserver_timeline_samples {
+            seen_branch_ids.insert(branch_id);
+            latest_samples.insert(
+                LatestMetricKey { slug: slug.clone(), branch_id: Some(branch_id) },
+                value,
+            );
             batch.push(NewComputeMetricSample {
                 id: Uuid::new_v4(),
                 branch_id: Some(branch_id),
@@ -195,6 +211,10 @@ impl MetricService {
 
         let pageserver_global_samples = self.sample_pageserver_global_metrics().await;
         for (slug, value) in pageserver_global_samples {
+            latest_samples.insert(
+                LatestMetricKey { slug: slug.to_string(), branch_id: None },
+                value,
+            );
             batch.push(NewComputeMetricSample {
                 id: Uuid::new_v4(),
                 branch_id: None,
@@ -206,6 +226,10 @@ impl MetricService {
 
         let safekeeper_samples = self.sample_safekeeper_metrics().await;
         for (slug, value) in safekeeper_samples {
+            latest_samples.insert(
+                LatestMetricKey { slug: slug.to_string(), branch_id: None },
+                value,
+            );
             batch.push(NewComputeMetricSample {
                 id: Uuid::new_v4(),
                 branch_id: None,
@@ -215,9 +239,36 @@ impl MetricService {
             });
         }
 
+        let branch_labels = self.build_branch_labels(&seen_branch_ids).await;
+
+        *self.snapshot.write().await = MetricSnapshot { samples: latest_samples, branch_labels };
+
         if let Err(error) = self.metric_repo.insert_batch(batch).await {
             tracing::warn!("Metric batch insert failed: {}", error);
         }
+    }
+
+    async fn build_branch_labels(&self, branch_ids: &HashSet<Uuid>) -> BranchLabelMap {
+        let mut labels: BranchLabelMap = HashMap::new();
+        for &branch_id in branch_ids {
+            let branch = match self.branch_repo.find_by_id(branch_id).await {
+                Ok(Some(branch)) => branch,
+                _ => continue,
+            };
+            let project = match self.project_repo.find_by_id(branch.project_id).await {
+                Ok(Some(project)) => project,
+                _ => continue,
+            };
+            labels.insert(branch_id, BranchLabels {
+                branch_name: branch.name,
+                project_name: project.name,
+            });
+        }
+        labels
+    }
+
+    pub async fn snapshot_latest(&self) -> MetricSnapshot {
+        self.snapshot.read().await.clone()
     }
 
     async fn refresh_processes(&self) {
