@@ -26,21 +26,19 @@ const colors = computed(() =>
   ),
 )
 
-const isFullyDown = computed(() => {
-  if (metricStore.loading) return false
-  if (metricStore.samples.length === 0) return true
-  const rangeStart = metricStore.rangeStart
-  const rangeEnd = metricStore.rangeEnd
-  if (typeof rangeStart !== 'number' || typeof rangeEnd !== 'number') return false
-  const sorted = [...metricStore.downtimeRanges].sort((a, b) => a.start - b.start)
-  let covered = rangeStart
-  for (const range of sorted) {
-    if (range.start > covered) break
-    covered = Math.max(covered, range.end)
-    if (covered >= rangeEnd) return true
-  }
-  return false
-})
+const partialDowntimeLabel = computed(() =>
+  metricStore.mode === 'branch' ? 'Endpoint inactive' : 'Daemon inactive',
+)
+
+const fullDowntimeLabel = computed(() =>
+  metricStore.mode === 'branch'
+    ? 'Endpoint inactive during selected time window'
+    : 'Daemon inactive during selected time window',
+)
+
+const hasNoData = computed(() =>
+  props.chart.series.every((entry) => (metricStore.seriesBySlug.get(entry.slug) ?? []).length === 0),
+)
 
 const chartRef = ref<InstanceType<typeof VChart> | null>(null)
 
@@ -113,8 +111,7 @@ const option = computed<EChartsOption>(() => {
         type: 'inside',
         xAxisIndex: 0,
         filterMode: 'none',
-        zoomOnMouseWheel: false,
-        moveOnMouseMove: false,
+        disabled: true,
       },
     ],
     xAxis: {
@@ -158,7 +155,7 @@ const option = computed<EChartsOption>(() => {
             <div class="font-semibold">${time}</div>
             <div class="flex items-center gap-2 text-slate-500">
               <span class="size-2 rounded-sm" style="background:rgba(100,116,139,0.3);"></span>
-              <span>Endpoint inactive</span>
+              <span>${partialDowntimeLabel.value}</span>
             </div>
           </div>`
         }
@@ -204,10 +201,16 @@ const option = computed<EChartsOption>(() => {
     </div>
     <div class="relative h-56">
       <div
-        v-if="isFullyDown"
+        v-if="metricStore.isFullyDown"
         class="flex h-full items-center justify-center rounded-md bg-muted/30 text-center text-sm text-muted-foreground"
       >
-        Endpoint was stopped during selected time window
+        {{ fullDowntimeLabel }}
+      </div>
+      <div
+        v-else-if="hasNoData"
+        class="flex h-full items-center justify-center rounded-md bg-muted/30 text-center text-sm text-muted-foreground"
+      >
+        No data available for selected time window
       </div>
       <VChart
         v-else

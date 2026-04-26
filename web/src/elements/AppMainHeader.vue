@@ -16,6 +16,8 @@ const ROUTE_TITLES: Record<string, string> = {
   'projects.list': 'Projects',
   'settings.organization': 'Organization settings',
   'daemon': 'Daemon',
+  'daemon.monitoring': 'Daemon — Monitoring',
+  'projects.branches.metrics': 'Monitoring',
 }
 
 const title = computed(() => {

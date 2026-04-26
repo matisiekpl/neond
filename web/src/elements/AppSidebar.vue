@@ -40,6 +40,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from '@/components/ui/sidebar'
 
@@ -128,18 +131,6 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              as-child
-              :is-active="route.name === 'daemon'"
-              tooltip="Daemon"
-            >
-              <RouterLink :to="{ name: 'daemon', params: { organizationId } }">
-                <Terminal />
-                <span>Daemon</span>
-              </RouterLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
           <SidebarMenuItem v-if="authStore.user?.is_admin">
             <SidebarMenuButton
               as-child
@@ -151,6 +142,28 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
                 <span>Users</span>
               </RouterLink>
             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="route.name === 'daemon'"
+              tooltip="Daemon"
+            >
+              <RouterLink :to="{ name: 'daemon', params: { organizationId } }">
+                <Terminal />
+                <span>Daemon</span>
+              </RouterLink>
+            </SidebarMenuButton>
+            <SidebarMenuSub>
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton as-child :is-active="route.name === 'daemon.monitoring'">
+                  <RouterLink :to="{ name: 'daemon.monitoring', params: { organizationId } }">
+                    <Activity />
+                    <span>Monitoring</span>
+                  </RouterLink>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            </SidebarMenuSub>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>

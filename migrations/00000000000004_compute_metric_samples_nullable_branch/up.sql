@@ -1,0 +1,1 @@
+ALTER TABLE compute_metric_samples ALTER COLUMN branch_id DROP NOT NULL;

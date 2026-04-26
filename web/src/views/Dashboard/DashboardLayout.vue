@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, watch, watchEffect, onUnmounted } from 'vue'
+import { computed, watch, watchEffect } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import { useOrganizationStore } from '@/stores/organization.store'
@@ -46,7 +47,15 @@ watchEffect(() => {
   }
 })
 
-let pollInterval: ReturnType<typeof setInterval> | null = null
+const { pause: pauseBranchPoll, resume: resumeBranchPoll } = useIntervalFn(
+  () => {
+    const orgId = organizationStore.selectedOrganizationId
+    const projectId = route.params.projectId as string | undefined
+    if (orgId && projectId) branchStore.fetch(orgId, projectId, true)
+  },
+  500,
+  { immediate: false },
+)
 
 watch(
   () => organizationStore.selectedOrganizationId,
@@ -59,19 +68,13 @@ watch(
 watch(
   [() => organizationStore.selectedOrganizationId, () => route.params.projectId as string | undefined],
   ([orgId, projectId]) => {
-    if (pollInterval) clearInterval(pollInterval)
+    pauseBranchPoll()
     if (!orgId || !projectId) return
     branchStore.fetch(orgId, projectId)
-    pollInterval = setInterval(() => {
-      branchStore.fetch(orgId, projectId, true)
-    }, 500)
+    resumeBranchPoll()
   },
   { immediate: true },
 )
-
-onUnmounted(() => {
-  if (pollInterval) clearInterval(pollInterval)
-})
 
 const showLayout = computed(
   () =>

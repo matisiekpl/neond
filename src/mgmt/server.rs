@@ -12,6 +12,8 @@ use crate::mgmt::handler::{branch, daemon, endpoint, metric, organization, proje
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     // TODO(matisiekpl): add ability to see compute endpoint logs
     // TODO(matisiekpl): add global daemon event log
+    // TODO(matisiekpl): add prometheus metrics
+    // TODO(matisiekpl): add cmd+k command panel
     let shutdown_token = state.services.daemon().shutdown_token();
     let state = Arc::new(state);
 
@@ -96,12 +98,13 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/metrics",
-            get(metric::list),
+            get(metric::list_for_branch),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",
             post(sql::execute),
         )
+        .route("/daemon/metrics", get(metric::list_daemon))
         .route("/daemon", get(daemon::get))
         .route(
             "/daemon/shutdown",
