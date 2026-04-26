@@ -18,18 +18,27 @@ const ROUTE_TITLES: Record<string, string> = {
   'daemon': 'Daemon',
   'daemon.monitoring': 'Daemon — Monitoring',
   'projects.branches.metrics': 'Monitoring',
+  'projects.branches.logs': 'Logs',
 }
 
 const title = computed(() => {
   const projectId = route.params.projectId as string | undefined
   const branchId = route.params.branchId as string | undefined
+
+  if (route.name === 'daemon.logs') {
+    const component = (route.params.component as string) ?? ''
+    return `Daemon — Logs — ${component}`
+  }
+
   if (projectId) {
     const project = projectStore.projects.find((p) => p.id === projectId)
     const projectName = project?.name ?? 'Project'
     if (branchId) {
       const branch = branchStore.branches.find((b) => b.id === branchId)
       const branchName = branch?.name ?? 'Branch'
-      return route.name === 'projects.branches.data' ? `${projectName} / ${branchName} — Data` : `${projectName} / ${branchName}`
+      if (route.name === 'projects.branches.data') return `${projectName} / ${branchName} — Data`
+      if (route.name === 'projects.branches.logs') return `${projectName} / ${branchName} — Logs`
+      return `${projectName} / ${branchName}`
     }
     return route.name === 'projects.settings' ? `${projectName} — Settings` : projectName
   }

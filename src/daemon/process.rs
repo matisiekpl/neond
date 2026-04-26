@@ -1,9 +1,11 @@
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::service::logs::{LogChannel, LogStream, LogsService};
 use crate::utils::death;
-use crate::utils::stdout::wait_for_output;
+use crate::utils::stdout::wait_for_output_timeout;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
 
 pub struct ProcessControl {
     name: String,
@@ -14,6 +16,8 @@ pub struct ProcessControl {
     needle: String,
     verbose: bool,
     child: Option<Child>,
+    logs_service: Option<Arc<LogsService>>,
+    log_channel: Option<LogChannel>,
 }
 
 impl ProcessControl {
@@ -35,7 +39,15 @@ impl ProcessControl {
             needle: needle.into(),
             verbose,
             child: None,
+            logs_service: None,
+            log_channel: None,
         }
+    }
+
+    pub fn with_logs(mut self, logs_service: Arc<LogsService>, channel: LogChannel) -> Self {
+        self.logs_service = Some(logs_service);
+        self.log_channel = Some(channel);
+        self
     }
 
     pub fn start(&mut self) -> Result<()> {
@@ -46,6 +58,7 @@ impl ProcessControl {
             .args(&self.args)
             .envs(self.env_vars.iter().map(|(k, v)| (k, v)))
             .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| AppError::DaemonStartupFailed {
                 reason: format!("failed to spawn {}: {}", self.name, error),
@@ -57,7 +70,45 @@ impl ProcessControl {
             .ok_or_else(|| AppError::DaemonStartupFailed {
                 reason: format!("stdout was not piped for {}", self.name),
             })?;
-        wait_for_output(stdout, &self.needle, self.verbose, self.verbose).map_err(|error| {
+
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| AppError::DaemonStartupFailed {
+                reason: format!("stderr was not piped for {}", self.name),
+            })?;
+
+        let stdout_sink: Option<Box<dyn Fn(String) + Send + 'static>> =
+            self.logs_service.as_ref().map(|logs| {
+                let logs = Arc::clone(logs);
+                let channel = self.log_channel.clone().unwrap();
+                Box::new(move |line: String| {
+                    logs.ingest(channel.clone(), line, LogStream::Stdout);
+                }) as Box<dyn Fn(String) + Send + 'static>
+            });
+
+        let stderr_sink: Option<Box<dyn Fn(String) + Send + 'static>> =
+            self.logs_service.as_ref().map(|logs| {
+                let logs = Arc::clone(logs);
+                let channel = self.log_channel.clone().unwrap();
+                Box::new(move |line: String| {
+                    logs.ingest(channel.clone(), line, LogStream::Stderr);
+                }) as Box<dyn Fn(String) + Send + 'static>
+            });
+
+        std::thread::spawn(move || {
+            if let Some(sink) = stderr_sink {
+                let reader = std::io::BufReader::new(stderr);
+                use std::io::BufRead;
+                for line in reader.lines() {
+                    if let Ok(line) = line {
+                        sink(line);
+                    }
+                }
+            }
+        });
+
+        wait_for_output_timeout(stdout, &self.needle, self.verbose, self.verbose, None, stdout_sink).map_err(|error| {
             AppError::DaemonStartupFailed {
                 reason: format!("waiting on {} stdout: {}", self.name, error),
             }

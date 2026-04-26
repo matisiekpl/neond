@@ -52,3 +52,26 @@ where
         fut
     }
 }
+
+pub fn authenticate(
+    header_result: Result<UserId, AppError>,
+    token_query: Option<String>,
+) -> Result<Uuid, AppError> {
+    if let Ok(UserId(user_id)) = header_result {
+        return Ok(user_id);
+    }
+
+    if let Some(token) = token_query {
+        let server_secret = std::env::var("SERVER_SECRET")
+            .map_err(|_| AppError::Internal("SERVER_SECRET not configured".into()))?;
+        let token_data = decode::<Claims>(
+            &token,
+            &DecodingKey::from_secret(server_secret.as_bytes()),
+            &Validation::default(),
+        )
+        .map_err(|_| AppError::Unauthorized)?;
+        return Ok(token_data.claims.sub);
+    }
+
+    Err(AppError::Unauthorized)
+}

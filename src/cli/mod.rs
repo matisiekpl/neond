@@ -5,6 +5,7 @@ use crate::mgmt::handler::AppState;
 use crate::mgmt::repository::Repositories;
 use crate::mgmt::repository::db::{init_pool, run_migrations};
 use crate::mgmt::server::serve;
+use crate::mgmt::service::logs::LogsService;
 use crate::mgmt::service::Services;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -46,7 +47,9 @@ pub async fn run() -> Result<()> {
         BackupService::new(config.clone(), shutdown_token.clone()).await?,
     );
 
-    let mut daemon = crate::daemon::Daemon::new(config.clone(), Arc::clone(&backup_service))?;
+    let logs_service = LogsService::new();
+
+    let mut daemon = crate::daemon::Daemon::new(config.clone(), Arc::clone(&backup_service), Arc::clone(&logs_service))?;
 
     daemon.start().await?;
 
@@ -87,6 +90,7 @@ pub async fn run() -> Result<()> {
         Arc::new(safekeeper_client),
         config.clone(),
         shutdown_token.clone(),
+        logs_service,
     ));
     let state = AppState {
         services: Arc::clone(&services),

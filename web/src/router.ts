@@ -10,11 +10,13 @@ import SetupOrganizationView from '@/views/Dashboard/Organization/SetupOrganizat
 import OrganizationSettingsView from '@/views/Dashboard/Organization/OrganizationSettingsView.vue'
 import DaemonView from '@/views/Dashboard/Daemon/DaemonView.vue'
 import DaemonMetricsView from '@/views/Dashboard/Daemon/DaemonMetricsView.vue'
+import DaemonLogsView from '@/views/Dashboard/Daemon/DaemonLogsView.vue'
 import UsersView from '@/views/Dashboard/Users/UsersView.vue'
 import BranchView from '@/views/Dashboard/Branch/BranchView.vue'
 import BranchDataView from '@/views/Dashboard/Branch/BranchDataView.vue'
 import BranchSqlView from '@/views/Dashboard/Branch/BranchSqlView.vue'
 import BranchMetricsView from '@/views/Dashboard/Branch/BranchMetricsView.vue'
+import BranchLogsView from '@/views/Dashboard/Branch/BranchLogsView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -54,11 +56,13 @@ const routes = [
           { path: 'data/:table?', component: BranchDataView, name: 'projects.branches.data' },
           { path: 'sql', component: BranchSqlView, name: 'projects.branches.sql' },
           { path: 'metrics', component: BranchMetricsView, name: 'projects.branches.metrics' },
+          { path: 'logs', component: BranchLogsView, name: 'projects.branches.logs' },
         ],
       },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },
       { path: 'daemon', component: DaemonView, name: 'daemon' },
       { path: 'daemon/monitoring', component: DaemonMetricsView, name: 'daemon.monitoring' },
+      { path: 'daemon/logs/:component', component: DaemonLogsView, name: 'daemon.logs' },
       { path: 'users', component: UsersView, name: 'users' },
     ],
   },

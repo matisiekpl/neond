@@ -13,6 +13,7 @@ use crate::mgmt::dto::metric_target::MetricTarget;
 use crate::mgmt::model::branch::Branch;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
+use crate::mgmt::service::logs::LogsService;
 use crate::mgmt::service::membership::MembershipService;
 use pg_sni_muxer::PgSniMuxer;
 use tokio::net::TcpListener;
@@ -24,6 +25,7 @@ pub struct EndpointService {
     membership_service: Arc<MembershipService>,
     config: Config,
     pg_proxy: Arc<PgSniMuxer>,
+    logs_service: Arc<LogsService>,
 }
 
 impl EndpointService {
@@ -32,6 +34,7 @@ impl EndpointService {
         branch_repo: Arc<BranchRepository>,
         project_repo: Arc<ProjectRepository>,
         membership_service: Arc<MembershipService>,
+        logs_service: Arc<LogsService>,
     ) -> Self {
         Self {
             config,
@@ -40,6 +43,7 @@ impl EndpointService {
             project_repo,
             membership_service,
             pg_proxy: Arc::new(PgSniMuxer::new()),
+            logs_service,
         }
     }
 
@@ -99,7 +103,7 @@ impl EndpointService {
 
         let preferred_port = branch.port.map(|p| p as u16);
         let mut endpoint =
-            ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port).map_err(
+            ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port, Arc::clone(&self.logs_service)).map_err(
                 |error| AppError::ComputeStartupFailed {
                     reason: error.to_string(),
                 },
@@ -378,7 +382,7 @@ impl EndpointService {
 
             let preferred_port = branch.port.map(|p| p as u16);
             let mut endpoint =
-                match ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port)
+                match ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port, Arc::clone(&self.logs_service))
                 {
                     Ok(e) => e,
                     Err(e) => {

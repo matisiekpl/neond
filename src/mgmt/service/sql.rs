@@ -18,6 +18,7 @@ use crate::mgmt::model::project::{PgVersion, Project};
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::endpoint::EndpointService;
+use crate::mgmt::service::logs::LogsService;
 use crate::mgmt::service::membership::MembershipService;
 use crate::utils::password::generate_password;
 
@@ -29,6 +30,7 @@ pub struct SqlService {
     endpoint_service: Arc<EndpointService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
+    logs_service: Arc<LogsService>,
 }
 
 impl SqlService {
@@ -40,6 +42,7 @@ impl SqlService {
         endpoint_service: Arc<EndpointService>,
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
+        logs_service: Arc<LogsService>,
     ) -> Self {
         Self {
             config,
@@ -49,6 +52,7 @@ impl SqlService {
             endpoint_service,
             pageserver_client,
             safekeeper_client,
+            logs_service,
         }
     }
 
@@ -188,7 +192,7 @@ impl SqlService {
         };
 
         let mut endpoint =
-            ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone(), None)
+            ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone(), None, Arc::clone(&self.logs_service))
                 .map_err(|error| AppError::ComputeStartupFailed {
                     reason: error.to_string(),
                 })?;

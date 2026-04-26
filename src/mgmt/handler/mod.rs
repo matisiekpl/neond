@@ -2,6 +2,7 @@ pub mod auth;
 pub mod branch;
 pub mod daemon;
 pub mod endpoint;
+pub mod logs;
 pub mod metric;
 pub mod prometheus;
 pub mod organization;
