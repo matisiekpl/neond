@@ -30,7 +30,11 @@ RUN CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE make -C neon -j $JOBS -s
 FROM neon AS postgres
 ARG JOBS
 COPY Makefile .
+COPY pgvector /neond/pgvector
 RUN make vanillapg JOBS=$JOBS
+RUN make neon-contrib JOBS=$JOBS
+RUN make neon-contrib-extras JOBS=$JOBS
+RUN make vector JOBS=$JOBS
 
 FROM postgres AS deps
 ARG JOBS

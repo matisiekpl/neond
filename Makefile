@@ -48,12 +48,27 @@ neon-contrib-extras:
 	  done; \
 	done
 
+vector:
+	@set -e; \
+	if [ ! -f "$(CURDIR)/pgvector/Makefile" ]; then \
+	  echo "pgvector submodule is missing; run 'git submodule update --init pgvector'" >&2; \
+	  exit 1; \
+	fi; \
+	for ver in v14 v15 v16 v17; do \
+	  pg_config="$(CURDIR)/neon/pg_install/$$ver/bin/pg_config"; \
+	  [ -x "$$pg_config" ] || continue; \
+	  echo "==> building pgvector for $$ver"; \
+	  $(MAKE) MAKELEVEL=0 -C "$(CURDIR)/pgvector" USE_PGXS=1 PG_CONFIG=$$pg_config clean; \
+	  $(MAKE) MAKELEVEL=0 -C "$(CURDIR)/pgvector" USE_PGXS=1 PG_CONFIG=$$pg_config -j $(JOBS) install; \
+	done
+
 build:
 	cd web && yarn && yarn build
 	$(MAKE) vanillapg
 	$(MAKE) -C neon -j $(JOBS) -s CARGO_BUILD_JOBS=$(JOBS) BUILD_TYPE=$(BUILD_TYPE)
 	$(MAKE) neon-contrib
 	$(MAKE) neon-contrib-extras
+	$(MAKE) vector
 	CARGO_BUILD_JOBS=$(JOBS) cargo build --jobs $(JOBS) $(if $(filter release,$(BUILD_TYPE)),--release,)
 
 kill:
