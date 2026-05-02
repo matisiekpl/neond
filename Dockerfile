@@ -12,7 +12,8 @@ ARG JOBS
 ARG BUILD_TYPE
 RUN apt-get update && apt-get install -y git build-essential libtool libreadline-dev zlib1g-dev flex bison libseccomp-dev \
                       libssl-dev clang pkg-config libpq-dev cmake postgresql-client protobuf-compiler \
-                      libprotobuf-dev libcurl4-openssl-dev openssl lsof libicu-dev
+                      libprotobuf-dev libcurl4-openssl-dev openssl lsof libicu-dev \
+                      libxml2-dev uuid-dev
 RUN export PROTOC_VERSION=22.2 && curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-$(uname -m | sed 's/aarch64/aarch_64/g').zip" -o "protoc.zip" \
         && unzip -q protoc.zip -d protoc \
         && mv protoc/bin/protoc /usr/local/bin/protoc \
@@ -56,7 +57,7 @@ RUN if [ "$BUILD_TYPE" = "release" ]; then \
 
 FROM debian:bookworm-slim
 ARG BUILD_TYPE
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 libpq5 libreadline8 libseccomp2 libcurl4 libicu72 zlib1g liblz4-1 libzstd1 libxml2 libkrb5-3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 libpq5 libreadline8 libseccomp2 libcurl4 libicu72 zlib1g liblz4-1 libzstd1 libxml2 libkrb5-3 libuuid1 && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 600 neond && useradd --system --uid 600 --gid 600 --create-home --home-dir /home/neond --shell /bin/bash neond
 COPY --from=server /neond/target/${BUILD_TYPE}/neond /usr/local/bin/neond
 COPY --from=server /neond/neon/target/${BUILD_TYPE}/safekeeper /usr/local/share/neon/bin/safekeeper
