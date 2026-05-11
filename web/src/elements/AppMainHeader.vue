@@ -38,7 +38,10 @@ const title = computed(() => {
       const branch = branchStore.branches.find((b) => b.id === branchId)
       const branchName = branch?.name ?? 'Branch'
       if (route.name === 'projects.branches.data') return `${projectName} / ${branchName} — Data`
-      if (route.name === 'projects.branches.logs') return `${projectName} / ${branchName} — Logs`
+      if (route.name === 'projects.branches.logs') {
+        const component = (route.params.component as string) ?? ''
+        return `${projectName} / ${branchName} — Logs — ${component}`
+      }
       return `${projectName} / ${branchName}`
     }
     return route.name === 'projects.settings' ? `${projectName} — Settings` : projectName

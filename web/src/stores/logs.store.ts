@@ -47,6 +47,10 @@ export const useLogsStore = defineStore('logs', () => {
     open(logsApi.streamEndpointLogs(organizationId, projectId, branchId))
   }
 
+  function startPgbouncerLogs(organizationId: string, projectId: string, branchId: string) {
+    open(logsApi.streamPgbouncerLogs(organizationId, projectId, branchId))
+  }
+
   function stop() {
     source?.close()
     source = null
@@ -54,5 +58,5 @@ export const useLogsStore = defineStore('logs', () => {
     connected.value = false
   }
 
-  return { lines, connected, startDaemonLogs, startEndpointLogs, stop }
+  return { lines, connected, startDaemonLogs, startEndpointLogs, startPgbouncerLogs, stop }
 })

@@ -186,7 +186,13 @@ impl BranchService {
             last_record_lsn: Default::default(),
             current_logical_size: 0,
             connection_string: endpoint_info
+                .clone()
                 .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
+            pooler_connection_string: endpoint_info
+                .and_then(|info| info.pooler_port)
+                .map(|pooler_port| {
+                    branch.get_pooler_connection_string(self.config.clone(), pooler_port)
+                }),
             password: branch.password.clone(),
             created_at: branch.created_at,
             updated_at: branch.updated_at,
@@ -268,10 +274,14 @@ impl BranchService {
                     .as_ref()
                     .map(|info| info.current_logical_size)
                     .unwrap_or(0),
-                connection_string: match endpoint_info {
-                    Some(info) => Some(b.get_connection_string(self.config.clone(), info.port)),
-                    None => None,
-                },
+                connection_string: endpoint_info
+                    .clone()
+                    .map(|info| b.get_connection_string(self.config.clone(), info.port)),
+                pooler_connection_string: endpoint_info
+                    .and_then(|info| info.pooler_port)
+                    .map(|pooler_port| {
+                        b.get_pooler_connection_string(self.config.clone(), pooler_port)
+                    }),
                 password: b.password.clone(),
                 created_at: b.created_at,
                 updated_at: b.updated_at,
@@ -360,6 +370,12 @@ impl BranchService {
             connection_string: endpoint_info
                 .as_ref()
                 .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
+            pooler_connection_string: endpoint_info
+                .as_ref()
+                .and_then(|info| info.pooler_port)
+                .map(|pooler_port| {
+                    branch.get_pooler_connection_string(self.config.clone(), pooler_port)
+                }),
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,
@@ -784,7 +800,13 @@ impl BranchService {
             last_record_lsn: Default::default(),
             current_logical_size: 0,
             connection_string: endpoint_info
+                .clone()
                 .map(|info| inserted.get_connection_string(self.config.clone(), info.port)),
+            pooler_connection_string: endpoint_info
+                .and_then(|info| info.pooler_port)
+                .map(|pooler_port| {
+                    inserted.get_pooler_connection_string(self.config.clone(), pooler_port)
+                }),
             password: inserted.password.clone(),
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
@@ -1003,7 +1025,13 @@ impl BranchService {
             last_record_lsn: Default::default(),
             current_logical_size: 0,
             connection_string: endpoint_info
+                .clone()
                 .map(|info| inserted.get_connection_string(self.config.clone(), info.port)),
+            pooler_connection_string: endpoint_info
+                .and_then(|info| info.pooler_port)
+                .map(|pooler_port| {
+                    inserted.get_pooler_connection_string(self.config.clone(), pooler_port)
+                }),
             password: inserted.password.clone(),
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
@@ -1098,7 +1126,13 @@ impl BranchService {
             last_record_lsn: Default::default(),
             current_logical_size: 0,
             connection_string: endpoint_info
+                .clone()
                 .map(|info| updated.get_connection_string(self.config.clone(), info.port)),
+            pooler_connection_string: endpoint_info
+                .and_then(|info| info.pooler_port)
+                .map(|pooler_port| {
+                    updated.get_pooler_connection_string(self.config.clone(), pooler_port)
+                }),
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,
@@ -1203,7 +1237,13 @@ impl BranchService {
             last_record_lsn: Default::default(),
             current_logical_size: 0,
             connection_string: endpoint_info
+                .clone()
                 .map(|info| updated.get_connection_string(self.config.clone(), info.port)),
+            pooler_connection_string: endpoint_info
+                .and_then(|info| info.pooler_port)
+                .map(|pooler_port| {
+                    updated.get_pooler_connection_string(self.config.clone(), pooler_port)
+                }),
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,

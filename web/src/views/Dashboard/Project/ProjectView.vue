@@ -287,6 +287,13 @@ function copyConnectionString(branch: Branch) {
   }
 }
 
+function copyPoolerConnectionString(branch: Branch) {
+  if (branch.pooler_connection_string) {
+    navigator.clipboard.writeText(branch.pooler_connection_string);
+    toast.success('Pooler connection string copied')
+  }
+}
+
 const projectIdCopied = ref(false)
 
 async function copyProjectId() {
@@ -488,6 +495,13 @@ async function copyProjectId() {
                     >
                       <Copy class="size-4"/>
                       Copy connection string
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      :disabled="!branch.pooler_connection_string"
+                      @click="copyPoolerConnectionString(branch)"
+                    >
+                      <Copy class="size-4"/>
+                      Copy pooler connection string
                     </DropdownMenuItem>
                     <DropdownMenuItem @click="openRename(branch)">
                       <Pencil class="size-4"/>

@@ -10,6 +10,7 @@ export interface Branch {
   ancestor_lsn: string | null
   endpoint_status: BranchStatus
   connection_string: string | null
+  pooler_connection_string: string | null
   current_logical_size: number
   remote_consistent_lsn_visible: string
   last_record_lsn: string

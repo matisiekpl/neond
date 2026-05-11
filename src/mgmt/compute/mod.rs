@@ -60,9 +60,12 @@ pub struct ComputeEndpoint {
     port: Option<u16>,
     preferred_port: Option<u16>,
     metrics_port: Option<u16>,
+    pooler_port: Option<u16>,
     pid: Option<u32>,
+    pgbouncer_pid: Option<u32>,
     compute_dir: TempDir,
     child: Option<Child>,
+    pgbouncer_child: Option<Child>,
     status: ComputeEndpointStatus,
     channel_binding_signature: Option<Vec<u8>>,
     config: Config,
@@ -73,6 +76,7 @@ pub struct ComputeEndpoint {
 pub struct ComputeEndpointInfo {
     pub(crate) status: ComputeEndpointStatus,
     pub(crate) port: u16,
+    pub(crate) pooler_port: Option<u16>,
 }
 
 impl ComputeEndpoint {
@@ -95,9 +99,12 @@ impl ComputeEndpoint {
             port: None,
             preferred_port,
             metrics_port: None,
+            pooler_port: None,
             pid: None,
+            pgbouncer_pid: None,
             compute_dir: pgdata_dir,
             child: None,
+            pgbouncer_child: None,
             status: ComputeEndpointStatus::Stopped,
             channel_binding_signature: None,
             logs_service,
@@ -258,6 +265,23 @@ impl ComputeEndpoint {
         }
 
         self.child = Some(child);
+
+        if let Err(e) = self.start_pgbouncer() {
+            tracing::error!(
+                "Failed to start pgbouncer for compute endpoint {}: {}",
+                self.branch.timeline_id,
+                e
+            );
+            if let Some(mut compute_child) = self.child.take() {
+                compute_child.kill().ok();
+                compute_child.wait().ok();
+            }
+            self.status = ComputeEndpointStatus::Failed;
+            self.pid = None;
+            self.metrics_port = None;
+            return Err(e);
+        }
+
         self.status = ComputeEndpointStatus::Running;
         tracing::info!(
             "Compute endpoint {} started on PID: {}, port: {}",
@@ -267,6 +291,214 @@ impl ComputeEndpoint {
         );
 
         Ok(())
+    }
+
+    fn start_pgbouncer(&mut self) -> Result<()> {
+        let pgbouncer_bin = match self.config.pgbouncer_bin.clone() {
+            Some(path) => path,
+            None => {
+                tracing::info!(
+                    "pgbouncer disabled (binary not found); skipping pooler for branch {}",
+                    self.branch.timeline_id
+                );
+                return Ok(());
+            }
+        };
+
+        let pg_port = self.port.ok_or_else(|| AppError::ComputeProcessStartupFailed {
+            reason: "postgres port not allocated before pgbouncer startup".to_string(),
+        })?;
+
+        let pooler_port = crate::utils::ports::allocate_random_port().map_err(|error| {
+            AppError::ComputeProcessStartupFailed {
+                reason: format!("failed to allocate pooler port: {}", error),
+            }
+        })?;
+        self.pooler_port = Some(pooler_port);
+
+        let compute_dir = self.compute_dir.path();
+        let userlist_path = compute_dir.join("userlist.txt");
+        let userlist_contents = format!("\"postgres\" \"{}\"\n", self.branch.password);
+        fs::write(&userlist_path, userlist_contents).map_err(|error| {
+            AppError::ComputeProcessStartupFailed {
+                reason: format!("failed to write userlist.txt: {}", error),
+            }
+        })?;
+
+        let config_path = compute_dir.join("pgbouncer.ini");
+        let server_pem_path = compute_dir.join("server.pem");
+        let server_key_path = compute_dir.join("server.key");
+
+        let mut conf = ini::Ini::new();
+        conf.with_section(Some("databases")).set(
+            "*",
+            format!("host=127.0.0.1 port={} auth_user=postgres", pg_port),
+        );
+        conf.with_section(Some("pgbouncer"))
+            .set("listen_addr", "0.0.0.0")
+            .set("listen_port", pooler_port.to_string())
+            .set("unix_socket_dir", "")
+            .set("auth_type", "scram-sha-256")
+            .set("auth_user", "postgres")
+            .set("auth_file", path_str(&userlist_path)?)
+            .set("auth_query", "SELECT usename, passwd FROM pg_shadow WHERE usename=$1")
+            .set("pool_mode", "transaction")
+            .set("max_client_conn", "1000")
+            .set("default_pool_size", "20")
+            .set("min_pool_size", "0")
+            .set("reserve_pool_size", "5")
+            .set("server_reset_query", "DISCARD ALL")
+            .set("ignore_startup_parameters", "extra_float_digits,search_path,options")
+            .set("server_tls_sslmode", "disable")
+            .set("client_tls_sslmode", "require")
+            .set("client_tls_key_file", path_str(&server_key_path)?)
+            .set("client_tls_cert_file", path_str(&server_pem_path)?)
+            .set("log_connections", "1")
+            .set("log_disconnections", "1")
+            .set("log_pooler_errors", "1")
+            .set("application_name_add_host", "1");
+
+        let mut write_opts = ini::WriteOption::default();
+        write_opts.kv_separator = " = ";
+        conf.write_to_file_opt(&config_path, write_opts).map_err(|error| {
+            AppError::ComputeProcessStartupFailed {
+                reason: format!("failed to write pgbouncer.ini: {}", error),
+            }
+        })?;
+
+        let mut cmd = Command::new(&pgbouncer_bin);
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            unsafe {
+                cmd.pre_exec(|| {
+                    #[cfg(target_os = "linux")]
+                    libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM, 0, 0, 0);
+                    #[cfg(target_os = "macos")]
+                    libc::setpgid(0, 0);
+                    Ok(())
+                });
+            }
+        }
+
+        let mut child = cmd
+            .env_clear()
+            .arg("-q")
+            .arg(path_str(&config_path)?)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| AppError::ComputeProcessStartupFailed {
+                reason: format!("failed to spawn pgbouncer: {}", error),
+            })?;
+
+        let pgbouncer_pid = child.id();
+        self.pgbouncer_pid = Some(pgbouncer_pid);
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AppError::ComputeProcessStartupFailed {
+                reason: "pgbouncer stdout was not piped".to_string(),
+            })?;
+
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| AppError::ComputeProcessStartupFailed {
+                reason: "pgbouncer stderr was not piped".to_string(),
+            })?;
+
+        let branch_id = self.branch.id;
+
+        let stdout_logs = Arc::clone(&self.logs_service);
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(stdout);
+            for line in reader.lines().map_while(|line| line.ok()) {
+                stdout_logs.ingest(LogChannel::Pgbouncer(branch_id), line, LogStream::Stdout);
+            }
+        });
+
+        let stderr_logs = Arc::clone(&self.logs_service);
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(stderr);
+            for line in reader.lines().map_while(|line| line.ok()) {
+                stderr_logs.ingest(LogChannel::Pgbouncer(branch_id), line, LogStream::Stderr);
+            }
+        });
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let address: std::net::SocketAddr = format!("127.0.0.1:{}", pooler_port)
+            .parse()
+            .map_err(|_| AppError::ComputeSocketAddressInvalid {
+                addr: format!("127.0.0.1:{}", pooler_port),
+            })?;
+        let mut ready = false;
+        while std::time::Instant::now() < deadline {
+            if std::net::TcpStream::connect_timeout(
+                &address,
+                std::time::Duration::from_millis(200),
+            )
+            .is_ok()
+            {
+                ready = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
+        if !ready {
+            child.kill().ok();
+            child.wait().ok();
+            self.pgbouncer_pid = None;
+            self.pooler_port = None;
+            return Err(AppError::ComputeProcessStartupFailed {
+                reason: "pgbouncer did not start listening within timeout".to_string(),
+            });
+        }
+
+        self.pgbouncer_child = Some(child);
+        tracing::info!(
+            "pgbouncer for branch {} started on PID: {}, port: {}",
+            self.branch.timeline_id,
+            pgbouncer_pid,
+            pooler_port,
+        );
+
+        Ok(())
+    }
+
+    fn stop_pgbouncer(&mut self) {
+        if let Some(mut child) = self.pgbouncer_child.take() {
+            #[cfg(unix)]
+            {
+                let pid = child.id() as i32;
+                unsafe {
+                    libc::killpg(pid, libc::SIGINT);
+                }
+                for _ in 0..50 {
+                    match child.try_wait() {
+                        Ok(Some(_)) => {
+                            self.pgbouncer_pid = None;
+                            self.pooler_port = None;
+                            self.logs_service
+                                .drop_channel(LogChannel::Pgbouncer(self.branch.id));
+                            return;
+                        }
+                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+                        Err(_) => break,
+                    }
+                }
+            }
+            child.kill().ok();
+            child.wait().ok();
+        }
+        self.pgbouncer_pid = None;
+        self.pooler_port = None;
+        self.logs_service
+            .drop_channel(LogChannel::Pgbouncer(self.branch.id));
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
@@ -282,6 +514,8 @@ impl ComputeEndpoint {
         }
 
         self.status = ComputeEndpointStatus::Stopping;
+
+        self.stop_pgbouncer();
 
         if let Some(mut child) = self.child.take() {
             #[cfg(unix)]
@@ -342,6 +576,16 @@ impl ComputeEndpoint {
 
     pub fn get_metrics_port(&self) -> Option<u16> {
         self.metrics_port
+    }
+
+    pub fn get_pooler_port(&self) -> Option<u16> {
+        self.pooler_port
+    }
+
+    fn scram_password(&self) -> String {
+        postgres_protocol::password::scram_sha_256(
+            String::from(self.branch.password.clone()).as_bytes(),
+        )
     }
 
     fn generate_certificates(&mut self) -> Result<()> {
@@ -592,9 +836,7 @@ impl ComputeEndpoint {
             },
         );
 
-        let password = postgres_protocol::password::scram_sha_256(
-            String::from(self.branch.password.clone()).as_bytes(),
-        );
+        let password = self.scram_password();
         let spec = ComputeSpec {
             format_version: 1.0,
             operation_uuid: None,
