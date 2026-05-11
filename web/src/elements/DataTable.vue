@@ -580,7 +580,7 @@ function exportAll(format: 'csv' | 'json') {
       </DropdownMenu>
     </div>
 
-    <div class="h-[calc(100vh-16rem)] md:h-[calc(100vh-15rem+5px)] flex flex-col">
+    <div class="h-[calc(100vh-16rem)] md:h-[calc(100vh-15rem-5px)] flex flex-col">
       <div v-if="showFilters" class="border-b px-3 py-2 flex flex-col gap-2 shrink-0">
         <div
           v-for="(filter, index) in filters"
