@@ -87,6 +87,10 @@ pub enum AppError {
     BackupUploadFailed { database_name: String, reason: String },
     BackupDownloadFailed { database_name: String, reason: String },
     BackupRestoreFailed { database_name: String, reason: String },
+
+    LeaseAcquisitionFailed { reason: String },
+    LeaseAlreadyHeldLocally { path: String },
+    LeaseAlreadyHeldRemotely { uri: String },
 }
 
 impl fmt::Display for AppError {
@@ -306,6 +310,24 @@ impl fmt::Display for AppError {
             AppError::BackupRestoreFailed { database_name, reason } => {
                 write!(f, "Backup restore for {} failed: {}", database_name, reason)
             }
+
+            AppError::LeaseAcquisitionFailed { reason } => {
+                write!(f, "Daemon lease acquisition failed: {}", reason)
+            }
+            AppError::LeaseAlreadyHeldLocally { path } => {
+                write!(
+                    f,
+                    "Daemon lease already held locally. If you are sure that no other neond is running, remove the lock file manually: rm {}",
+                    path
+                )
+            }
+            AppError::LeaseAlreadyHeldRemotely { uri } => {
+                write!(
+                    f,
+                    "Daemon lease already held remotely. If you are sure that no other neond is running, remove the S3 object manually: aws s3 rm {}",
+                    uri
+                )
+            }
         }
     }
 }
@@ -322,7 +344,9 @@ impl IntoResponse for AppError {
             AppError::Forbidden | AppError::RegistrationClosed => StatusCode::FORBIDDEN,
             AppError::Conflict(_)
             | AppError::PitrConcurrentEndpointOperation
-            | AppError::BranchNameAlreadyExists { .. } => StatusCode::CONFLICT,
+            | AppError::BranchNameAlreadyExists { .. }
+            | AppError::LeaseAlreadyHeldLocally { .. }
+            | AppError::LeaseAlreadyHeldRemotely { .. } => StatusCode::CONFLICT,
             AppError::TenantIdInvalid { .. }
             | AppError::TimelineIdInvalid { .. }
             | AppError::ComputeSocketAddressInvalid { .. }

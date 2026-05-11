@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod lease;
 mod pageserver;
 mod postgres;
 mod process;

@@ -1,4 +1,5 @@
 use crate::daemon::backup::BackupService;
+use crate::daemon::lease::{DaemonLease, LeaseError};
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::handler::AppState;
@@ -41,6 +42,30 @@ pub async fn run() -> Result<()> {
     .map_err(|error| AppError::ApplicationStartupFailed {
         reason: format!("preflight check: {}", error),
     })?;
+
+    let lease = DaemonLease::acquire(
+        &config.daemon_directory,
+        config.remote_storage_config.as_ref(),
+    )
+    .await
+    .map_err(|error| match error {
+        LeaseError::LocalAlreadyHeld { path } => AppError::LeaseAlreadyHeldLocally {
+            path: path.display().to_string(),
+        },
+        LeaseError::S3AlreadyHeld { bucket, key } => AppError::LeaseAlreadyHeldRemotely {
+            uri: format!("s3://{}/{}", bucket, key),
+        },
+        other => AppError::LeaseAcquisitionFailed {
+            reason: other.to_string(),
+        },
+    })?;
+
+    let result = run_with_lease(config).await;
+    lease.release().await;
+    result
+}
+
+async fn run_with_lease(config: Config) -> Result<()> {
     let shutdown_token = CancellationToken::new();
 
     let backup_service = Arc::new(
