@@ -1,7 +1,7 @@
 ARG JOBS=1
 ARG BUILD_TYPE=release
 
-FROM node AS web
+FROM node:lts AS web
 WORKDIR /web
 COPY web .
 RUN yarn
