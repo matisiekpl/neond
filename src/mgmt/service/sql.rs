@@ -245,7 +245,7 @@ impl SqlService {
     }
 }
 
-async fn run_sql(port: u16, sql: &str) -> Result<ExecuteSqlResponse> {
+pub(crate) async fn run_sql(port: u16, sql: &str) -> Result<ExecuteSqlResponse> {
     let connection_string =
         format!("host=127.0.0.1 port={port} user=cloud_admin dbname=postgres");
 

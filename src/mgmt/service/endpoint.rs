@@ -114,6 +114,8 @@ impl EndpointService {
         })?;
 
         let launched_port = endpoint.get_port();
+        self.drop_health_check_table(launched_port);
+
         if branch.port != Some(launched_port as i32) {
             if let Err(e) = self
                 .branch_repo
@@ -398,6 +400,8 @@ impl EndpointService {
             match endpoint.launch() {
                 Ok(()) => {
                     let launched_port = endpoint.get_port();
+                    self.drop_health_check_table(launched_port);
+
                     if branch.port != Some(launched_port as i32) {
                         if let Err(e) = self
                             .branch_repo
@@ -505,5 +509,15 @@ impl EndpointService {
             self.pg_proxy.clone().listen(listener).await?;
         }
         Ok(())
+    }
+
+    fn drop_health_check_table(&self, port: u16) {
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            match super::sql::run_sql(port, "DROP TABLE IF EXISTS public.health_check").await {
+                Ok(_) => tracing::info!("Dropped health_check table on port {}", port),
+                Err(error) => tracing::warn!("Failed to drop health_check table: {}", error),
+            }
+        });
     }
 }
