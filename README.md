@@ -66,6 +66,13 @@ services:
       - "3000:3000"
       - "50000-50010:50000-50010"
     restart: unless-stopped
+    stop_grace_period: 1h
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/auth/setup"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5m
     volumes:
       - ./neond_data:/neond
 ```
@@ -85,6 +92,13 @@ services:
       - "3000:3000"
       - "5432:5432"
     restart: unless-stopped
+    stop_grace_period: 1h
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/auth/setup"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5m
     volumes:
       - ./neond_data:/neond
 ```
