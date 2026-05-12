@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Check, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, RotateCcw, Scissors, Square, Trash2,
+  BookDown, Check, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -13,6 +13,7 @@ import type {Branch} from '@/types/models/branch'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
 import RestorePitrDialog from '@/elements/RestorePitrDialog.vue'
+import ConnectDialog from '@/elements/ConnectDialog.vue'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -280,18 +281,14 @@ watch(() => organizationStore.selectedOrganizationId, (orgId) => {
   if (orgId) projectStore.fetch(orgId)
 }, {immediate: true})
 
-function copyConnectionString(branch: Branch) {
-  if (branch.connection_string) {
-    navigator.clipboard.writeText(branch.connection_string);
-    toast.success('Connection string copied')
-  }
-}
+const connectOpen = ref(false)
+const connectBranch = ref<Branch | null>(null)
+const connectPooled = ref(true)
+const connectLibcompat = ref(false)
 
-function copyPoolerConnectionString(branch: Branch) {
-  if (branch.pooler_connection_string) {
-    navigator.clipboard.writeText(branch.pooler_connection_string);
-    toast.success('Pooler connection string copied')
-  }
+function openConnect(branch: Branch) {
+  connectBranch.value = branch
+  connectOpen.value = true
 }
 
 const projectIdCopied = ref(false)
@@ -490,18 +487,11 @@ async function copyProjectId() {
                       {{ branch.endpoint_status === 'starting' ? 'Starting…' : 'Stopping…' }}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      :disabled="!branch.connection_string"
-                      @click="copyConnectionString(branch)"
+                      :disabled="!branch.connection_string && !branch.pooler_connection_string"
+                      @click="openConnect(branch)"
                     >
-                      <Copy class="size-4"/>
-                      Copy connection string
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      :disabled="!branch.pooler_connection_string"
-                      @click="copyPoolerConnectionString(branch)"
-                    >
-                      <Copy class="size-4"/>
-                      Copy pooler connection string
+                      <Plug class="size-4"/>
+                      Connect
                     </DropdownMenuItem>
                     <DropdownMenuItem @click="openRename(branch)">
                       <Pencil class="size-4"/>
@@ -717,6 +707,13 @@ async function copyProjectId() {
       :organization-id="organizationStore.selectedOrganizationId"
       :project-id="projectId"
       :branch-id="restoreBranch.id"
+    />
+
+    <ConnectDialog
+      v-model:open="connectOpen"
+      v-model:pooled="connectPooled"
+      v-model:libcompat="connectLibcompat"
+      :branch="connectBranch"
     />
   </div>
 </template>
