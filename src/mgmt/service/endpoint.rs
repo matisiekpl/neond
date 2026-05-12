@@ -135,6 +135,11 @@ impl EndpointService {
             .hostname
             .as_ref()
             .map(|hostname| format!("{}.{}", branch.slug, hostname));
+        let pooler_sni_hostname = self
+            .config
+            .hostname
+            .as_ref()
+            .map(|hostname| format!("{}-pooler.{}", branch.slug, hostname));
 
         if let Some(ref sni_hostname) = sni_hostname {
             let port = endpoint.get_port();
@@ -145,6 +150,19 @@ impl EndpointService {
             )?;
             self.pg_proxy
                 .set_mapping(sni_hostname.clone(), backend_addr)
+                .await;
+        }
+
+        if let (Some(ref pooler_sni_hostname), Some(pooler_port)) =
+            (pooler_sni_hostname.as_ref(), endpoint.get_pooler_port())
+        {
+            let backend_addr: SocketAddr = format!("127.0.0.1:{}", pooler_port).parse().map_err(
+                |_| AppError::ComputeSocketAddressInvalid {
+                    addr: format!("127.0.0.1:{}", pooler_port),
+                },
+            )?;
+            self.pg_proxy
+                .set_mapping(pooler_sni_hostname.clone(), backend_addr)
                 .await;
         }
 
@@ -165,7 +183,9 @@ impl EndpointService {
             branch_id,
             status: launched_status,
             port: endpoint.get_port(),
+            pooler_port: endpoint.get_pooler_port(),
             sni_hostname,
+            pooler_sni_hostname,
             password: branch.password.clone(),
         };
 
@@ -218,9 +238,18 @@ impl EndpointService {
             .hostname
             .as_ref()
             .map(|hostname| format!("{}.{}", branch.slug, hostname));
+        let pooler_sni_hostname = self
+            .config
+            .hostname
+            .as_ref()
+            .map(|hostname| format!("{}-pooler.{}", branch.slug, hostname));
 
         if let Some(ref sni_hostname) = sni_hostname {
             self.pg_proxy.remove_mapping(sni_hostname).await;
+        }
+
+        if let Some(ref pooler_sni_hostname) = pooler_sni_hostname {
+            self.pg_proxy.remove_mapping(pooler_sni_hostname).await;
         }
 
         let final_status = endpoint.get_status();
@@ -240,7 +269,9 @@ impl EndpointService {
             branch_id,
             status: final_status,
             port: endpoint.get_port(),
+            pooler_port: endpoint.get_pooler_port(),
             sni_hostname,
+            pooler_sni_hostname,
             password: branch.password.clone(),
         };
 
@@ -264,6 +295,9 @@ impl EndpointService {
                     if let Some(ref hostname) = self.config.hostname {
                         let sni_hostname = format!("{}.{}", endpoint.get_branch().slug, hostname);
                         self.pg_proxy.remove_mapping(&sni_hostname).await;
+                        let pooler_sni_hostname =
+                            format!("{}-pooler.{}", endpoint.get_branch().slug, hostname);
+                        self.pg_proxy.remove_mapping(&pooler_sni_hostname).await;
                     }
                 }
             }
@@ -280,6 +314,7 @@ impl EndpointService {
             .map(|e| ComputeEndpointInfo {
                 status: e.get_status(),
                 port: e.get_port(),
+                pooler_port: e.get_pooler_port(),
             })
     }
 
@@ -319,23 +354,34 @@ impl EndpointService {
             .hostname
             .as_ref()
             .map(|hostname| format!("{}.{}", branch.slug, hostname));
+        let pooler_sni_hostname = self
+            .config
+            .hostname
+            .as_ref()
+            .map(|hostname| format!("{}-pooler.{}", branch.slug, hostname));
 
         let endpoints = self.endpoints.lock().await;
 
-        let (status, port) = if let Some(endpoint) = endpoints.get(&branch_id) {
-            (endpoint.get_status(), endpoint.get_port())
+        let (status, port, pooler_port) = if let Some(endpoint) = endpoints.get(&branch_id) {
+            (
+                endpoint.get_status(),
+                endpoint.get_port(),
+                endpoint.get_pooler_port(),
+            )
         } else {
             let recent = branch
                 .recent_status
                 .unwrap_or(ComputeEndpointStatus::Stopped);
-            (recent, 0)
+            (recent, 0, None)
         };
 
         Ok(EndpointResponse {
             branch_id,
             status,
             port,
+            pooler_port,
             sni_hostname,
+            pooler_sni_hostname,
             password: branch.password.clone(),
         })
     }
@@ -421,6 +467,11 @@ impl EndpointService {
                         .hostname
                         .as_ref()
                         .map(|hostname| format!("{}.{}", branch.slug, hostname));
+                    let pooler_sni_hostname = self
+                        .config
+                        .hostname
+                        .as_ref()
+                        .map(|hostname| format!("{}-pooler.{}", branch.slug, hostname));
 
                     if let Some(ref sni_hostname) = sni_hostname {
                         let port = endpoint.get_port();
@@ -439,6 +490,23 @@ impl EndpointService {
                                 );
                                 continue;
                             }
+                        }
+                    }
+
+                    if let (Some(ref pooler_sni_hostname), Some(pooler_port)) =
+                        (pooler_sni_hostname.as_ref(), endpoint.get_pooler_port())
+                    {
+                        let addr_text = format!("127.0.0.1:{}", pooler_port);
+                        if let Ok(backend_addr) = addr_text.parse::<std::net::SocketAddr>() {
+                            self.pg_proxy
+                                .set_mapping(pooler_sni_hostname.clone(), backend_addr)
+                                .await;
+                        } else {
+                            tracing::error!(
+                                "Invalid pooler socket address during recovery for branch {}: {}",
+                                branch.id,
+                                addr_text
+                            );
                         }
                     }
 

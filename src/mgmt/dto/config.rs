@@ -22,12 +22,35 @@ pub struct Config {
     pub(crate) daemon_directory: PathBuf,
     pub(crate) neon_binaries_directory: PathBuf,
     pub(crate) pg_install_directory: PathBuf,
+    pub(crate) pgbouncer_bin: Option<PathBuf>,
     pub(crate) remote_storage_config: Option<RemoteStorageConfig>,
     pub(crate) port_range: PortRange,
     pub(crate) hostname: Option<String>,
     pub(crate) pg_proxy_port: u16,
     pub(crate) component_auth: Arc<DaemonAuth>,
     pub(crate) backup_interval: Duration,
+}
+
+fn discover_pgbouncer() -> Option<PathBuf> {
+    if let Ok(value) = std::env::var("PGBOUNCER_BIN") {
+        let path = PathBuf::from(value);
+        if path.exists() {
+            return Some(path);
+        }
+        tracing::warn!("PGBOUNCER_BIN set to {} but file does not exist", path.display());
+    }
+    for candidate in [
+        "/usr/bin/pgbouncer",
+        "/usr/sbin/pgbouncer",
+        "/usr/local/bin/pgbouncer",
+        "/opt/homebrew/bin/pgbouncer",
+    ] {
+        let path = PathBuf::from(candidate);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 impl Config {
@@ -69,6 +92,12 @@ impl Config {
                 .join("neon")
                 .join("pg_install"),
         };
+
+        let pgbouncer_bin = discover_pgbouncer();
+        match &pgbouncer_bin {
+            Some(path) => tracing::info!("pgbouncer found at {}, pooling enabled", path.display()),
+            None => tracing::warn!("pgbouncer binary not found, pooling disabled"),
+        }
 
         let remote_storage_config = if std::env::var("AWS_S3_BUCKET").is_ok()
             && std::env::var("AWS_REGION").is_ok()
@@ -158,6 +187,7 @@ impl Config {
             daemon_directory,
             neon_binaries_directory,
             pg_install_directory,
+            pgbouncer_bin,
             remote_storage_config,
             port_range,
             hostname,

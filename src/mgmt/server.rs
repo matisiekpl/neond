@@ -101,6 +101,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             get(logs::stream_endpoint),
         )
         .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/logs/pgbouncer",
+            get(logs::stream_pgbouncer),
+        )
+        .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",
             post(sql::execute),
         )

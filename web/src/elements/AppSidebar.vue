@@ -329,11 +329,23 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               :is-active="route.name === 'projects.branches.logs'"
               tooltip="Logs"
             >
-              <RouterLink :to="{ name: 'projects.branches.logs', params: { organizationId, projectId, branchId } }">
+              <RouterLink :to="{ name: 'projects.branches.logs', params: { organizationId, projectId, branchId, component: 'compute' } }">
                 <ScrollText />
                 <span>Logs</span>
               </RouterLink>
             </SidebarMenuButton>
+            <SidebarMenuSub v-if="route.name === 'projects.branches.logs'">
+              <SidebarMenuSubItem v-for="component in ['compute', 'pgbouncer']" :key="component">
+                <SidebarMenuSubButton
+                  as-child
+                  :is-active="route.params.component === component"
+                >
+                  <RouterLink :to="{ name: 'projects.branches.logs', params: { organizationId, projectId, branchId, component } }">
+                    <span>{{ component }}</span>
+                  </RouterLink>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            </SidebarMenuSub>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>

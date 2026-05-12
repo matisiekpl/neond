@@ -86,6 +86,14 @@ function copyConnectionString(branchId: string) {
   close()
 }
 
+function copyPoolerConnectionString(branchId: string) {
+  const branch = branchStore.branches.find((b) => b.id === branchId)
+  if (!branch?.pooler_connection_string) return
+  navigator.clipboard.writeText(branch.pooler_connection_string)
+  toast.success('Pooler connection string copied')
+  close()
+}
+
 function onInputKeydown(event: KeyboardEvent) {
   const isEmpty = (event.target as HTMLInputElement).value === ''
   if ((event.key === 'Backspace' || event.key === 'ArrowLeft') && isEmpty) {
@@ -167,11 +175,18 @@ function onInputKeydown(event: KeyboardEvent) {
               {{ branch.name }} — Metrics
             </CommandItem>
             <CommandItem
-              :value="`go to branch ${branch.name} logs`"
-              @select="navigate('projects.branches.logs', { projectId: projectId!, branchId: branch.id })"
+              :value="`go to branch ${branch.name} compute logs`"
+              @select="navigate('projects.branches.logs', { projectId: projectId!, branchId: branch.id, component: 'compute' })"
             >
               <ScrollText />
-              {{ branch.name }} — Logs
+              {{ branch.name }} — Compute Logs
+            </CommandItem>
+            <CommandItem
+              :value="`go to branch ${branch.name} pgbouncer logs`"
+              @select="navigate('projects.branches.logs', { projectId: projectId!, branchId: branch.id, component: 'pgbouncer' })"
+            >
+              <ScrollText />
+              {{ branch.name }} — Pgbouncer Logs
             </CommandItem>
             <CommandItem
               v-if="branch.connection_string"
@@ -180,6 +195,14 @@ function onInputKeydown(event: KeyboardEvent) {
             >
               <Clipboard />
               {{ branch.name }} — Copy Connection String
+            </CommandItem>
+            <CommandItem
+              v-if="branch.pooler_connection_string"
+              :value="`copy pooler connection string ${branch.name}`"
+              @select="copyPoolerConnectionString(branch.id)"
+            >
+              <Clipboard />
+              {{ branch.name }} — Copy Pooler Connection String
             </CommandItem>
           </template>
         </CommandGroup>

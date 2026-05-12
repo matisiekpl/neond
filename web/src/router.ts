@@ -56,7 +56,7 @@ const routes = [
           { path: 'data/:table?', component: BranchDataView, name: 'projects.branches.data' },
           { path: 'sql', component: BranchSqlView, name: 'projects.branches.sql' },
           { path: 'metrics', component: BranchMetricsView, name: 'projects.branches.metrics' },
-          { path: 'logs', component: BranchLogsView, name: 'projects.branches.logs' },
+          { path: 'logs/:component', component: BranchLogsView, name: 'projects.branches.logs' },
         ],
       },
       { path: 'settings/organization', component: OrganizationSettingsView, name: 'settings.organization' },

@@ -1,6 +1,8 @@
 # Top-level build artifacts
 target/
 build/
+web/dist/
+web/node_modules/
 
 # Neon subdir - exclude everything except what's needed
 neon/*

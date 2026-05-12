@@ -121,9 +121,23 @@ async fn run_with_lease(config: Config) -> Result<()> {
         services: Arc::clone(&services),
     };
 
-    let ctrlc_shutdown_token = shutdown_token.clone();
+    let ctrlc_daemon_service = Arc::clone(services.daemon());
+    let ctrlc_runtime_handle = tokio::runtime::Handle::current();
     ctrlc::set_handler(move || {
-        ctrlc_shutdown_token.cancel();
+        let daemon_service = Arc::clone(&ctrlc_daemon_service);
+        ctrlc_runtime_handle.spawn(async move {
+            match daemon_service.request_shutdown(false).await {
+                Ok(()) => {
+                    tracing::info!("Shutdown requested via signal");
+                }
+                Err(AppError::Conflict(reason)) => {
+                    tracing::info!("Signal-triggered shutdown ignored: {}", reason);
+                }
+                Err(error) => {
+                    tracing::error!("Signal-triggered shutdown failed: {}", error);
+                }
+            }
+        });
     })
     .map_err(|error| AppError::ApplicationStartupFailed {
         reason: format!("ctrlc handler: {}", error),

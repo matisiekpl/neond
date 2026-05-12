@@ -21,6 +21,7 @@ pub struct BranchResponse {
     pub last_record_lsn: Lsn,
     pub current_logical_size: u64,
     pub connection_string: Option<String>,
+    pub pooler_connection_string: Option<String>,
     pub password: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,

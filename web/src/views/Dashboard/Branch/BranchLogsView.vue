@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useTitle } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { useLogsStore } from '@/stores/logs.store'
 import LogsTextarea from '@/elements/LogsTextarea.vue'
-
-useTitle('Logs — neond')
 
 const route = useRoute()
 const organizationStore = useOrganizationStore()
@@ -15,10 +13,20 @@ const logsStore = useLogsStore()
 const organizationId = computed(() => organizationStore.selectedOrganizationId!)
 const projectId = computed(() => route.params.projectId as string)
 const branchId = computed(() => route.params.branchId as string)
+const component = computed(() => route.params.component as string)
 
-onMounted(() => {
-  logsStore.startEndpointLogs(organizationId.value, projectId.value, branchId.value)
-})
+useTitle(computed(() => `Logs — ${component.value} — neond`))
+
+function start() {
+  if (component.value === 'pgbouncer') {
+    logsStore.startPgbouncerLogs(organizationId.value, projectId.value, branchId.value)
+  } else {
+    logsStore.startEndpointLogs(organizationId.value, projectId.value, branchId.value)
+  }
+}
+
+onMounted(start)
+watch(() => route.params.component, start)
 
 onUnmounted(() => {
   logsStore.stop()

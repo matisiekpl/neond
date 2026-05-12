@@ -23,4 +23,11 @@ export const logsApi = {
       `${Config.serverUrl}/api/organizations/${organizationId}/projects/${projectId}/branches/${branchId}/endpoint/logs?token=${encodeURIComponent(token)}`,
     )
   },
+
+  streamPgbouncerLogs(organizationId: string, projectId: string, branchId: string): EventSource {
+    const token = localStorage.getItem(ACCESS_TOKEN) ?? ''
+    return new EventSource(
+      `${Config.serverUrl}/api/organizations/${organizationId}/projects/${projectId}/branches/${branchId}/endpoint/logs/pgbouncer?token=${encodeURIComponent(token)}`,
+    )
+  },
 }

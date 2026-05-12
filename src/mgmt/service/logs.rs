@@ -33,6 +33,7 @@ pub enum LogChannel {
     StorageControllerDb,
     ManagementDb,
     ComputeEndpoint(Uuid),
+    Pgbouncer(Uuid),
 }
 
 impl FromStr for LogChannel {
