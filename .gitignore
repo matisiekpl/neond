@@ -10,3 +10,6 @@ neon_daemon_data/
 .cursor/
 
 daemondata/
+
+web/dist/
+web/node_modules/
