@@ -51,6 +51,7 @@ pub enum AppError {
     BranchUpdateFailed { reason: String },
     BranchRestoreFailed { reason: String },
     BranchImportFailed { reason: String },
+    BranchImportAborted,
     InvalidConnectionString { reason: String },
     PitrLsnInvalid { value: String },
     PitrLsnOutOfRange { reason: String },
@@ -206,6 +207,9 @@ impl fmt::Display for AppError {
             }
             AppError::BranchImportFailed { reason } => {
                 write!(f, "Branch import failed: {}", reason)
+            }
+            AppError::BranchImportAborted => {
+                write!(f, "Branch import aborted")
             }
             AppError::InvalidConnectionString { reason } => {
                 write!(f, "Invalid connection string: {}", reason)

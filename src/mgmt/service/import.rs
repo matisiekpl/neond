@@ -8,6 +8,8 @@ use neon_utils::id::{TenantId, TimelineId};
 use neon_utils::shard::TenantShardId;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
 use crate::mgmt::compute::ComputeEndpointStatus;
@@ -15,6 +17,7 @@ use crate::mgmt::dto::branch_response::BranchResponse;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::import_branch_request::ImportBranchRequest;
+use crate::mgmt::model::branch::ImportStatus;
 use crate::mgmt::repository::branch::BranchRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::branch::BranchService;
@@ -32,6 +35,8 @@ pub struct ImportService {
     branch_service: Arc<BranchService>,
     logs_service: Arc<LogsService>,
     config: Config,
+    shutdown_token: CancellationToken,
+    tracker: TaskTracker,
 }
 
 impl ImportService {
@@ -44,6 +49,7 @@ impl ImportService {
         branch_service: Arc<BranchService>,
         logs_service: Arc<LogsService>,
         config: Config,
+        shutdown_token: CancellationToken,
     ) -> Self {
         Self {
             branch_repo,
@@ -54,6 +60,8 @@ impl ImportService {
             branch_service,
             logs_service,
             config,
+            shutdown_token,
+            tracker: TaskTracker::new(),
         }
     }
 
@@ -160,7 +168,7 @@ impl ImportService {
                 );
                 if let Err(update_error) = self
                     .branch_repo
-                    .update_import_status(branch.id, "failed", Some(&message))
+                    .update_import_status(branch.id, ImportStatus::Failed, Some(&message))
                     .await
                 {
                     tracing::error!(
@@ -180,8 +188,10 @@ impl ImportService {
         let target_port = endpoint.port;
         let target_password = branch.password.clone();
         let branch_id = branch.id;
+        let shutdown_token = self.shutdown_token.clone();
 
-        tokio::spawn(async move {
+        let tracker = self.tracker.clone();
+        self.tracker.spawn(async move {
             match Self::run_import(
                 Arc::clone(&logs_service),
                 branch_id,
@@ -189,6 +199,8 @@ impl ImportService {
                 source_connection_string,
                 target_port,
                 target_password,
+                shutdown_token,
+                tracker,
             )
             .await
             {
@@ -199,7 +211,7 @@ impl ImportService {
                         LogStream::Stdout,
                     );
                     if let Err(error) = branch_repo
-                        .update_import_status(branch_id, "ready", None)
+                        .update_import_status(branch_id, ImportStatus::Ready, None)
                         .await
                     {
                         tracing::error!(
@@ -210,19 +222,18 @@ impl ImportService {
                     }
                 }
                 Err(error) => {
-                    let message = error.to_string();
+                    let message = match &error {
+                        AppError::BranchImportAborted => "aborted: daemon shutdown".to_string(),
+                        other => other.to_string(),
+                    };
                     logs_service.ingest(
                         LogChannel::Import(branch_id),
                         format!("Import failed: {}", message),
                         LogStream::Stderr,
                     );
-                    tracing::error!(
-                        "Import failed for branch {}: {}",
-                        branch_id,
-                        message
-                    );
+                    tracing::error!("Import failed for branch {}: {}", branch_id, message);
                     if let Err(update_error) = branch_repo
-                        .update_import_status(branch_id, "failed", Some(&message))
+                        .update_import_status(branch_id, ImportStatus::Failed, Some(&message))
                         .await
                     {
                         tracing::error!(
@@ -276,6 +287,8 @@ impl ImportService {
         source_connection_string: String,
         target_port: u16,
         target_password: String,
+        shutdown_token: CancellationToken,
+        tracker: TaskTracker,
     ) -> Result<()> {
         let pg_dump_binary = pg_install_directory.join("vanilla_v17/bin/pg_dump");
         let pg_restore_binary = pg_install_directory.join("vanilla_v17/bin/pg_restore");
@@ -345,7 +358,7 @@ impl ImportService {
             }
         })?;
 
-        tokio::spawn(async move {
+        tracker.spawn(async move {
             if let Err(error) = tokio::io::copy(&mut dump_stdout, &mut restore_stdin).await {
                 tracing::error!("Failed to pipe pg_dump to pg_restore: {}", error);
             }
@@ -353,7 +366,7 @@ impl ImportService {
         });
 
         if let Some(stderr) = pg_dump.stderr.take() {
-            tokio::spawn(Self::stream_lines(
+            tracker.spawn(Self::stream_lines(
                 Arc::clone(&logs_service),
                 branch_id,
                 "pg_dump",
@@ -362,7 +375,7 @@ impl ImportService {
             ));
         }
         if let Some(stderr) = pg_restore.stderr.take() {
-            tokio::spawn(Self::stream_lines(
+            tracker.spawn(Self::stream_lines(
                 Arc::clone(&logs_service),
                 branch_id,
                 "pg_restore",
@@ -371,7 +384,7 @@ impl ImportService {
             ));
         }
         if let Some(stdout) = pg_restore.stdout.take() {
-            tokio::spawn(Self::stream_lines(
+            tracker.spawn(Self::stream_lines(
                 Arc::clone(&logs_service),
                 branch_id,
                 "pg_restore",
@@ -380,16 +393,30 @@ impl ImportService {
             ));
         }
 
-        let dump_status = pg_dump.wait().await.map_err(|error| {
-            AppError::BranchImportFailed {
-                reason: format!("wait pg_dump: {}", error),
+        let (dump_status, restore_status) = tokio::select! {
+            biased;
+            _ = shutdown_token.cancelled() => {
+                logs_service.ingest(
+                    LogChannel::Import(branch_id),
+                    "Shutdown requested; terminating pg_dump and pg_restore".to_string(),
+                    LogStream::Stderr,
+                );
+                let _ = pg_dump.start_kill();
+                let _ = pg_restore.start_kill();
+                let _ = pg_dump.wait().await;
+                let _ = pg_restore.wait().await;
+                return Err(AppError::BranchImportAborted);
             }
-        })?;
-        let restore_status = pg_restore.wait().await.map_err(|error| {
-            AppError::BranchImportFailed {
-                reason: format!("wait pg_restore: {}", error),
-            }
-        })?;
+            result = async {
+                let dump = pg_dump.wait().await.map_err(|error| AppError::BranchImportFailed {
+                    reason: format!("wait pg_dump: {}", error),
+                })?;
+                let restore = pg_restore.wait().await.map_err(|error| AppError::BranchImportFailed {
+                    reason: format!("wait pg_restore: {}", error),
+                })?;
+                Ok::<_, AppError>((dump, restore))
+            } => result?,
+        };
 
         if !dump_status.success() {
             return Err(AppError::BranchImportFailed {
@@ -403,6 +430,24 @@ impl ImportService {
         }
 
         Ok(())
+    }
+
+    pub async fn shutdown(&self) {
+        self.tracker.close();
+        self.tracker.wait().await;
+    }
+
+    pub async fn reconcile_interrupted(&self) {
+        let reason = "interrupted: daemon restarted while importing";
+        match self
+            .branch_repo
+            .fail_imports_with_status(ImportStatus::Importing, reason)
+            .await
+        {
+            Ok(0) => {}
+            Ok(count) => tracing::warn!("Marked {} interrupted import(s) as failed", count),
+            Err(error) => tracing::error!("Failed to reconcile interrupted imports: {}", error),
+        }
     }
 
     async fn stream_lines<R>(

@@ -64,6 +64,7 @@ impl Services {
             Arc::clone(&branch),
             Arc::clone(&logs),
             config.clone(),
+            shutdown_token.clone(),
         ));
         let project = ProjectService::new(
             Arc::new(repositories.project().clone()),
@@ -149,7 +150,7 @@ impl Services {
         &self.endpoint
     }
 
-    pub fn import(&self) -> &ImportService {
+    pub fn import(&self) -> &Arc<ImportService> {
         &self.import
     }
 

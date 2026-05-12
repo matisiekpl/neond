@@ -5,6 +5,23 @@ use crate::mgmt::dto::config::Config;
 use diesel::prelude::*;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportStatus {
+    Importing,
+    Ready,
+    Failed,
+}
+
+impl ImportStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ImportStatus::Importing => "importing",
+            ImportStatus::Ready => "ready",
+            ImportStatus::Failed => "failed",
+        }
+    }
+}
+
 #[derive(Queryable, Selectable, Clone)]
 #[diesel(table_name = crate::mgmt::schema::schema::branches)]
 pub struct Branch {
