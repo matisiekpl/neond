@@ -143,6 +143,8 @@ async fn run_with_lease(config: Config) -> Result<()> {
         reason: format!("ctrlc handler: {}", error),
     })?;
 
+    services.import().reconcile_interrupted().await;
+
     services.endpoint().recover_running().await;
 
     let listen_services = Arc::clone(&services);
@@ -164,6 +166,7 @@ async fn run_with_lease(config: Config) -> Result<()> {
             reason: format!("server: {}", error),
         })?;
 
+    services.import().shutdown().await;
     services.endpoint().shutdown_all().await;
     backup_service.stop_periodic().await;
     backup_service.final_sync(&daemon.backed_up_databases()).await;

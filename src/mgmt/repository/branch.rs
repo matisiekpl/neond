@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use uuid::Uuid;
 use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::error::{AppError, Result};
-use crate::mgmt::model::branch::Branch;
+use crate::mgmt::model::branch::{Branch, ImportStatus};
 use crate::mgmt::repository::db::DbPool;
 use crate::mgmt::schema::schema::branches;
 
@@ -42,6 +42,68 @@ impl BranchRepository {
                 branches::slug.eq(slug),
             ))
             .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn create_for_import(
+        &self,
+        id: Uuid,
+        project_id: Uuid,
+        name: &str,
+        timeline_id: Uuid,
+        password: &str,
+        slug: &str,
+    ) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::insert_into(branches::table)
+            .values((
+                branches::id.eq(id),
+                branches::project_id.eq(project_id),
+                branches::name.eq(name),
+                branches::parent_branch_id.eq(None::<Uuid>),
+                branches::timeline_id.eq(timeline_id),
+                branches::password.eq(password),
+                branches::slug.eq(slug),
+                branches::import_status.eq(ImportStatus::Importing.as_str()),
+            ))
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn update_import_status(
+        &self,
+        id: Uuid,
+        status: ImportStatus,
+        error: Option<&str>,
+    ) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::update(branches::table.filter(branches::id.eq(id)))
+            .set((
+                branches::import_status.eq(status.as_str()),
+                branches::import_error.eq(error),
+            ))
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn fail_imports_with_status(
+        &self,
+        from_status: ImportStatus,
+        error: &str,
+    ) -> Result<usize> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::update(branches::table.filter(branches::import_status.eq(from_status.as_str())))
+            .set((
+                branches::import_status.eq(ImportStatus::Failed.as_str()),
+                branches::import_error.eq(error),
+            ))
+            .execute(conn)
             .await
             .map_err(Into::into)
     }

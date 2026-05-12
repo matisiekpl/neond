@@ -16,6 +16,14 @@ export const branchesApi = {
     return response.data
   },
 
+  async import(organizationId: string, projectId: string, name: string, sourceConnectionString: string): Promise<Branch> {
+    const response = await api.post<Branch>(
+      `organizations/${organizationId}/projects/${projectId}/branches/import`,
+      { name, source_connection_string: sourceConnectionString },
+    )
+    return response.data
+  },
+
   async update(organizationId: string, projectId: string, branchId: string, name: string): Promise<Branch> {
     const response = await api.put<Branch>(
       `organizations/${organizationId}/projects/${projectId}/branches/${branchId}`,

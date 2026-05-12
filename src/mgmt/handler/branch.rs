@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::mgmt::dto::error::AppError;
 use crate::mgmt::dto::change_password_request::ChangePasswordRequest;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
+use crate::mgmt::dto::import_branch_request::ImportBranchRequest;
 use crate::mgmt::dto::lsn_request::LsnRequest;
 use crate::mgmt::dto::restore_branch_request::RestoreBranchRequest;
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
@@ -23,6 +24,20 @@ pub async fn create(
     Json(req): Json<CreateBranchRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let branch = state.services.branch().create(user_id, organization_id, project_id, req).await?;
+    Ok((StatusCode::CREATED, Json(branch)))
+}
+
+pub async fn import(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<ImportBranchRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let branch = state
+        .services
+        .import()
+        .create(user_id, organization_id, project_id, req)
+        .await?;
     Ok((StatusCode::CREATED, Json(branch)))
 }
 

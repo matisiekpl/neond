@@ -196,6 +196,8 @@ impl BranchService {
             password: branch.password.clone(),
             created_at: branch.created_at,
             updated_at: branch.updated_at,
+            import_status: branch.import_status.clone(),
+            import_error: branch.import_error.clone(),
         })
     }
 
@@ -285,6 +287,8 @@ impl BranchService {
                 password: b.password.clone(),
                 created_at: b.created_at,
                 updated_at: b.updated_at,
+                import_status: b.import_status.clone(),
+                import_error: b.import_error.clone(),
             });
         }
 
@@ -379,6 +383,8 @@ impl BranchService {
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,
+            import_status: updated.import_status.clone(),
+            import_error: updated.import_error.clone(),
         })
     }
 
@@ -810,6 +816,8 @@ impl BranchService {
             password: inserted.password.clone(),
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
+            import_status: inserted.import_status.clone(),
+            import_error: inserted.import_error.clone(),
         })
     }
 
@@ -1035,6 +1043,8 @@ impl BranchService {
             password: inserted.password.clone(),
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
+            import_status: inserted.import_status.clone(),
+            import_error: inserted.import_error.clone(),
         })
     }
 
@@ -1136,6 +1146,8 @@ impl BranchService {
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,
+            import_status: updated.import_status.clone(),
+            import_error: updated.import_error.clone(),
         })
     }
 
@@ -1247,6 +1259,8 @@ impl BranchService {
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,
+            import_status: updated.import_status.clone(),
+            import_error: updated.import_error.clone(),
         })
     }
 
@@ -1351,7 +1365,7 @@ impl BranchService {
         }
     }
 
-    async fn generate_unique_slug(&self) -> Result<String> {
+    pub async fn generate_unique_slug(&self) -> Result<String> {
         for _ in 0..10 {
             let slug = Generator::default()
                 .next()
@@ -1365,7 +1379,7 @@ impl BranchService {
         Ok(format!("branch-{}", Uuid::new_v4()))
     }
 
-    fn validate_branch_name(name: &str) -> Result<()> {
+    pub fn validate_branch_name(name: &str) -> Result<()> {
         if name.is_empty() {
             return Err(AppError::BranchCreationFailed {
                 reason: "Branch name cannot be empty".into(),

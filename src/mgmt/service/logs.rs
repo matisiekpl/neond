@@ -34,6 +34,7 @@ pub enum LogChannel {
     ManagementDb,
     ComputeEndpoint(Uuid),
     Pgbouncer(Uuid),
+    Import(Uuid),
 }
 
 impl FromStr for LogChannel {

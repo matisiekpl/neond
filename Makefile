@@ -3,6 +3,12 @@
 JOBS ?= 1
 BUILD_TYPE ?= release
 
+ifeq ($(shell uname),Darwin)
+OPENSSL_PREFIX := $(shell brew --prefix openssl@3 2>/dev/null || brew --prefix openssl 2>/dev/null)
+OPENSSL_LDFLAGS := -L$(OPENSSL_PREFIX)/lib
+OPENSSL_CPPFLAGS := -I$(OPENSSL_PREFIX)/include
+endif
+
 NEON_CONTRIB_DIRS := bloom btree_gin btree_gist citext cube dblink \
     dict_int dict_xsyn earthdistance file_fdw fuzzystrmatch hstore \
     intagg intarray isn lo ltree pg_freespacemap pg_logicalinspect \
@@ -13,7 +19,7 @@ NEON_CONTRIB_DIRS := bloom btree_gin btree_gist citext cube dblink \
 NEON_CONTRIB_EXTRAS := xml2 uuid-ossp
 
 vanillapg:
-	cd postgres && ./configure --prefix=$(CURDIR)/neon/pg_install/vanilla_v17 --without-icu
+	cd postgres && LDFLAGS="$(OPENSSL_LDFLAGS)" CPPFLAGS="$(OPENSSL_CPPFLAGS)" ./configure --prefix=$(CURDIR)/neon/pg_install/vanilla_v17 --without-icu --with-openssl
 	$(MAKE) MAKELEVEL=0 -C postgres -j $(JOBS)
 	$(MAKE) MAKELEVEL=0 -C postgres install
 

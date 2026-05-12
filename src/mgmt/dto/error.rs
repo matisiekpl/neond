@@ -50,6 +50,9 @@ pub enum AppError {
     BranchListingFailed { reason: String },
     BranchUpdateFailed { reason: String },
     BranchRestoreFailed { reason: String },
+    BranchImportFailed { reason: String },
+    BranchImportAborted,
+    InvalidConnectionString { reason: String },
     PitrLsnInvalid { value: String },
     PitrLsnOutOfRange { reason: String },
     PitrSwapFailed { reason: String },
@@ -201,6 +204,15 @@ impl fmt::Display for AppError {
             }
             AppError::BranchRestoreFailed { reason } => {
                 write!(f, "Branch restore failed: {}", reason)
+            }
+            AppError::BranchImportFailed { reason } => {
+                write!(f, "Branch import failed: {}", reason)
+            }
+            AppError::BranchImportAborted => {
+                write!(f, "Branch import aborted")
+            }
+            AppError::InvalidConnectionString { reason } => {
+                write!(f, "Invalid connection string: {}", reason)
             }
             AppError::PitrLsnInvalid { value } => {
                 write!(f, "LSN is invalid: {}", value)
@@ -354,6 +366,7 @@ impl IntoResponse for AppError {
             | AppError::RegistrationFailed { .. }
             | AppError::PitrLsnInvalid { .. }
             | AppError::PitrLsnOutOfRange { .. }
+            | AppError::InvalidConnectionString { .. }
             | AppError::BranchAlreadyDetached => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };

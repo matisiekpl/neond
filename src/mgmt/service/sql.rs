@@ -189,6 +189,8 @@ impl SqlService {
             port: None,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            import_status: None,
+            import_error: None,
         };
 
         let mut endpoint =

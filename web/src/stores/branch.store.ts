@@ -36,6 +36,18 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
+    async function importBranch(organizationId: string, projectId: string, name: string, sourceConnectionString: string): Promise<Branch> {
+        try {
+            const branch = await branchesApi.import(organizationId, projectId, name, sourceConnectionString)
+            await fetch(organizationId, projectId)
+            toast.success('Import started')
+            return branch
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
     async function update(organizationId: string, projectId: string, branchId: string, name: string): Promise<void> {
         try {
             await branchesApi.update(organizationId, projectId, branchId, name)
@@ -128,5 +140,5 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
-    return {branches, loading, detaching, reset, fetch, create, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, detachAncestor, changePassword}
+    return {branches, loading, detaching, reset, fetch, create, importBranch, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, detachAncestor, changePassword}
 })

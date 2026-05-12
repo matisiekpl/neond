@@ -1,6 +1,7 @@
 pub mod branch;
 pub mod daemon;
 pub mod endpoint;
+pub mod import;
 pub mod logs;
 pub mod services;
 pub mod membership;
