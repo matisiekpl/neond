@@ -1,6 +1,7 @@
 pub mod add_member_by_email_request;
 pub mod branch_response;
 pub mod create_branch_request;
+pub mod import_branch_request;
 pub mod endpoint_response;
 pub mod create_membership_request;
 pub mod create_organization_request;

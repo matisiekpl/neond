@@ -63,6 +63,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             post(branch::create).get(branch::list),
         )
         .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/import",
+            post(branch::import),
+        )
+        .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}",
             put(branch::update).delete(branch::delete),
         )
@@ -103,6 +107,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/logs/pgbouncer",
             get(logs::stream_pgbouncer),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/logs/import",
+            get(logs::stream_import),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",

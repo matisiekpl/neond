@@ -100,3 +100,24 @@ pub async fn stream_pgbouncer(
 
     Ok(Sse::new(build_sse_stream(snapshot, receiver)).keep_alive(KeepAlive::default()))
 }
+
+pub async fn stream_import(
+    State(state): State<Arc<AppState>>,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+    Query(query): Query<TokenQuery>,
+    user_id_result: Result<UserId, AppError>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
+    let user_id = authenticate(user_id_result, query.token)?;
+
+    state
+        .services
+        .membership()
+        .verify_membership(user_id, organization_id)
+        .await?;
+
+    let channel = LogChannel::Import(branch_id);
+    let snapshot = state.services.logs().snapshot(channel.clone());
+    let receiver = state.services.logs().subscribe(channel);
+
+    Ok(Sse::new(build_sse_stream(snapshot, receiver)).keep_alive(KeepAlive::default()))
+}

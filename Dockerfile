@@ -4,6 +4,7 @@ ARG BUILD_TYPE=release
 FROM node:lts AS web
 WORKDIR /web
 COPY web .
+RUN yarn config set network-timeout 300000
 RUN yarn
 RUN yarn build
 

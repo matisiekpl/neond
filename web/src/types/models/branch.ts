@@ -16,4 +16,6 @@ export interface Branch {
   last_record_lsn: string
   created_at: string
   updated_at: string
+  import_status: 'importing' | 'ready' | 'failed' | null
+  import_error: string | null
 }

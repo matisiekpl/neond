@@ -60,6 +60,8 @@ diesel::table! {
         port -> Nullable<Int4>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        import_status -> Nullable<Text>,
+        import_error -> Nullable<Text>,
     }
 }
 diesel::table! {

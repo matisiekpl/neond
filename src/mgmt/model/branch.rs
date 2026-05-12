@@ -19,6 +19,8 @@ pub struct Branch {
     pub port: Option<i32>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub import_status: Option<String>,
+    pub import_error: Option<String>,
 }
 
 impl Branch {

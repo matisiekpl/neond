@@ -14,6 +14,7 @@ import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
 import RestorePitrDialog from '@/elements/RestorePitrDialog.vue'
 import ConnectDialog from '@/elements/ConnectDialog.vue'
+import ImportBranchDialog from '@/elements/ImportBranchDialog.vue'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,6 +105,8 @@ function formatDate(d: string) {
 const createOpen = ref(false)
 const createName = ref('')
 const createSubmitting = ref(false)
+
+const importOpen = ref(false)
 
 const deleteOpen = ref(false)
 const deleteId = ref<string | null>(null)
@@ -352,10 +355,22 @@ async function copyProjectId() {
     <div class="space-y-3">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-semibold">Branches</h2>
-        <Button type="button" size="sm" class="cursor-pointer" :disabled="createSubmitting" @click="openCreate">
-          <Loader2 v-if="createSubmitting" class="mr-1.5 size-3.5 animate-spin"/>
-          New branch
-        </Button>
+        <div class="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            class="cursor-pointer"
+            :disabled="!organizationStore.selectedOrganizationId"
+            @click="importOpen = true"
+          >
+            Import
+          </Button>
+          <Button type="button" size="sm" class="cursor-pointer" :disabled="createSubmitting" @click="openCreate">
+            <Loader2 v-if="createSubmitting" class="mr-1.5 size-3.5 animate-spin"/>
+            New branch
+          </Button>
+        </div>
       </div>
 
       <div v-if="branchStore.loading && branchStore.branches.length === 0" class="flex justify-center py-8">
@@ -398,6 +413,24 @@ async function copyProjectId() {
                 <span class="flex items-center gap-1.5" :style="{ paddingLeft: `${depth * 20}px` }">
                   <span v-if="depth > 0" class="shrink-0 text-muted-foreground">╰</span>
                   <span>{{ branch.name }}</span>
+                  <RouterLink
+                    v-if="branch.import_status === 'importing'"
+                    :to="{ name: 'projects.branches.logs', params: { organizationId: organizationStore.selectedOrganizationId!, projectId, branchId: branch.id, component: 'import' } }"
+                    class="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60"
+                    @click.stop
+                  >
+                    <Loader2 class="size-3 animate-spin"/>
+                    Importing
+                  </RouterLink>
+                  <RouterLink
+                    v-else-if="branch.import_status === 'failed'"
+                    :to="{ name: 'projects.branches.logs', params: { organizationId: organizationStore.selectedOrganizationId!, projectId, branchId: branch.id, component: 'import' } }"
+                    :title="branch.import_error ?? 'Import failed'"
+                    class="inline-flex items-center rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
+                    @click.stop
+                  >
+                    Import failed
+                  </RouterLink>
                 </span>
               </TableCell>
               <TableCell class="w-28">
@@ -714,6 +747,13 @@ async function copyProjectId() {
       v-model:pooled="connectPooled"
       v-model:libcompat="connectLibcompat"
       :branch="connectBranch"
+    />
+
+    <ImportBranchDialog
+      v-if="organizationStore.selectedOrganizationId"
+      v-model:open="importOpen"
+      :organization-id="organizationStore.selectedOrganizationId"
+      :project-id="projectId"
     />
   </div>
 </template>

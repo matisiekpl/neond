@@ -62,6 +62,11 @@ const branchId = computed(() => route.params.branchId as string | undefined)
 const currentProject = computed(() => projectStore.projects.find((p) => p.id === projectId.value))
 const currentBranch = computed(() => branchStore.branches.find((b) => b.id === branchId.value))
 const displayOrg = computed(() => organizationStore.organizations.find((o) => o.id === organizationId.value))
+const logComponents = computed(() => {
+  const base = ['compute', 'pgbouncer']
+  if (currentBranch.value?.import_status) base.push('import')
+  return base
+})
 </script>
 
 <template>
@@ -335,7 +340,7 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
               </RouterLink>
             </SidebarMenuButton>
             <SidebarMenuSub v-if="route.name === 'projects.branches.logs'">
-              <SidebarMenuSubItem v-for="component in ['compute', 'pgbouncer']" :key="component">
+              <SidebarMenuSubItem v-for="component in logComponents" :key="component">
                 <SidebarMenuSubButton
                   as-child
                   :is-active="route.params.component === component"
