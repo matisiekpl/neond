@@ -34,6 +34,14 @@ export const metricCharts: MetricChartDefinition[] = [
     ],
   },
   {
+    id: 'storage-size',
+    title: 'Storage size',
+    unit: 'bytes',
+    series: [
+      { slug: 'pageserver.timeline.logical_size', label: 'Logical size' },
+    ],
+  },
+  {
     id: 'compute-ctl',
     title: 'Compute Control Plane',
     unit: 'raw',

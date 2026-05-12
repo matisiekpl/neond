@@ -37,6 +37,7 @@ pub const PAGESERVER_TIMELINE_DIRECTORY_ENTRIES: &str = "pageserver.timeline.dir
 pub const PAGESERVER_TIMELINE_WAIT_LSN_SECONDS_SUM: &str = "pageserver.timeline.wait_lsn_seconds_sum";
 pub const PAGESERVER_TIMELINE_ONDEMAND_DOWNLOAD_BYTES: &str = "pageserver.timeline.ondemand_download_bytes_total";
 pub const PAGESERVER_TIMELINE_SMGR_QUERY_STARTED: &str = "pageserver.timeline.smgr_query_started_count";
+pub const PAGESERVER_TIMELINE_LOGICAL_SIZE: &str = "pageserver.timeline.logical_size";
 
 pub const PAGESERVER_PAGE_CACHE_HITS: &str = "pageserver.page_cache.hits_total";
 pub const PAGESERVER_PAGE_CACHE_ACCESSES: &str = "pageserver.page_cache.accesses_total";
@@ -567,12 +568,19 @@ impl MetricService {
                 "pageserver_wait_lsn_seconds_sum" => Some(PAGESERVER_TIMELINE_WAIT_LSN_SECONDS_SUM),
                 "pageserver_ondemand_download_bytes_total" => Some(PAGESERVER_TIMELINE_ONDEMAND_DOWNLOAD_BYTES),
                 "pageserver_smgr_query_started_count" => Some(PAGESERVER_TIMELINE_SMGR_QUERY_STARTED),
+                "pageserver_current_logical_size" => Some(PAGESERVER_TIMELINE_LOGICAL_SIZE),
                 _ => None,
             };
 
             if let Some(slug) = slug {
                 let entry = aggregated.entry((timeline_id, slug)).or_insert(0.0);
-                *entry += value;
+                if slug == PAGESERVER_TIMELINE_LOGICAL_SIZE {
+                    if value > *entry {
+                        *entry = value;
+                    }
+                } else {
+                    *entry += value;
+                }
             }
         }
 
