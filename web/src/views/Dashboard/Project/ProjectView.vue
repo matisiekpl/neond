@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref, computed, watch} from 'vue'
+import {ref, computed, watch, onMounted} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
@@ -283,6 +283,16 @@ async function confirmDelete() {
 watch(() => organizationStore.selectedOrganizationId, (orgId) => {
   if (orgId) projectStore.fetch(orgId)
 }, {immediate: true})
+
+onMounted(() => {
+  const orgId = organizationStore.selectedOrganizationId
+  if (orgId && projectId.value) branchStore.fetch(orgId, projectId.value, true)
+})
+
+watch(projectId, (id) => {
+  const orgId = organizationStore.selectedOrganizationId
+  if (orgId && id) branchStore.fetch(orgId, id, true)
+})
 
 const connectOpen = ref(false)
 const connectBranch = ref<Branch | null>(null)
@@ -591,7 +601,7 @@ async function copyProjectId() {
             @click="confirmDetach"
           >
             <Loader2 v-if="branchStore.detaching" class="mr-1.5 size-3.5 animate-spin"/>
-            Detach
+            {{ branchStore.detaching ? 'Detaching…' : 'Detach' }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -613,7 +623,7 @@ async function copyProjectId() {
             @click="confirmResetToParent"
           >
             <Loader2 v-if="resetting" class="mr-1.5 size-3.5 animate-spin"/>
-            Reset branch
+            {{ resetting ? 'Resetting…' : 'Reset branch' }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -635,7 +645,7 @@ async function copyProjectId() {
             @click="confirmDelete"
           >
             <Loader2 v-if="deleting" class="mr-1.5 size-3.5 animate-spin"/>
-            Delete branch
+            {{ deleting ? 'Deleting…' : 'Delete branch' }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

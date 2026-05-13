@@ -470,7 +470,7 @@ impl ComputeEndpoint {
         Ok(())
     }
 
-    fn stop_pgbouncer(&mut self) {
+    async fn stop_pgbouncer(&mut self) {
         if let Some(mut child) = self.pgbouncer_child.take() {
             #[cfg(unix)]
             {
@@ -487,7 +487,9 @@ impl ComputeEndpoint {
                                 .drop_channel(LogChannel::Pgbouncer(self.branch.id));
                             return;
                         }
-                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+                        Ok(None) => {
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await
+                        }
                         Err(_) => break,
                     }
                 }
@@ -501,7 +503,7 @@ impl ComputeEndpoint {
             .drop_channel(LogChannel::Pgbouncer(self.branch.id));
     }
 
-    pub fn shutdown(&mut self) -> Result<()> {
+    pub async fn shutdown(&mut self) -> Result<()> {
         if self.status == ComputeEndpointStatus::Stopped {
             return Err(AppError::ComputeShutdownFailed {
                 reason: "Compute endpoint is already stopped".to_string(),
@@ -515,7 +517,7 @@ impl ComputeEndpoint {
 
         self.status = ComputeEndpointStatus::Stopping;
 
-        self.stop_pgbouncer();
+        self.stop_pgbouncer().await;
 
         if let Some(mut child) = self.child.take() {
             #[cfg(unix)]
@@ -535,7 +537,9 @@ impl ComputeEndpoint {
                             );
                             return Ok(());
                         }
-                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+                        Ok(None) => {
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await
+                        }
                         Err(e) => {
                             tracing::warn!(
                                 "Error waiting for compute endpoint {}: {}",
@@ -913,9 +917,15 @@ impl Drop for ComputeEndpoint {
         if self.status == ComputeEndpointStatus::Running
             || self.status == ComputeEndpointStatus::Starting
         {
-            if let Err(e) = self.shutdown() {
-                tracing::error!("Failed to shutdown compute endpoint: {}", e);
+            if let Some(mut child) = self.child.take() {
+                child.kill().ok();
+                child.wait().ok();
             }
+            if let Some(mut pgbouncer_child) = self.pgbouncer_child.take() {
+                pgbouncer_child.kill().ok();
+                pgbouncer_child.wait().ok();
+            }
+            self.status = ComputeEndpointStatus::Stopped;
         }
     }
 }

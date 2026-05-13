@@ -59,26 +59,47 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
+    function setEndpointStatus(branchId: string, status: Branch['endpoint_status']): void {
+        const branch = branches.value.find((b) => b.id === branchId)
+        if (branch) branch.endpoint_status = status
+    }
+
     async function launchEndpoint(organizationId: string, projectId: string, branchId: string, silent: boolean = false): Promise<void> {
-        try {
-            await branchesApi.launch(organizationId, projectId, branchId)
-            await fetch(organizationId, projectId)
-            if (!silent) toast.success('Endpoint started')
-        } catch (e) {
-            toast.error(getAppError(e))
-            throw e
+        setEndpointStatus(branchId, 'starting')
+        const launchOperation = (async () => {
+            try {
+                await branchesApi.launch(organizationId, projectId, branchId)
+            } finally {
+                await fetch(organizationId, projectId, true)
+            }
+        })()
+        if (!silent) {
+            toast.promise(launchOperation, {
+                loading: 'Starting endpoint…',
+                success: 'Endpoint started',
+                error: (error: unknown) => getAppError(error),
+            })
         }
+        await launchOperation
     }
 
     async function shutdownEndpoint(organizationId: string, projectId: string, branchId: string, silent: boolean = false): Promise<void> {
-        try {
-            await branchesApi.shutdown(organizationId, projectId, branchId)
-            await fetch(organizationId, projectId)
-            if (!silent) toast.success('Endpoint stopped')
-        } catch (e) {
-            toast.error(getAppError(e))
-            throw e
+        setEndpointStatus(branchId, 'stopping')
+        const shutdownOperation = (async () => {
+            try {
+                await branchesApi.shutdown(organizationId, projectId, branchId)
+            } finally {
+                await fetch(organizationId, projectId, true)
+            }
+        })()
+        if (!silent) {
+            toast.promise(shutdownOperation, {
+                loading: 'Stopping endpoint…',
+                success: 'Endpoint stopped',
+                error: (error: unknown) => getAppError(error),
+            })
         }
+        await shutdownOperation
     }
 
     async function remove(organizationId: string, projectId: string, branchId: string): Promise<void> {

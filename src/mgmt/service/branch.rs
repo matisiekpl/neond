@@ -19,6 +19,7 @@ use neon_utils::id::{TenantId, TimelineId};
 use neon_utils::lsn::Lsn;
 use neon_utils::shard::TenantShardId;
 use chrono::{DateTime, SecondsFormat, Utc};
+use futures_util::future::join_all;
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -223,30 +224,48 @@ impl BranchService {
 
         let branches = self.branch_repo.list_by_project_id(project_id).await?;
 
-        let mut results = Vec::with_capacity(branches.len());
-
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
             .map_err(|_| AppError::TenantIdInvalid {
                 value: project_id.to_string(),
             })?;
 
-        for b in branches {
-            let timeline_id = TimelineId::from_str(b.timeline_id.as_simple().to_string().as_str())
-                .map_err(|_| AppError::TimelineIdInvalid {
-                    value: b.timeline_id.to_string(),
-                })?;
+        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
 
-            let timeline_info = self
-                .pageserver_client
-                .timeline_info(
-                    TenantShardId::unsharded(tenant_id),
-                    timeline_id,
-                    ForceAwaitLogicalSize::Yes,
-                )
-                .await
-                .ok();
+        let branch_details = join_all(branches.iter().map(|b| {
+            let pageserver_client = Arc::clone(&self.pageserver_client);
+            let endpoint_service = Arc::clone(&self.endpoint_service);
+            let branch_id = b.id;
+            let timeline_uuid = b.timeline_id;
+            async move {
+                let timeline_id =
+                    TimelineId::from_str(timeline_uuid.as_simple().to_string().as_str())
+                        .map_err(|_| AppError::TimelineIdInvalid {
+                            value: timeline_uuid.to_string(),
+                        })?;
 
-            let endpoint_info = self.endpoint_service.get_endpoint_info(b.id).await;
+                let (timeline_info, endpoint_info) = tokio::join!(
+                    async {
+                        pageserver_client
+                            .timeline_info(
+                                tenant_shard_id,
+                                timeline_id,
+                                ForceAwaitLogicalSize::Yes,
+                            )
+                            .await
+                            .ok()
+                    },
+                    endpoint_service.get_endpoint_info(branch_id),
+                );
+
+                Ok::<_, AppError>((timeline_info, endpoint_info))
+            }
+        }))
+        .await;
+
+        let mut results = Vec::with_capacity(branches.len());
+
+        for (b, details) in branches.into_iter().zip(branch_details.into_iter()) {
+            let (timeline_info, endpoint_info) = details?;
             let ancestor_timeline_id = timeline_info
                 .as_ref()
                 .and_then(|info| info.ancestor_timeline_id)

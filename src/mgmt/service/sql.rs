@@ -206,7 +206,7 @@ impl SqlService {
         let port = endpoint.get_port();
         let sql_result = run_sql(port, &sql).await;
 
-        if let Err(e) = endpoint.shutdown() {
+        if let Err(e) = endpoint.shutdown().await {
             tracing::warn!("Failed to shutdown ephemeral compute endpoint: {}", e);
         }
 

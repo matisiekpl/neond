@@ -229,7 +229,7 @@ impl EndpointService {
 
         let endpoint = endpoints.get_mut(&branch_id).ok_or(AppError::NotFound)?;
 
-        endpoint.shutdown().map_err(|error| AppError::ComputeShutdownFailed {
+        endpoint.shutdown().await.map_err(|error| AppError::ComputeShutdownFailed {
             reason: error.to_string(),
         })?;
 
@@ -284,7 +284,7 @@ impl EndpointService {
             let status = endpoint.get_status();
             if status == ComputeEndpointStatus::Running || status == ComputeEndpointStatus::Starting
             {
-                if let Err(e) = endpoint.shutdown() {
+                if let Err(e) = endpoint.shutdown().await {
                     tracing::error!(
                         "Failed to shutdown endpoint for branch {}: {}",
                         branch_id,

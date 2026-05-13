@@ -265,7 +265,7 @@ function onCancel() {
           @click="onRestore"
         >
           <Loader2 v-if="restoring" class="mr-1.5 size-3.5 animate-spin" />
-          Restore
+          {{ restoring ? 'Restoring…' : 'Restore' }}
         </Button>
       </DialogFooter>
     </DialogContent>
