@@ -3,6 +3,7 @@ target/
 build/
 web/dist/
 web/node_modules/
+landing/
 
 # Neon subdir - exclude everything except what's needed
 neon/*

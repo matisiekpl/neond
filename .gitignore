@@ -13,3 +13,8 @@ daemondata/
 
 web/dist/
 web/node_modules/
+
+landing/node_modules/
+landing/.vuepress/.cache/
+landing/.vuepress/.temp/
+landing/.vuepress/dist/
