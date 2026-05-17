@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-const MAX_BUFFER_LINES: usize = 500;
+const MAX_BUFFER_BYTES: usize = 1024 * 1024;
 const BROADCAST_CAPACITY: usize = 256;
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,8 +53,13 @@ impl FromStr for LogChannel {
     }
 }
 
+struct LogBufferState {
+    lines: VecDeque<LogLine>,
+    bytes: usize,
+}
+
 struct LogBuffer {
-    buffer: Mutex<VecDeque<LogLine>>,
+    buffer: Mutex<LogBufferState>,
     sender: broadcast::Sender<LogLine>,
 }
 
@@ -62,23 +67,30 @@ impl LogBuffer {
     fn new() -> Self {
         let (sender, _) = broadcast::channel(BROADCAST_CAPACITY);
         LogBuffer {
-            buffer: Mutex::new(VecDeque::new()),
+            buffer: Mutex::new(LogBufferState {
+                lines: VecDeque::new(),
+                bytes: 0,
+            }),
             sender,
         }
     }
 
     fn push(&self, line: LogLine) {
         let mut buffer = self.buffer.lock().unwrap();
-        if buffer.len() >= MAX_BUFFER_LINES {
-            buffer.pop_front();
+        buffer.bytes += line.message.len();
+        buffer.lines.push_back(line.clone());
+        while buffer.bytes > MAX_BUFFER_BYTES {
+            match buffer.lines.pop_front() {
+                Some(removed) => buffer.bytes -= removed.message.len(),
+                None => break,
+            }
         }
-        buffer.push_back(line.clone());
         drop(buffer);
         let _ = self.sender.send(line);
     }
 
     fn snapshot(&self) -> Vec<LogLine> {
-        self.buffer.lock().unwrap().iter().cloned().collect()
+        self.buffer.lock().unwrap().lines.iter().cloned().collect()
     }
 
     fn subscribe(&self) -> broadcast::Receiver<LogLine> {
