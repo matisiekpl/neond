@@ -110,7 +110,12 @@ const importOpen = ref(false)
 
 const deleteOpen = ref(false)
 const deleteId = ref<string | null>(null)
+const deleteConfirmName = ref('')
 const deleting = ref(false)
+
+const deleteBranchName = computed(
+  () => branchStore.branches.find((branch) => branch.id === deleteId.value)?.name ?? ''
+)
 
 const branchFromOpen = ref(false)
 const branchFromParent = ref<Branch | null>(null)
@@ -138,6 +143,9 @@ watch(renameOpen, (val) => {
 })
 watch(passwordOpen, (val) => {
   if (!val) passwordValue.value = ''
+})
+watch(deleteOpen, (val) => {
+  if (!val) deleteConfirmName.value = ''
 })
 
 function openCreate() {
@@ -637,11 +645,22 @@ async function copyProjectId() {
             This branch and all its data will be permanently removed. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div class="grid gap-2">
+          <Label for="delete-branch-confirm">
+            Type <span class="font-semibold">{{ deleteBranchName }}</span> to confirm
+          </Label>
+          <Input
+            id="delete-branch-confirm"
+            v-model="deleteConfirmName"
+            :placeholder="deleteBranchName"
+            :disabled="deleting"
+          />
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deleting">Cancel</AlertDialogCancel>
           <AlertDialogAction
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
-            :disabled="deleting"
+            :disabled="deleting || deleteConfirmName !== deleteBranchName"
             @click="confirmDelete"
           >
             <Loader2 v-if="deleting" class="mr-1.5 size-3.5 animate-spin"/>

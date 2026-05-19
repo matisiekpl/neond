@@ -70,7 +70,12 @@ const project = computed(() => projectStore.projects.find((p) => p.id === projec
 useTitle(computed(() => project.value ? `Settings — ${project.value.name} — neond` : 'Settings — neond'))
 
 const deleteOpen = ref(false)
+const deleteConfirmName = ref('')
 const deleting = ref(false)
+
+watch(deleteOpen, (val) => {
+  if (!val) deleteConfirmName.value = ''
+})
 const configLoading = ref(false)
 const nameSubmitting = ref(false)
 const gcSubmitting = ref(false)
@@ -398,11 +403,22 @@ async function confirmDelete() {
             All branches and data in <strong>{{ project.name }}</strong> will be permanently removed. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div class="grid gap-2">
+          <Label for="delete-project-confirm">
+            Type <span class="font-semibold">{{ project.name }}</span> to confirm
+          </Label>
+          <Input
+            id="delete-project-confirm"
+            v-model="deleteConfirmName"
+            :placeholder="project.name"
+            :disabled="deleting"
+          />
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deleting">Cancel</AlertDialogCancel>
           <AlertDialogAction
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
-            :disabled="deleting"
+            :disabled="deleting || deleteConfirmName !== project.name"
             @click="confirmDelete"
           >
             <Loader2 v-if="deleting" class="mr-1.5 size-3.5 animate-spin" />
