@@ -11,5 +11,4 @@ export interface Project {
   checkpoint_distance?: number
   checkpoint_timeout?: string
   physical_size?: number
-  synthetic_size?: number
 }

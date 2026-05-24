@@ -380,25 +380,6 @@ async function copyProjectId() {
             </Tooltip>
           </span>
         </template>
-        <template v-if="project.synthetic_size !== undefined">
-          <span>·</span>
-          <span class="inline-flex items-center gap-1">
-            Synthetic: {{ formatBytes(project.synthetic_size) }}
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <CircleHelp class="size-3.5 cursor-help opacity-60 hover:opacity-100"/>
-              </TooltipTrigger>
-              <TooltipContent class="max-w-xs">
-                <p>
-                  Synthetic size is the pageserver's estimate of the smallest storage footprint required to satisfy the configured PITR window. It deduplicates history shared between branches — closer to the question "how much data am I really keeping?".
-                </p>
-                <p class="mt-1">
-                  Unlike physical size, it ignores uncompacted L0 layers and transient overhead, so it's usually noticeably smaller.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </span>
-        </template>
         <button
           type="button"
           class="group inline-flex cursor-pointer items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-0.5 font-mono text-xs transition-colors hover:bg-muted"

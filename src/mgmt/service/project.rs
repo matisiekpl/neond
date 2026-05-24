@@ -133,7 +133,6 @@ impl ProjectService {
             checkpoint_distance: None,
             checkpoint_timeout: None,
             physical_size: None,
-            synthetic_size: None,
         })
     }
 
@@ -160,10 +159,9 @@ impl ProjectService {
             })?;
         let tenant_shard_id = TenantShardId::unsharded(tenant_id);
 
-        let (config_value, physical_size, synthetic_size) = tokio::join!(
+        let (config_value, physical_size) = tokio::join!(
             self.fetch_tenant_config(tenant_shard_id),
             self.fetch_physical_size(project.id),
-            self.fetch_synthetic_size(project.id),
         );
 
         let (gc_period, gc_horizon, pitr_interval, checkpoint_distance, checkpoint_timeout) =
@@ -207,7 +205,6 @@ impl ProjectService {
             checkpoint_distance,
             checkpoint_timeout,
             physical_size,
-            synthetic_size,
         })
     }
 
@@ -224,20 +221,15 @@ impl ProjectService {
 
         let projects = self.project_repo.list_by_org_id(org_id).await?;
 
-        let (physical_sizes, synthetic_sizes) = tokio::join!(
-            futures_util::future::join_all(
-                projects.iter().map(|p| self.fetch_physical_size(p.id))
-            ),
-            futures_util::future::join_all(
-                projects.iter().map(|p| self.fetch_synthetic_size(p.id))
-            ),
-        );
+        let physical_sizes = futures_util::future::join_all(
+            projects.iter().map(|p| self.fetch_physical_size(p.id)),
+        )
+        .await;
 
         Ok(projects
             .into_iter()
             .zip(physical_sizes)
-            .zip(synthetic_sizes)
-            .map(|((p, physical_size), synthetic_size)| ProjectResponse {
+            .map(|(p, physical_size)| ProjectResponse {
                 id: p.id,
                 organization_id: p.organization_id,
                 name: p.name,
@@ -250,7 +242,6 @@ impl ProjectService {
                 checkpoint_distance: None,
                 checkpoint_timeout: None,
                 physical_size,
-                synthetic_size,
             })
             .collect())
     }
@@ -453,33 +444,5 @@ impl ProjectService {
 
         let value: serde_json::Value = response.json().await.ok()?;
         value.get("current_physical_size").and_then(|v| v.as_u64())
-    }
-
-    async fn fetch_synthetic_size(&self, project_id: Uuid) -> Option<u64> {
-        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str()).ok()?;
-        let tenant_shard_id = TenantShardId::unsharded(tenant_id);
-
-        let token = self
-            .config
-            .component_auth
-            .generate_token(neon_utils::auth::Scope::PageServerApi, None)
-            .ok()?;
-
-        let response = self
-            .http_client
-            .get(format!(
-                "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/synthetic_size"
-            ))
-            .header("Authorization", format!("Bearer {}", token))
-            .send()
-            .await
-            .ok()?;
-
-        if !response.status().is_success() {
-            return None;
-        }
-
-        let value: serde_json::Value = response.json().await.ok()?;
-        value.get("size").and_then(|v| v.as_u64())
     }
 }
