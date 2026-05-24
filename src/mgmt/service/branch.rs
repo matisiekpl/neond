@@ -249,7 +249,7 @@ impl BranchService {
                             .timeline_info(
                                 tenant_shard_id,
                                 timeline_id,
-                                ForceAwaitLogicalSize::Yes,
+                                ForceAwaitLogicalSize::No,
                             )
                             .await
                             .ok()
