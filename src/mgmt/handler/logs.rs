@@ -23,15 +23,16 @@ fn log_line_to_event(line: LogLine) -> Result<Event, Infallible> {
     Ok(Event::default().data(data))
 }
 
+fn snapshot_to_event(snapshot: Vec<LogLine>) -> Result<Event, Infallible> {
+    let data = serde_json::to_string(&snapshot).unwrap_or_else(|_| "[]".to_string());
+    Ok(Event::default().event("snapshot").data(data))
+}
+
 fn build_sse_stream(
     snapshot: Vec<LogLine>,
     receiver: tokio::sync::broadcast::Receiver<LogLine>,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
-    let snapshot_stream = stream::iter(
-        snapshot
-            .into_iter()
-            .map(|line| Ok(log_line_to_event(line).unwrap())),
-    );
+    let snapshot_stream = stream::iter(std::iter::once(snapshot_to_event(snapshot)));
 
     let live_stream = BroadcastStream::new(receiver).filter_map(|result| async move {
         match result {
