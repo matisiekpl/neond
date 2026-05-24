@@ -28,6 +28,7 @@ pub struct ProjectService {
     branch_service: Arc<BranchService>,
     pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
     safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
+    http_client: reqwest::Client,
     config: Config,
 }
 
@@ -48,6 +49,7 @@ impl ProjectService {
             branch_service,
             pageserver_client,
             safekeeper_client,
+            http_client: reqwest::Client::new(),
             config,
         }
     }
@@ -101,8 +103,8 @@ impl ProjectService {
             .config
             .component_auth
             .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
-        let pageserver_http_client = reqwest::Client::new();
-        let response = pageserver_http_client
+        let response = self
+            .http_client
             .request(Method::POST, "http://127.0.0.1:1234/v1/tenant")
             .header("Authorization", format!("Bearer {}", token))
             .json(&tenant_create_request)
@@ -157,22 +159,13 @@ impl ProjectService {
             })?;
         let tenant_shard_id = TenantShardId::unsharded(tenant_id);
 
-        let token = self
-            .config
-            .component_auth
-            .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
-        let config_resp = reqwest::Client::new()
-            .get(format!(
-                "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/config"
-            ))
-            .header("Authorization", format!("Bearer {}", token))
-            .send()
-            .await
-            .ok();
+        let (config_value, size) = tokio::join!(
+            self.fetch_tenant_config(tenant_shard_id),
+            self.fetch_physical_size(project.id)
+        );
 
         let (gc_period, gc_horizon, pitr_interval, checkpoint_distance, checkpoint_timeout) =
-            if let Some(resp) = config_resp {
-                let val: serde_json::Value = resp.json().await.unwrap_or_default();
+            if let Some(val) = config_value {
                 let overrides = val
                     .get("tenant_specific_overrides")
                     .cloned()
@@ -198,8 +191,6 @@ impl ProjectService {
             } else {
                 (None, None, None, None, None)
             };
-
-        let size = self.fetch_physical_size(project.id).await;
 
         Ok(ProjectResponse {
             id: project.id,
@@ -409,6 +400,29 @@ impl ProjectService {
         Ok(())
     }
 
+    async fn fetch_tenant_config(
+        &self,
+        tenant_shard_id: TenantShardId,
+    ) -> Option<serde_json::Value> {
+        let token = self
+            .config
+            .component_auth
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None)
+            .ok()?;
+
+        let response = self
+            .http_client
+            .get(format!(
+                "http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}/config"
+            ))
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .ok()?;
+
+        response.json().await.ok()
+    }
+
     async fn fetch_physical_size(&self, project_id: Uuid) -> Option<u64> {
         let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str()).ok()?;
         let tenant_shard_id = TenantShardId::unsharded(tenant_id);
@@ -419,7 +433,8 @@ impl ProjectService {
             .generate_token(neon_utils::auth::Scope::PageServerApi, None)
             .ok()?;
 
-        let response = reqwest::Client::new()
+        let response = self
+            .http_client
             .get(format!("http://127.0.0.1:1234/v1/tenant/{tenant_shard_id}"))
             .header("Authorization", format!("Bearer {}", token))
             .send()
