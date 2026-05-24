@@ -148,7 +148,7 @@ function formatDate(d: string) {
             <CardContent>
               <p class="text-xs text-muted-foreground">
                 Created {{ formatDate(project.created_at) }}
-                <template v-if="project.size !== undefined"> · {{ formatBytes(project.size) }}</template>
+                <template v-if="project.physical_size !== undefined"> · {{ formatBytes(project.physical_size) }}</template>
               </p>
             </CardContent>
           </Card>

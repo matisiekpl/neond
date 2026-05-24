@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Check, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Square, Trash2,
+  BookDown, Check, CircleHelp, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -54,6 +54,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {formatBytes} from "@/lib/utils.ts";
 
 const route = useRoute()
@@ -352,9 +357,47 @@ async function copyProjectId() {
         <span>PostgreSQL {{ project.pg_version.replace(/^V/i, '') }}</span>
         <span>·</span>
         <span>Created {{ new Date(project.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
-        <template v-if="project.size !== undefined">
+        <template v-if="project.physical_size !== undefined">
           <span>·</span>
-          <span>{{ formatBytes(project.size) }}</span>
+          <span class="inline-flex items-center gap-1">
+            Physical: {{ formatBytes(project.physical_size) }}
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <CircleHelp class="size-3.5 cursor-help opacity-60 hover:opacity-100"/>
+              </TooltipTrigger>
+              <TooltipContent class="max-w-xs">
+                <p>
+                  Physical size is the total bytes of all layer files stored on the pageserver for this tenant. It includes:
+                </p>
+                <ul class="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>PITR retention (delta and image layers kept for time-travel)</li>
+                  <li>Ancestor history shared with branches</li>
+                  <li>Uncompacted L0 layers from recent writes</li>
+                  <li>Both image and delta layer copies of the same data</li>
+                  <li>WAL retained for safekeepers</li>
+                </ul>
+              </TooltipContent>
+            </Tooltip>
+          </span>
+        </template>
+        <template v-if="project.synthetic_size !== undefined">
+          <span>·</span>
+          <span class="inline-flex items-center gap-1">
+            Synthetic: {{ formatBytes(project.synthetic_size) }}
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <CircleHelp class="size-3.5 cursor-help opacity-60 hover:opacity-100"/>
+              </TooltipTrigger>
+              <TooltipContent class="max-w-xs">
+                <p>
+                  Synthetic size is the pageserver's estimate of the smallest storage footprint required to satisfy the configured PITR window. It deduplicates history shared between branches — closer to the question "how much data am I really keeping?".
+                </p>
+                <p class="mt-1">
+                  Unlike physical size, it ignores uncompacted L0 layers and transient overhead, so it's usually noticeably smaller.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </span>
         </template>
         <button
           type="button"
