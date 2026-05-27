@@ -19,6 +19,14 @@ struct PageserverConfig {
     http_auth_type: String,
     pg_auth_type: String,
     control_plane_api_token: String,
+    disk_usage_based_eviction: DiskUsageBasedEviction,
+}
+
+#[derive(Serialize)]
+struct DiskUsageBasedEviction {
+    enabled: bool,
+    max_usage_pct: u8,
+    min_avail_bytes: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,6 +85,14 @@ pub fn write_pageserver_init_files(
         http_auth_type: "NeonJWT".to_string(),
         pg_auth_type: "NeonJWT".to_string(),
         control_plane_api_token: component_auth.generate_token(Scope::GenerationsApi, None)?,
+        // Evict layers only on an absolute free-space floor, not a percentage of
+        // total filesystem usage, so unrelated data on the same volume does not
+        // trigger eviction. max_usage_pct=100 effectively disables the relative arm.
+        disk_usage_based_eviction: DiskUsageBasedEviction {
+            enabled: true,
+            max_usage_pct: 100,
+            min_avail_bytes: 2_000_000_000,
+        },
     };
 
     let identity_filename = daemon_directory.join("pageserver/identity.toml");

@@ -57,6 +57,9 @@ pub const SAFEKEEPER_EVICTED_TIMELINES: &str = "safekeeper.evicted_timelines";
 pub const SAFEKEEPER_PROPOSER_ACCEPTOR_MESSAGES: &str = "safekeeper.proposer_acceptor_messages_total";
 pub const SAFEKEEPER_PARTIAL_BACKUP_UPLOADED_BYTES: &str = "safekeeper.partial_backup_uploaded_bytes_total";
 
+pub const S3_REQUESTS_TOTAL: &str = "remote_storage.s3.requests_total";
+pub const S3_DELETED_OBJECTS_TOTAL: &str = "remote_storage.s3.deleted_objects_total";
+
 const COLLECTION_INTERVAL: Duration = Duration::from_secs(10);
 const CLEANUP_INTERVAL: Duration = Duration::from_secs(300);
 const RETENTION_HOURS: i64 = 24;
@@ -210,23 +213,17 @@ impl MetricService {
             });
         }
 
-        let pageserver_global_samples = self.sample_pageserver_global_metrics().await;
-        for (slug, value) in pageserver_global_samples {
-            latest_samples.insert(
-                LatestMetricKey { slug: slug.to_string(), branch_id: None },
-                value,
-            );
-            batch.push(NewComputeMetricSample {
-                id: Uuid::new_v4(),
-                branch_id: None,
-                recorded_at,
-                slug: slug.to_string(),
-                value,
-            });
+        let mut global_samples: HashMap<&'static str, f64> = HashMap::new();
+        for (slug, value) in self
+            .sample_pageserver_global_metrics()
+            .await
+            .into_iter()
+            .chain(self.sample_safekeeper_metrics().await.into_iter())
+        {
+            *global_samples.entry(slug).or_insert(0.0) += value;
         }
 
-        let safekeeper_samples = self.sample_safekeeper_metrics().await;
-        for (slug, value) in safekeeper_samples {
+        for (slug, value) in global_samples {
             latest_samples.insert(
                 LatestMetricKey { slug: slug.to_string(), branch_id: None },
                 value,
@@ -643,6 +640,8 @@ impl MetricService {
                 "pageserver_tenant_states_count" => Some(PAGESERVER_TENANT_STATES_COUNT),
                 "pageserver_broken_tenants_count" => Some(PAGESERVER_BROKEN_TENANTS_COUNT),
                 "pageserver_io_operations_bytes_total" => Some(PAGESERVER_IO_OPERATIONS_BYTES),
+                "remote_storage_s3_request_seconds_count" => Some(S3_REQUESTS_TOTAL),
+                "remote_storage_s3_deleted_objects_total" => Some(S3_DELETED_OBJECTS_TOTAL),
                 _ => None,
             };
 
@@ -698,6 +697,8 @@ impl MetricService {
                 "safekeeper_evicted_timelines" => Some(SAFEKEEPER_EVICTED_TIMELINES),
                 "safekeeper_proposer_acceptor_messages_total" => Some(SAFEKEEPER_PROPOSER_ACCEPTOR_MESSAGES),
                 "safekeeper_partial_backup_uploaded_bytes_total" => Some(SAFEKEEPER_PARTIAL_BACKUP_UPLOADED_BYTES),
+                "remote_storage_s3_request_seconds_count" => Some(S3_REQUESTS_TOTAL),
+                "remote_storage_s3_deleted_objects_total" => Some(S3_DELETED_OBJECTS_TOTAL),
                 _ => None,
             };
 

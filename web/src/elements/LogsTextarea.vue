@@ -2,6 +2,7 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { useLogsStore } from '@/stores/logs.store'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import { Copy, Trash2 } from 'lucide-vue-next'
 
 const { compact } = defineProps<{ compact?: boolean }>()
@@ -60,11 +61,23 @@ function clearLogs() {
         </Button>
       </div>
     </div>
-    <pre
-      ref="containerRef"
+    <div
       :class="compact ? 'h-[calc(100vh-15rem)]' : 'h-[calc(100vh-10rem)]'"
-      class="border rounded-lg overflow-auto w-full bg-black text-green-400 font-mono text-xs p-4 whitespace-pre leading-5"
-      @scroll="onScroll"
-    >{{ text || 'No logs yet.' }}</pre>
+      class="border rounded-lg overflow-hidden w-full bg-black relative"
+    >
+      <div
+        v-if="logsStore.loading && !logsStore.lines.length"
+        class="absolute inset-0 flex items-center justify-center gap-2 text-green-400 font-mono text-xs"
+      >
+        <Spinner />
+        Loading logs…
+      </div>
+      <pre
+        v-else
+        ref="containerRef"
+        class="h-full overflow-auto w-full text-green-400 font-mono text-xs p-4 whitespace-pre leading-5"
+        @scroll="onScroll"
+      >{{ text || 'No logs yet.' }}</pre>
+    </div>
   </div>
 </template>

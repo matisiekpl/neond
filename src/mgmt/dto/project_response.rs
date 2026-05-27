@@ -22,5 +22,5 @@ pub struct ProjectResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_timeout: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub size: Option<u64>,
+    pub physical_size: Option<u64>,
 }

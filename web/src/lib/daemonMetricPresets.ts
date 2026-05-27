@@ -71,4 +71,13 @@ export const daemonMetricCharts: MetricChartDefinition[] = [
       { slug: 'safekeeper.evicted_timelines', label: 'Evicted timelines' },
     ],
   },
+  {
+    id: 's3-operations',
+    title: 'S3 operations',
+    unit: 'count',
+    series: [
+      { slug: 'remote_storage.s3.requests_total', label: 'Requests' },
+      { slug: 'remote_storage.s3.deleted_objects_total', label: 'Deleted objects' },
+    ],
+  },
 ]

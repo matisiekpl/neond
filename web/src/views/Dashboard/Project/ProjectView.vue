@@ -4,7 +4,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Check, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Square, Trash2,
+  BookDown, Check, CircleHelp, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -54,6 +54,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {formatBytes} from "@/lib/utils.ts";
 
 const route = useRoute()
@@ -110,7 +115,12 @@ const importOpen = ref(false)
 
 const deleteOpen = ref(false)
 const deleteId = ref<string | null>(null)
+const deleteConfirmName = ref('')
 const deleting = ref(false)
+
+const deleteBranchName = computed(
+  () => branchStore.branches.find((branch) => branch.id === deleteId.value)?.name ?? ''
+)
 
 const branchFromOpen = ref(false)
 const branchFromParent = ref<Branch | null>(null)
@@ -138,6 +148,9 @@ watch(renameOpen, (val) => {
 })
 watch(passwordOpen, (val) => {
   if (!val) passwordValue.value = ''
+})
+watch(deleteOpen, (val) => {
+  if (!val) deleteConfirmName.value = ''
 })
 
 function openCreate() {
@@ -344,9 +357,28 @@ async function copyProjectId() {
         <span>PostgreSQL {{ project.pg_version.replace(/^V/i, '') }}</span>
         <span>·</span>
         <span>Created {{ new Date(project.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) }}</span>
-        <template v-if="project.size !== undefined">
+        <template v-if="project.physical_size !== undefined">
           <span>·</span>
-          <span>{{ formatBytes(project.size) }}</span>
+          <span class="inline-flex items-center gap-1">
+            Physical: {{ formatBytes(project.physical_size) }}
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <CircleHelp class="size-3.5 cursor-help opacity-60 hover:opacity-100"/>
+              </TooltipTrigger>
+              <TooltipContent class="max-w-xs">
+                <p>
+                  Physical size is the total bytes of all layer files stored on the pageserver for this tenant. It includes:
+                </p>
+                <ul class="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>PITR retention (delta and image layers kept for time-travel)</li>
+                  <li>Ancestor history shared with branches</li>
+                  <li>Uncompacted L0 layers from recent writes</li>
+                  <li>Both image and delta layer copies of the same data</li>
+                  <li>WAL retained for safekeepers</li>
+                </ul>
+              </TooltipContent>
+            </Tooltip>
+          </span>
         </template>
         <button
           type="button"
@@ -637,11 +669,22 @@ async function copyProjectId() {
             This branch and all its data will be permanently removed. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div class="grid gap-2">
+          <Label for="delete-branch-confirm">
+            Type <span class="font-semibold">{{ deleteBranchName }}</span> to confirm
+          </Label>
+          <Input
+            id="delete-branch-confirm"
+            v-model="deleteConfirmName"
+            :placeholder="deleteBranchName"
+            :disabled="deleting"
+          />
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deleting">Cancel</AlertDialogCancel>
           <AlertDialogAction
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
-            :disabled="deleting"
+            :disabled="deleting || deleteConfirmName !== deleteBranchName"
             @click="confirmDelete"
           >
             <Loader2 v-if="deleting" class="mr-1.5 size-3.5 animate-spin"/>

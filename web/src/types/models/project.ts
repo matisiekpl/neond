@@ -10,5 +10,5 @@ export interface Project {
   pitr_interval?: string
   checkpoint_distance?: number
   checkpoint_timeout?: string
-  size?: number
+  physical_size?: number
 }

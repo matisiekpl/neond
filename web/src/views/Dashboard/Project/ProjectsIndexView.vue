@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useTitle } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { MoreHorizontal, Loader2 } from 'lucide-vue-next'
@@ -53,7 +53,12 @@ const renameName = ref('')
 const renameSubmitting = ref(false)
 const deleteOpen = ref(false)
 const deleteId = ref<string | null>(null)
+const deleteConfirmName = ref('')
 const deleteSubmitting = ref(false)
+
+const deleteProjectName = computed(
+  () => projectStore.projects.find((project) => project.id === deleteId.value)?.name ?? ''
+)
 
 watch(() => organizationStore.selectedOrganizationId, (id) => {
   if (id) projectStore.fetch(id)
@@ -61,6 +66,10 @@ watch(() => organizationStore.selectedOrganizationId, (id) => {
 
 watch(renameOpen, (val) => {
   if (!val) renameName.value = ''
+})
+
+watch(deleteOpen, (val) => {
+  if (!val) deleteConfirmName.value = ''
 })
 
 function openRename(id: string, currentName: string) {
@@ -139,7 +148,7 @@ function formatDate(d: string) {
             <CardContent>
               <p class="text-xs text-muted-foreground">
                 Created {{ formatDate(project.created_at) }}
-                <template v-if="project.size !== undefined"> · {{ formatBytes(project.size) }}</template>
+                <template v-if="project.physical_size !== undefined"> · {{ formatBytes(project.physical_size) }}</template>
               </p>
             </CardContent>
           </Card>
@@ -199,11 +208,22 @@ function formatDate(d: string) {
             All branches and data in this project will be permanently removed. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div class="grid gap-2">
+          <Label for="delete-project-confirm">
+            Type <span class="font-semibold">{{ deleteProjectName }}</span> to confirm
+          </Label>
+          <Input
+            id="delete-project-confirm"
+            v-model="deleteConfirmName"
+            :placeholder="deleteProjectName"
+            :disabled="deleteSubmitting"
+          />
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deleteSubmitting">Cancel</AlertDialogCancel>
           <AlertDialogAction
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
-            :disabled="deleteSubmitting"
+            :disabled="deleteSubmitting || deleteConfirmName !== deleteProjectName"
             @click="confirmDelete"
           >
             <Loader2 v-if="deleteSubmitting" class="mr-1.5 size-3.5 animate-spin" />

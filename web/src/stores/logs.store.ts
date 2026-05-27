@@ -14,17 +14,31 @@ const MAX_LINES = 5000
 export const useLogsStore = defineStore('logs', () => {
   const lines = ref<LogLine[]>([])
   const connected = ref(false)
+  const loading = ref(false)
   let source: EventSource | null = null
 
-  function handleMessage(event: MessageEvent) {
-    const line = JSON.parse(event.data) as LogLine
-    lines.value.push(line)
+  function trimLines() {
     if (lines.value.length > MAX_LINES) {
       lines.value = lines.value.slice(-MAX_LINES)
     }
   }
 
+  function handleMessage(event: MessageEvent) {
+    loading.value = false
+    const line = JSON.parse(event.data) as LogLine
+    lines.value.push(line)
+    trimLines()
+  }
+
+  function handleSnapshot(event: MessageEvent) {
+    loading.value = false
+    const snapshot = JSON.parse(event.data) as LogLine[]
+    lines.value.push(...snapshot)
+    trimLines()
+  }
+
   function handleError() {
+    loading.value = false
     connected.value = false
     toast.error('Log stream disconnected')
   }
@@ -32,10 +46,12 @@ export const useLogsStore = defineStore('logs', () => {
   function open(eventSource: EventSource) {
     stop()
     source = eventSource
+    loading.value = true
     source.onopen = () => {
       connected.value = true
     }
     source.onmessage = handleMessage
+    source.addEventListener('snapshot', handleSnapshot as EventListener)
     source.onerror = handleError
   }
 
@@ -60,7 +76,8 @@ export const useLogsStore = defineStore('logs', () => {
     source = null
     lines.value = []
     connected.value = false
+    loading.value = false
   }
 
-  return { lines, connected, startDaemonLogs, startEndpointLogs, startPgbouncerLogs, startImportLogs, stop }
+  return { lines, connected, loading, startDaemonLogs, startEndpointLogs, startPgbouncerLogs, startImportLogs, stop }
 })
