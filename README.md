@@ -19,6 +19,7 @@
     <a href="#-features">Features</a> •
     <a href="#-installation">Installation</a> •
     <a href="#-usage">Usage</a> •
+    <a href="#-documentation">Documentation</a> •
     <a href="#-motivation">Motivation</a> •
     <a href="#-license">License</a>
   </p>
@@ -37,6 +38,10 @@
   under single domain.
 - **Full Security** - control plane takes care about SSL certificates and keys to enable secure connection
 - **Multi-Tenancy** - create multiple users and share compute to other developers with configured roles
+- **PgBouncer built-in** - connection pooling out of the box for every endpoint
+- **Import existing PostgreSQL** - import an external Postgres database into a new branch
+- **Extensions** - ships with `pgvector` and compiled Postgres contrib extensions
+- **Observability** - per-branch logs and storage size metrics in the dashboard
 
 > NeonD is not designed to be deployed in critical application environments. Its purpose is to
 > provide a DX-oriented PostgreSQL platform for early-stage startup projects, where innovation and velocity are more
@@ -128,6 +133,14 @@ services:
 4. Click on options of default `production` branch and click "Start endpoint".
 5. Click on options of branch and "Copy Connection String".
 6. Connect to database - for example `psql '<connection_string>'`
+
+## 📚 Documentation
+
+Full user guide lives in [`docs/`](./docs/README.md):
+
+- **Getting started** — [Installation](./docs/installation.md), [Quickstart](./docs/quickstart.md), [Configuration](./docs/configuration.md)
+- **Using neond** — [Branching & PITR](./docs/branching.md), [Importing PostgreSQL](./docs/import.md), [PgBouncer](./docs/pgbouncer.md), [TLS SNI routing](./docs/tls-sni.md)
+- **Operating neond** — [Startup](./docs/startup.md), [Storage](./docs/storage.md), [Backups](./docs/backups.md)
 
 ## ⚠️ Caveats
 
