@@ -138,7 +138,7 @@ services:
 
 Full user guide lives in [`docs/`](./docs/README.md):
 
-- **Getting started** — [Installation](./docs/installation.md), [Quickstart](./docs/quickstart.md), [Configuration](./docs/configuration.md)
+- **Getting started** — [Installation](./docs/installation.md), [Quickstart](./docs/quickstart.md), [Configuration](./docs/configuration.md), [Accounts & organizations](./docs/accounts.md)
 - **Using neond** — [Branching & PITR](./docs/branching.md), [Importing PostgreSQL](./docs/import.md), [PgBouncer](./docs/pgbouncer.md), [TLS SNI routing](./docs/tls-sni.md)
 - **Operating neond** — [Startup](./docs/startup.md), [Storage](./docs/storage.md), [Backups](./docs/backups.md)
 
