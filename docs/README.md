@@ -11,6 +11,8 @@ parts.
   connection in a few minutes.
 - [Configuration](./configuration.md) — every environment variable neond
   reads.
+- [Accounts & organizations](./accounts.md) — first user, signup rules, and
+  how organizations scope what people see.
 
 ## Using neond
 
