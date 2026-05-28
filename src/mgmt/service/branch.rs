@@ -59,6 +59,10 @@ impl BranchService {
         }
     }
 
+    pub async fn count_all(&self) -> Result<i64> {
+        self.branch_repo.count_all().await
+    }
+
     pub async fn create(
         &self,
         user_id: Uuid,

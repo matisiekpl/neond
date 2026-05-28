@@ -109,6 +109,7 @@ async fn run_with_lease(config: Config) -> Result<()> {
     );
 
     let repositories = Repositories::new().await?;
+    let telemetry = crate::mgmt::telemetry::Telemetry::new(&config.daemon_directory).await;
     let services = Arc::new(Services::new(
         &repositories,
         Arc::new(pageserver_client),
@@ -116,6 +117,7 @@ async fn run_with_lease(config: Config) -> Result<()> {
         config.clone(),
         shutdown_token.clone(),
         logs_service,
+        telemetry.clone(),
     ));
     let state = AppState {
         services: Arc::clone(&services),
@@ -146,6 +148,10 @@ async fn run_with_lease(config: Config) -> Result<()> {
     services.import().reconcile_interrupted().await;
 
     services.endpoint().recover_running().await;
+
+    if let Some(telemetry) = telemetry {
+        telemetry.spawn_heartbeat(Arc::clone(&services));
+    }
 
     let listen_services = Arc::clone(&services);
     tokio::spawn(async move {

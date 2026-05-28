@@ -218,6 +218,16 @@ impl BranchRepository {
             .map_err(Into::into)
     }
 
+    pub async fn count_all(&self) -> Result<i64> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        branches::table
+            .count()
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn list_all_with_recent_status(&self, status: ComputeEndpointStatus) -> Result<Vec<Branch>> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

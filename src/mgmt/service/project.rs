@@ -20,6 +20,7 @@ use crate::mgmt::repository::organization::OrganizationRepository;
 use crate::mgmt::repository::project::ProjectRepository;
 use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::membership::MembershipService;
+use crate::mgmt::telemetry::Telemetry;
 
 pub struct ProjectService {
     project_repo: Arc<ProjectRepository>,
@@ -30,6 +31,7 @@ pub struct ProjectService {
     safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
     http_client: reqwest::Client,
     config: Config,
+    telemetry: Option<Arc<Telemetry>>,
 }
 
 impl ProjectService {
@@ -41,6 +43,7 @@ impl ProjectService {
         pageserver_client: Arc<neon_pageserver_client::mgmt_api::Client>,
         safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
         config: Config,
+        telemetry: Option<Arc<Telemetry>>,
     ) -> Self {
         Self {
             project_repo,
@@ -51,7 +54,12 @@ impl ProjectService {
             safekeeper_client,
             http_client: reqwest::Client::new(),
             config,
+            telemetry,
         }
+    }
+
+    pub async fn count_all(&self) -> Result<i64> {
+        self.project_repo.count_all().await
     }
 
     pub async fn create(
@@ -218,6 +226,12 @@ impl ProjectService {
         self.membership_service
             .verify_membership(user_id, org_id)
             .await?;
+
+        if let Some(telemetry) = self.telemetry.clone() {
+            tokio::spawn(async move {
+                telemetry.capture_pageview(user_id).await;
+            });
+        }
 
         let projects = self.project_repo.list_by_org_id(org_id).await?;
 

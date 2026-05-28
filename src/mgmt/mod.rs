@@ -7,3 +7,4 @@ pub mod frontend;
 pub mod server;
 pub mod service;
 pub mod compute;
+pub mod telemetry;

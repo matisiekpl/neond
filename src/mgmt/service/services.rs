@@ -11,6 +11,7 @@ use crate::mgmt::service::organization::OrganizationService;
 use crate::mgmt::service::project::ProjectService;
 use crate::mgmt::service::sql::SqlService;
 use crate::mgmt::service::user::UserService;
+use crate::mgmt::telemetry::Telemetry;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -36,6 +37,7 @@ impl Services {
         config: Config,
         shutdown_token: CancellationToken,
         logs: Arc<LogsService>,
+        telemetry: Option<Arc<Telemetry>>,
     ) -> Self {
         let membership = MembershipService::new(Arc::new(repositories.membership().clone()));
         let endpoint = Arc::new(EndpointService::new(
@@ -74,6 +76,7 @@ impl Services {
             Arc::clone(&pageserver_client),
             Arc::clone(&safekeeper_client),
             config.clone(),
+            telemetry,
         );
         let project = Arc::new(project);
         let daemon = Arc::new(DaemonService::new(

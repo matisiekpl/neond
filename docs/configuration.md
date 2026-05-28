@@ -80,6 +80,26 @@ services:
       - ./neond_data:/neond
 ```
 
+## Telemetry
+
+neond sends **anonymous** product telemetry to PostHog (EU region) so the
+maintainers can see how many installations are alive and how usage grows
+over time. No PII, no SQL contents, no names, no IPs.
+
+Two events are sent:
+
+- `app_started` — once per process start, with `os`, `arch`, and version.
+- `heartbeat` — every hour after a 5-minute warmup, with `uptime_seconds`,
+  `projects_count`, `branches_count`, and `endpoints_running_count`.
+
+A stable anonymous installation ID (UUID v4) is generated on first boot and
+persisted to `<daemon_directory>/installation_id`.
+
+| Variable | What it does |
+|---|---|
+| `DO_NOT_TRACK` | Set to `1` or `true` to disable telemetry (standard https://consoledonottrack.com). |
+| `TELEMETRY_DISABLED` | Set to `1` or `true` to disable telemetry. Equivalent alias to `DO_NOT_TRACK`. |
+
 ## Health and lifecycle
 
 - **Healthcheck endpoint**: `GET /api/auth/setup` returns 200 once the API is

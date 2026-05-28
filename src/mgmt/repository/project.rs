@@ -62,6 +62,16 @@ impl ProjectRepository {
             .map_err(Into::into)
     }
 
+    pub async fn count_all(&self) -> Result<i64> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        projects::table
+            .count()
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn update(&self, id: Uuid, name: &str) -> Result<Project> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

@@ -535,6 +535,14 @@ impl EndpointService {
         }
     }
 
+    pub async fn count_running(&self) -> usize {
+        let endpoints = self.endpoints.lock().await;
+        endpoints
+            .values()
+            .filter(|endpoint| endpoint.get_status() == ComputeEndpointStatus::Running)
+            .count()
+    }
+
     pub async fn get_all_active(&self) -> Vec<(Uuid, String, u16)> {
         let endpoints = self.endpoints.lock().await;
         endpoints
