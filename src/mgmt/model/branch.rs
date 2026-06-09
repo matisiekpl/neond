@@ -34,6 +34,7 @@ pub struct Branch {
     pub slug: String,
     pub recent_status: Option<ComputeEndpointStatus>,
     pub port: Option<i32>,
+    pub pooler_port: Option<i32>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub import_status: Option<String>,

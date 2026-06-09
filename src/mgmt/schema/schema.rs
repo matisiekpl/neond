@@ -58,6 +58,7 @@ diesel::table! {
         slug -> Varchar,
         recent_status -> Nullable<ComputeEndpointStatus>,
         port -> Nullable<Int4>,
+        pooler_port -> Nullable<Int4>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         import_status -> Nullable<Text>,

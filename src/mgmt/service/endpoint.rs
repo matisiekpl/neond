@@ -102,8 +102,9 @@ impl EndpointService {
         }
 
         let preferred_port = branch.port.map(|p| p as u16);
+        let preferred_pooler_port = branch.pooler_port.map(|p| p as u16);
         let mut endpoint =
-            ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port, Arc::clone(&self.logs_service)).map_err(
+            ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port, preferred_pooler_port, Arc::clone(&self.logs_service)).map_err(
                 |error| AppError::ComputeStartupFailed {
                     reason: error.to_string(),
                 },
@@ -124,6 +125,21 @@ impl EndpointService {
             {
                 tracing::warn!(
                     "Failed to save port for branch {}: {}",
+                    branch_id,
+                    e
+                );
+            }
+        }
+
+        let launched_pooler_port = endpoint.get_pooler_port().map(|p| p as i32);
+        if branch.pooler_port != launched_pooler_port {
+            if let Err(e) = self
+                .branch_repo
+                .update_pooler_port(branch_id, launched_pooler_port)
+                .await
+            {
+                tracing::warn!(
+                    "Failed to save pooler port for branch {}: {}",
                     branch_id,
                     e
                 );
@@ -429,8 +445,9 @@ impl EndpointService {
             };
 
             let preferred_port = branch.port.map(|p| p as u16);
+            let preferred_pooler_port = branch.pooler_port.map(|p| p as u16);
             let mut endpoint =
-                match ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port, Arc::clone(&self.logs_service))
+                match ComputeEndpoint::new(self.config.clone(), branch.clone(), project.pg_version, preferred_port, preferred_pooler_port, Arc::clone(&self.logs_service))
                 {
                     Ok(e) => e,
                     Err(e) => {
@@ -456,6 +473,21 @@ impl EndpointService {
                         {
                             tracing::warn!(
                                 "Failed to save port for branch {}: {}",
+                                branch.id,
+                                e
+                            );
+                        }
+                    }
+
+                    let launched_pooler_port = endpoint.get_pooler_port().map(|p| p as i32);
+                    if branch.pooler_port != launched_pooler_port {
+                        if let Err(e) = self
+                            .branch_repo
+                            .update_pooler_port(branch.id, launched_pooler_port)
+                            .await
+                        {
+                            tracing::warn!(
+                                "Failed to save pooler port for branch {}: {}",
                                 branch.id,
                                 e
                             );

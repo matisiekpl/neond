@@ -187,6 +187,7 @@ impl SqlService {
             slug: format!("ephemeral-{}", Uuid::new_v4()),
             recent_status: None,
             port: None,
+            pooler_port: None,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
             import_status: None,
@@ -194,7 +195,7 @@ impl SqlService {
         };
 
         let mut endpoint =
-            ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone(), None, Arc::clone(&self.logs_service))
+            ComputeEndpoint::new(self.config.clone(), ephemeral_branch, project.pg_version.clone(), None, None, Arc::clone(&self.logs_service))
                 .map_err(|error| AppError::ComputeStartupFailed {
                     reason: error.to_string(),
                 })?;

@@ -218,6 +218,16 @@ impl BranchRepository {
             .map_err(Into::into)
     }
 
+    pub async fn update_pooler_port(&self, id: Uuid, pooler_port: Option<i32>) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::update(branches::table.filter(branches::id.eq(id)))
+            .set(branches::pooler_port.eq(pooler_port))
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn count_all(&self) -> Result<i64> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

@@ -61,6 +61,7 @@ pub struct ComputeEndpoint {
     preferred_port: Option<u16>,
     metrics_port: Option<u16>,
     pooler_port: Option<u16>,
+    preferred_pooler_port: Option<u16>,
     pid: Option<u32>,
     pgbouncer_pid: Option<u32>,
     compute_dir: TempDir,
@@ -85,6 +86,7 @@ impl ComputeEndpoint {
         branch: Branch,
         pg_version: PgVersion,
         preferred_port: Option<u16>,
+        preferred_pooler_port: Option<u16>,
         logs_service: Arc<LogsService>,
     ) -> Result<Self> {
         let pgdata_dir = TempDir::with_prefix(format!("compute_{}_", branch.timeline_id))
@@ -100,6 +102,7 @@ impl ComputeEndpoint {
             preferred_port,
             metrics_port: None,
             pooler_port: None,
+            preferred_pooler_port,
             pid: None,
             pgbouncer_pid: None,
             compute_dir: pgdata_dir,
@@ -309,11 +312,7 @@ impl ComputeEndpoint {
             reason: "postgres port not allocated before pgbouncer startup".to_string(),
         })?;
 
-        let pooler_port = crate::utils::ports::allocate_random_port().map_err(|error| {
-            AppError::ComputeProcessStartupFailed {
-                reason: format!("failed to allocate pooler port: {}", error),
-            }
-        })?;
+        let pooler_port = self.resolve_pooler_port()?;
         self.pooler_port = Some(pooler_port);
 
         let compute_dir = self.compute_dir.path();
@@ -709,6 +708,20 @@ impl ComputeEndpoint {
             }
             tracing::warn!(
                 "Preferred port {} for branch {} is unavailable, falling back to random port",
+                preferred,
+                self.branch.timeline_id
+            );
+        }
+        self.generate_random_port()
+    }
+
+    fn resolve_pooler_port(&self) -> Result<u16> {
+        if let Some(preferred) = self.preferred_pooler_port {
+            if std::net::TcpListener::bind(("127.0.0.1", preferred)).is_ok() {
+                return Ok(preferred);
+            }
+            tracing::warn!(
+                "Preferred pooler port {} for branch {} is unavailable, falling back to random port",
                 preferred,
                 self.branch.timeline_id
             );
