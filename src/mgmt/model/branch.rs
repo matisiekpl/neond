@@ -59,20 +59,25 @@ impl Branch {
         }
     }
 
-    pub fn get_pooler_connection_string(&self, config: Config, pooler_port: u16) -> String {
+    pub fn get_pooler_connection_string(
+        &self,
+        config: Config,
+        pooler_port: Option<u16>,
+    ) -> Option<String> {
+        if config.pgbouncer_bin.is_none() {
+            return None;
+        }
         match config.hostname {
-            Some(hostname) => {
-                format!(
-                    "postgresql://postgres:{}@{}-pooler.{}:{}/postgres?sslmode=require",
-                    self.password, self.slug, hostname, config.pg_proxy_port
-                )
-            }
-            None => {
+            Some(hostname) => Some(format!(
+                "postgresql://postgres:{}@{}-pooler.{}:{}/postgres?sslmode=require",
+                self.password, self.slug, hostname, config.pg_proxy_port
+            )),
+            None => pooler_port.map(|pooler_port| {
                 format!(
                     "postgresql://postgres:{}@0.0.0.0:{}/postgres?sslmode=require",
                     self.password, pooler_port,
                 )
-            }
+            }),
         }
     }
 }

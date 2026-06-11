@@ -271,18 +271,10 @@ impl ComputeEndpoint {
 
         if let Err(e) = self.start_pgbouncer() {
             tracing::error!(
-                "Failed to start pgbouncer for compute endpoint {}: {}",
+                "Failed to start pgbouncer for compute endpoint {}, continuing without pooling: {}",
                 self.branch.timeline_id,
                 e
             );
-            if let Some(mut compute_child) = self.child.take() {
-                compute_child.kill().ok();
-                compute_child.wait().ok();
-            }
-            self.status = ComputeEndpointStatus::Failed;
-            self.pid = None;
-            self.metrics_port = None;
-            return Err(e);
         }
 
         self.status = ComputeEndpointStatus::Running;
@@ -428,7 +420,7 @@ impl ComputeEndpoint {
             }
         });
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
         let address: std::net::SocketAddr = format!("127.0.0.1:{}", pooler_port)
             .parse()
             .map_err(|_| AppError::ComputeSocketAddressInvalid {

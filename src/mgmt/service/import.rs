@@ -267,11 +267,12 @@ impl ImportService {
             connection_string: endpoint_info
                 .clone()
                 .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
-            pooler_connection_string: endpoint_info
-                .and_then(|info| info.pooler_port)
-                .map(|pooler_port| {
-                    branch.get_pooler_connection_string(self.config.clone(), pooler_port)
-                }),
+            pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                branch.get_pooler_connection_string(
+                    self.config.clone(),
+                    info.pooler_port.or(branch.pooler_port.map(|p| p as u16)),
+                )
+            }),
             password: branch.password.clone(),
             created_at: branch.created_at,
             updated_at: branch.updated_at,

@@ -193,11 +193,12 @@ impl BranchService {
             connection_string: endpoint_info
                 .clone()
                 .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
-            pooler_connection_string: endpoint_info
-                .and_then(|info| info.pooler_port)
-                .map(|pooler_port| {
-                    branch.get_pooler_connection_string(self.config.clone(), pooler_port)
-                }),
+            pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                branch.get_pooler_connection_string(
+                    self.config.clone(),
+                    info.pooler_port.or(branch.pooler_port.map(|p| p as u16)),
+                )
+            }),
             password: branch.password.clone(),
             created_at: branch.created_at,
             updated_at: branch.updated_at,
@@ -302,11 +303,12 @@ impl BranchService {
                 connection_string: endpoint_info
                     .clone()
                     .map(|info| b.get_connection_string(self.config.clone(), info.port)),
-                pooler_connection_string: endpoint_info
-                    .and_then(|info| info.pooler_port)
-                    .map(|pooler_port| {
-                        b.get_pooler_connection_string(self.config.clone(), pooler_port)
-                    }),
+                pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                    b.get_pooler_connection_string(
+                        self.config.clone(),
+                        info.pooler_port.or(b.pooler_port.map(|p| p as u16)),
+                    )
+                }),
                 password: b.password.clone(),
                 created_at: b.created_at,
                 updated_at: b.updated_at,
@@ -397,12 +399,12 @@ impl BranchService {
             connection_string: endpoint_info
                 .as_ref()
                 .map(|info| branch.get_connection_string(self.config.clone(), info.port)),
-            pooler_connection_string: endpoint_info
-                .as_ref()
-                .and_then(|info| info.pooler_port)
-                .map(|pooler_port| {
-                    branch.get_pooler_connection_string(self.config.clone(), pooler_port)
-                }),
+            pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                branch.get_pooler_connection_string(
+                    self.config.clone(),
+                    info.pooler_port.or(branch.pooler_port.map(|p| p as u16)),
+                )
+            }),
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,
@@ -831,11 +833,12 @@ impl BranchService {
             connection_string: endpoint_info
                 .clone()
                 .map(|info| inserted.get_connection_string(self.config.clone(), info.port)),
-            pooler_connection_string: endpoint_info
-                .and_then(|info| info.pooler_port)
-                .map(|pooler_port| {
-                    inserted.get_pooler_connection_string(self.config.clone(), pooler_port)
-                }),
+            pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                inserted.get_pooler_connection_string(
+                    self.config.clone(),
+                    info.pooler_port.or(inserted.pooler_port.map(|p| p as u16)),
+                )
+            }),
             password: inserted.password.clone(),
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
@@ -1058,11 +1061,12 @@ impl BranchService {
             connection_string: endpoint_info
                 .clone()
                 .map(|info| inserted.get_connection_string(self.config.clone(), info.port)),
-            pooler_connection_string: endpoint_info
-                .and_then(|info| info.pooler_port)
-                .map(|pooler_port| {
-                    inserted.get_pooler_connection_string(self.config.clone(), pooler_port)
-                }),
+            pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                inserted.get_pooler_connection_string(
+                    self.config.clone(),
+                    info.pooler_port.or(inserted.pooler_port.map(|p| p as u16)),
+                )
+            }),
             password: inserted.password.clone(),
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
@@ -1161,11 +1165,12 @@ impl BranchService {
             connection_string: endpoint_info
                 .clone()
                 .map(|info| updated.get_connection_string(self.config.clone(), info.port)),
-            pooler_connection_string: endpoint_info
-                .and_then(|info| info.pooler_port)
-                .map(|pooler_port| {
-                    updated.get_pooler_connection_string(self.config.clone(), pooler_port)
-                }),
+            pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                updated.get_pooler_connection_string(
+                    self.config.clone(),
+                    info.pooler_port.or(updated.pooler_port.map(|p| p as u16)),
+                )
+            }),
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,
@@ -1274,11 +1279,12 @@ impl BranchService {
             connection_string: endpoint_info
                 .clone()
                 .map(|info| updated.get_connection_string(self.config.clone(), info.port)),
-            pooler_connection_string: endpoint_info
-                .and_then(|info| info.pooler_port)
-                .map(|pooler_port| {
-                    updated.get_pooler_connection_string(self.config.clone(), pooler_port)
-                }),
+            pooler_connection_string: endpoint_info.as_ref().and_then(|info| {
+                updated.get_pooler_connection_string(
+                    self.config.clone(),
+                    info.pooler_port.or(updated.pooler_port.map(|p| p as u16)),
+                )
+            }),
             password: updated.password.clone(),
             created_at: updated.created_at,
             updated_at: updated.updated_at,

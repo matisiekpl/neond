@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, watch} from 'vue'
+import {computed} from 'vue'
 import {Copy, TriangleAlert} from 'lucide-vue-next'
 import {toast} from 'vue-sonner'
 import {Button} from '@/components/ui/button'
@@ -19,41 +19,27 @@ import type {Branch} from '@/types/models/branch'
 const props = defineProps<{
   open: boolean
   branch: Branch | null
-  pooled: boolean
   libcompat: boolean
 }>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  'update:pooled': [value: boolean]
   'update:libcompat': [value: boolean]
 }>()
 
-const poolerAvailable = computed(() => !!props.branch?.pooler_connection_string)
-
-watch(
-  () => [props.open, poolerAvailable.value] as const,
-  ([open, available]) => {
-    if (open && !available && props.pooled) {
-      emit('update:pooled', false)
-    }
-  },
-)
-
-const connectionString = computed(() => {
-  if (!props.branch) return ''
-  const base = props.pooled
-    ? props.branch.pooler_connection_string
-    : props.branch.connection_string
+function withLibcompat(base: string | null | undefined): string {
   if (!base) return ''
   if (!props.libcompat) return base
   const separator = base.includes('?') ? '&' : '?'
   return `${base}${separator}uselibpqcompat=true`
-})
+}
 
-async function copy() {
-  if (!connectionString.value) return
-  await navigator.clipboard.writeText(connectionString.value)
+const directConnectionString = computed(() => withLibcompat(props.branch?.connection_string))
+const pooledConnectionString = computed(() => withLibcompat(props.branch?.pooler_connection_string))
+
+async function copy(value: string) {
+  if (!value) return
+  await navigator.clipboard.writeText(value)
   toast.success('Connection string copied')
 }
 </script>
@@ -65,46 +51,65 @@ async function copy() {
         <DialogTitle>Connect to your database</DialogTitle>
       </DialogHeader>
 
-      <div class="flex flex-col gap-4">
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <div class="flex items-center gap-2">
-            <Switch
-              id="connect-pooled"
-              :model-value="pooled"
-              :disabled="!poolerAvailable"
-              @update:model-value="emit('update:pooled', $event)"
-            />
-            <Label
-              for="connect-pooled"
-              :class="poolerAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+      <div class="flex flex-col gap-6">
+        <div class="flex items-center gap-2">
+          <Switch
+            id="connect-libcompat"
+            :model-value="libcompat"
+            @update:model-value="emit('update:libcompat', $event)"
+          />
+          <Label for="connect-libcompat" class="cursor-pointer">libpq compatibility</Label>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <Label>Direct connection</Label>
+          <Textarea
+            :model-value="directConnectionString"
+            readonly
+            class="font-mono text-xs min-h-24"
+          />
+          <div class="flex justify-end">
+            <Button
+              variant="outline"
+              type="button"
+              size="sm"
+              class="cursor-pointer"
+              :disabled="!directConnectionString"
+              @click="copy(directConnectionString)"
             >
-              Connection pooling
-              <span v-if="!poolerAvailable" class="text-xs text-muted-foreground">(unavailable)</span>
-            </Label>
-          </div>
-          <div class="flex items-center gap-2">
-            <Switch
-              id="connect-libcompat"
-              :model-value="libcompat"
-              @update:model-value="emit('update:libcompat', $event)"
-            />
-            <Label for="connect-libcompat" class="cursor-pointer">libpq compatibility</Label>
+              <Copy class="size-3.5"/>
+              Copy
+            </Button>
           </div>
         </div>
 
-        <Alert v-if="pooled">
-          <TriangleAlert class="size-4 text-amber-600"/>
-          <AlertDescription>
-            Pooled connections do not enforce channel binding, which can leave the client open to
-            MITM attacks. Use the direct connection if you need channel binding.
-          </AlertDescription>
-        </Alert>
-
-        <Textarea
-          :model-value="connectionString"
-          readonly
-          class="font-mono text-xs min-h-24"
-        />
+        <div v-if="pooledConnectionString" class="flex flex-col gap-2">
+          <Label class="mb-1">Connection pooling (pgbouncer)</Label>
+          <Alert>
+            <TriangleAlert class="size-4 text-amber-600"/>
+            <AlertDescription>
+              Pooled connections do not enforce channel binding, which can leave the client open to
+              MITM attacks. Use the direct connection if you need channel binding.
+            </AlertDescription>
+          </Alert>
+          <Textarea
+            :model-value="pooledConnectionString"
+            readonly
+            class="font-mono text-xs min-h-24"
+          />
+          <div class="flex justify-end">
+            <Button
+              variant="outline"
+              type="button"
+              size="sm"
+              class="cursor-pointer"
+              @click="copy(pooledConnectionString)"
+            >
+              <Copy class="size-3.5"/>
+              Copy
+            </Button>
+          </div>
+        </div>
       </div>
 
       <DialogFooter class="mt-2">
@@ -115,15 +120,6 @@ async function copy() {
           @click="emit('update:open', false)"
         >
           Close
-        </Button>
-        <Button
-          type="button"
-          class="cursor-pointer"
-          :disabled="!connectionString"
-          @click="copy"
-        >
-          <Copy class="size-3.5"/>
-          Copy snippet
         </Button>
       </DialogFooter>
     </DialogContent>

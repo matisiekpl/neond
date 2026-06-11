@@ -309,7 +309,6 @@ watch(projectId, (id) => {
 
 const connectOpen = ref(false)
 const connectBranch = ref<Branch | null>(null)
-const connectPooled = ref(true)
 const connectLibcompat = ref(false)
 
 function openConnect(branch: Branch) {
@@ -797,7 +796,6 @@ async function copyProjectId() {
 
     <ConnectDialog
       v-model:open="connectOpen"
-      v-model:pooled="connectPooled"
       v-model:libcompat="connectLibcompat"
       :branch="connectBranch"
     />
