@@ -5,3 +5,5 @@ mod common;
 mod branch_recovery;
 #[path = "e2e/mgmt_api.rs"]
 mod mgmt_api;
+#[path = "e2e/postgis.rs"]
+mod postgis;

@@ -3,6 +3,13 @@
 JOBS ?= 1
 BUILD_TYPE ?= release
 
+POSTGIS_VERSION := 3.6.4
+POSTGIS_SHA256 := ed8dc6679f1e06f7b113592b04cde2a7e00f1b1e681294c8ca2204058990cec6
+POSTGIS_BUILD_DIR := $(CURDIR)/build/postgis/$(POSTGIS_VERSION)
+POSTGIS_ARCHIVE := $(POSTGIS_BUILD_DIR)/postgis-$(POSTGIS_VERSION).tar.gz
+
+.PHONY: postgis
+
 ifeq ($(shell uname),Darwin)
 OPENSSL_PREFIX := $(shell brew --prefix openssl@3 2>/dev/null || brew --prefix openssl 2>/dev/null)
 OPENSSL_LDFLAGS := -L$(OPENSSL_PREFIX)/lib
@@ -68,6 +75,42 @@ vector:
 	  $(MAKE) MAKELEVEL=0 -C "$(CURDIR)/pgvector" USE_PGXS=1 PG_CONFIG=$$pg_config -j $(JOBS) install; \
 	done
 
+$(POSTGIS_ARCHIVE):
+	@mkdir -p "$(POSTGIS_BUILD_DIR)"
+	curl --fail --location --retry 3 "https://download.osgeo.org/postgis/source/postgis-$(POSTGIS_VERSION).tar.gz" -o "$@.tmp"
+	@set -e; \
+	if command -v sha256sum >/dev/null 2>&1; then \
+	  echo "$(POSTGIS_SHA256)  $@.tmp" | sha256sum -c -; \
+	else \
+	  echo "$(POSTGIS_SHA256)  $@.tmp" | shasum -a 256 -c -; \
+	fi
+	mv "$@.tmp" "$@"
+
+# PostGIS 3.6.4 utils recursively generates upgrade/uninstall SQL for disabled
+# modules too. Serialize its targets to avoid racing on shared SQL temp files.
+postgis: $(POSTGIS_ARCHIVE)
+	@set -e; \
+	for ver in v14 v15 v16 v17; do \
+	  pg_config="$(CURDIR)/neon/pg_install/$$ver/bin/pg_config"; \
+	  [ -x "$$pg_config" ] || continue; \
+	  build="$(POSTGIS_BUILD_DIR)/$$ver"; \
+	  mkdir -p "$$build"; \
+	  if [ ! -f "$$build/configure" ]; then \
+	    tar -xzf "$(POSTGIS_ARCHIVE)" --strip-components=1 -C "$$build"; \
+	  fi; \
+	  echo "==> building PostGIS $(POSTGIS_VERSION) for $$ver"; \
+	  ( cd "$$build" && ./configure --with-pgconfig="$$pg_config" \
+	      --without-raster --without-sfcgal --without-topology \
+	      --without-tiger --without-address-standardizer ); \
+	  echo '.NOTPARALLEL:' >> "$$build/utils/Makefile"; \
+	  $(MAKE) MAKELEVEL=0 -C "$$build" -j $(JOBS); \
+	  $(MAKE) MAKELEVEL=0 -C "$$build" install; \
+	  control="$$("$$pg_config" --sharedir)/extension/postgis.control"; \
+	  if ! grep -Eq '^[[:space:]]*trusted[[:space:]]*=' "$$control"; then \
+	    echo 'trusted = true' >> "$$control"; \
+	  fi; \
+	done
+
 build:
 	cd web && yarn && yarn build
 	$(MAKE) vanillapg
@@ -75,6 +118,7 @@ build:
 	$(MAKE) neon-contrib
 	$(MAKE) neon-contrib-extras
 	$(MAKE) vector
+	$(MAKE) postgis
 	CARGO_BUILD_JOBS=$(JOBS) cargo build --jobs $(JOBS) $(if $(filter release,$(BUILD_TYPE)),--release,)
 
 kill:

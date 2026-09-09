@@ -30,12 +30,16 @@ RUN CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE make -C neon -j $JOBS -s
 
 FROM neon AS postgres
 ARG JOBS
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgeos-dev libproj-dev libjson-c-dev libprotobuf-c-dev protobuf-c-compiler \
+    && rm -rf /var/lib/apt/lists/*
 COPY Makefile .
 COPY pgvector /neond/pgvector
 RUN make vanillapg JOBS=$JOBS
 RUN make neon-contrib JOBS=$JOBS
 RUN make neon-contrib-extras JOBS=$JOBS
 RUN make vector JOBS=$JOBS
+RUN make postgis JOBS=$JOBS
 
 FROM postgres AS deps
 ARG JOBS
@@ -62,7 +66,9 @@ RUN if [ "$BUILD_TYPE" = "release" ]; then \
 
 FROM debian:bookworm-slim
 ARG BUILD_TYPE
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl pgbouncer libssl3 libpq5 libreadline8 libseccomp2 libcurl4 libicu72 zlib1g liblz4-1 libzstd1 libxml2 libkrb5-3 libuuid1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl pgbouncer libssl3 libpq5 libreadline8 libseccomp2 libcurl4 libicu72 zlib1g liblz4-1 libzstd1 libxml2 libkrb5-3 libuuid1 \
+    libgeos-c1v5 libproj25 proj-data libjson-c5 libprotobuf-c1 \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 600 neond && useradd --system --uid 600 --gid 600 --create-home --home-dir /home/neond --shell /bin/bash neond
 COPY --from=server /neond/target/${BUILD_TYPE}/neond /usr/local/bin/neond
 COPY --from=server /neond/neon/target/${BUILD_TYPE}/safekeeper /usr/local/share/neon/bin/safekeeper

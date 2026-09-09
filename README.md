@@ -40,7 +40,7 @@
 - **Multi-Tenancy** - create multiple users and share compute to other developers with configured roles
 - **PgBouncer built-in** - connection pooling out of the box for every endpoint
 - **Import existing PostgreSQL** - import an external Postgres database into a new branch
-- **Extensions** - ships with `pgvector` and compiled Postgres contrib extensions
+- **Extensions** - ships with `pgvector`, PostGIS, and compiled Postgres contrib extensions
 - **Observability** - per-branch logs and storage size metrics in the dashboard
 
 > NeonD is not designed to be deployed in critical application environments. Its purpose is to
