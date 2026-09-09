@@ -878,9 +878,9 @@ impl BranchService {
             return Err(AppError::NotFound);
         }
 
-        let parent_branch_id = branch.parent_branch_id.ok_or(AppError::BranchUpdateFailed {
-            reason: "Branch has no parent".into(),
-        })?;
+        let parent_branch_id = branch
+            .parent_branch_id
+            .ok_or(AppError::Conflict("Branch has no parent".into()))?;
 
         let parent = self
             .branch_repo

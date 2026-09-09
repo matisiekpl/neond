@@ -1,0 +1,19 @@
+name: neond-e2e
+services:
+  neond:
+    image: neond/neond:test
+    environment:
+      PORT: 3000
+      SERVER_SECRET: "e2e-secret"
+      PG_PROXY_PORT: "5443"
+      PORT_RANGE: 50100-50120
+    ports:
+      - "3100:3000"
+      - "5443:5443"
+      - "50100-50120:50100-50120"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/auth/setup"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
