@@ -24,6 +24,7 @@ use std::str::FromStr;
 use tempfile::TempDir;
 
 use crate::mgmt::service::logs::{LogChannel, LogStream, LogsService};
+use crate::utils::death;
 use crate::utils::stdout::wait_for_output_timeout;
 
 use crate::mgmt::model::branch::Branch;
@@ -163,19 +164,7 @@ impl ComputeEndpoint {
         let connection_string = format!("postgresql://cloud_admin@localhost:{}/postgres", port);
 
         let mut cmd = Command::new(&compute_ctl_binary);
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            unsafe {
-                cmd.pre_exec(|| {
-                    #[cfg(target_os = "linux")]
-                    libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM, 0, 0, 0);
-                    #[cfg(target_os = "macos")]
-                    libc::setpgid(0, 0);
-                    Ok(())
-                });
-            }
-        }
+        death::configure_death_signal(&mut cmd);
 
         let metrics_port =
             crate::utils::ports::allocate_random_port().map_err(|error| {
@@ -358,19 +347,7 @@ impl ComputeEndpoint {
         })?;
 
         let mut cmd = Command::new(&pgbouncer_bin);
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            unsafe {
-                cmd.pre_exec(|| {
-                    #[cfg(target_os = "linux")]
-                    libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM, 0, 0, 0);
-                    #[cfg(target_os = "macos")]
-                    libc::setpgid(0, 0);
-                    Ok(())
-                });
-            }
-        }
+        death::configure_death_signal(&mut cmd);
 
         let mut child = cmd
             .env_clear()
@@ -466,8 +443,12 @@ impl ComputeEndpoint {
             #[cfg(unix)]
             {
                 let pid = child.id() as i32;
-                unsafe {
-                    libc::killpg(pid, libc::SIGINT);
+                if unsafe { libc::killpg(pid, libc::SIGINT) } != 0 {
+                    tracing::warn!(
+                        "Failed to signal pgbouncer process group {}: {}",
+                        pid,
+                        std::io::Error::last_os_error()
+                    );
                 }
                 for _ in 0..50 {
                     match child.try_wait() {
@@ -515,8 +496,12 @@ impl ComputeEndpoint {
             {
                 let pid = child.id() as i32;
                 tracing::debug!("Sending SIGINT to compute process group: {}", pid);
-                unsafe {
-                    libc::killpg(pid, libc::SIGINT);
+                if unsafe { libc::killpg(pid, libc::SIGINT) } != 0 {
+                    tracing::warn!(
+                        "Failed to signal compute process group {}: {}",
+                        pid,
+                        std::io::Error::last_os_error()
+                    );
                 }
                 for _ in 0..50 {
                     match child.try_wait() {
@@ -923,6 +908,10 @@ impl Drop for ComputeEndpoint {
             || self.status == ComputeEndpointStatus::Starting
         {
             if let Some(mut child) = self.child.take() {
+                #[cfg(unix)]
+                unsafe {
+                    libc::killpg(child.id() as i32, libc::SIGKILL);
+                }
                 child.kill().ok();
                 child.wait().ok();
             }
