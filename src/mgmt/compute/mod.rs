@@ -177,6 +177,9 @@ impl ComputeEndpoint {
         let pg_data_path = self.compute_dir.path().join("pg_data");
         let mut child = cmd
             .env_clear()
+            .env("OTEL_SDK_DISABLED", "true")
+            .env("MALLOC_ARENA_MAX", "2")
+            .env("MALLOC_MMAP_THRESHOLD_", "131072")
             .arg("--pgdata")
             .arg(path_str(&pg_data_path)?)
             .arg("--pgbin")

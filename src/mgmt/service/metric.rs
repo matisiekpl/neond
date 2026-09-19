@@ -78,6 +78,7 @@ pub struct MetricService {
     http_client: reqwest::Client,
     system: Arc<Mutex<System>>,
     snapshot: Arc<RwLock<MetricSnapshot>>,
+    pg_clients: Mutex<HashMap<Uuid, (u16, tokio_postgres::Client)>>,
 }
 
 impl MetricService {
@@ -101,6 +102,7 @@ impl MetricService {
             http_client,
             system: Arc::new(Mutex::new(System::new())),
             snapshot: Arc::new(RwLock::new(MetricSnapshot::default())),
+            pg_clients: Mutex::new(HashMap::new()),
         }
     }
 
@@ -196,6 +198,11 @@ impl MetricService {
                 });
             }
         }
+
+        self.pg_clients
+            .lock()
+            .await
+            .retain(|branch_id, _| targets.iter().any(|target| target.branch_id == *branch_id));
 
         let pageserver_timeline_samples = self.sample_pageserver_timeline_metrics().await;
         for (branch_id, slug, value) in pageserver_timeline_samples {
@@ -409,15 +416,14 @@ impl MetricService {
         parsed.into_iter().collect()
     }
 
-    async fn sample_pg_connections(&self, target: &MetricTarget) -> Vec<(&'static str, f64)> {
+    async fn connect_pg(&self, target: &MetricTarget) -> Option<tokio_postgres::Client> {
         let connection_string = format!(
-            "host=127.0.0.1 port={} user=cloud_admin dbname=postgres",
+            "host=127.0.0.1 port={} user=cloud_admin dbname=postgres application_name=neond-metrics",
             target.pg_port
         );
-
         let connect_future =
             tokio_postgres::connect(&connection_string, tokio_postgres::NoTls);
-        let connect_result = match tokio::time::timeout(SQL_TIMEOUT, connect_future).await {
+        let (client, connection) = match tokio::time::timeout(SQL_TIMEOUT, connect_future).await {
             Ok(Ok(pair)) => pair,
             Ok(Err(error)) => {
                 tracing::debug!(
@@ -425,22 +431,39 @@ impl MetricService {
                     target.branch_id,
                     error
                 );
-                return Vec::new();
+                return None;
             }
             Err(_) => {
                 tracing::debug!(
                     "Timed out connecting for pg_stat_activity on branch {}",
                     target.branch_id
                 );
-                return Vec::new();
+                return None;
             }
         };
-        let (client, connection) = connect_result;
-        let connection_task = tokio::spawn(async move {
+        tokio::spawn(async move {
             if let Err(error) = connection.await {
                 tracing::debug!("pg_stat_activity connection error: {}", error);
             }
         });
+        Some(client)
+    }
+
+    async fn sample_pg_connections(&self, target: &MetricTarget) -> Vec<(&'static str, f64)> {
+        let mut clients = self.pg_clients.lock().await;
+        let reusable = clients
+            .get(&target.branch_id)
+            .is_some_and(|(port, client)| *port == target.pg_port && !client.is_closed());
+        if !reusable {
+            clients.remove(&target.branch_id);
+            let Some(client) = self.connect_pg(target).await else {
+                return Vec::new();
+            };
+            clients.insert(target.branch_id, (target.pg_port, client));
+        }
+        let Some((_, client)) = clients.get(&target.branch_id) else {
+            return Vec::new();
+        };
 
         let query_future = client.simple_query(
             "SELECT state, count(*) FROM pg_stat_activity WHERE state IS NOT NULL GROUP BY state",
@@ -453,8 +476,7 @@ impl MetricService {
                     target.branch_id,
                     error
                 );
-                drop(client);
-                connection_task.abort();
+                clients.remove(&target.branch_id);
                 return Vec::new();
             }
             Err(_) => {
@@ -462,13 +484,10 @@ impl MetricService {
                     "pg_stat_activity query timed out on branch {}",
                     target.branch_id
                 );
-                drop(client);
-                connection_task.abort();
+                clients.remove(&target.branch_id);
                 return Vec::new();
             }
         };
-        drop(client);
-        connection_task.abort();
 
         let mut active: f64 = 0.0;
         let mut idle: f64 = 0.0;
