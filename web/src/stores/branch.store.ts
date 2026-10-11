@@ -4,6 +4,7 @@ import {toast} from 'vue-sonner'
 import {branchesApi} from '@/api/branches'
 import {getAppError} from '@/api/utils'
 import type {Branch} from '@/types/models/branch'
+import type {CompactionStatus} from '@/types/dto/compaction'
 
 export const useBranchStore = defineStore('branch', () => {
     const branches = ref<Branch[]>([])
@@ -161,5 +162,20 @@ export const useBranchStore = defineStore('branch', () => {
         }
     }
 
-    return {branches, loading, detaching, reset, fetch, create, importBranch, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, detachAncestor, changePassword}
+    async function compact(organizationId: string, projectId: string, branchId: string): Promise<CompactionStatus> {
+        try {
+            const status = await branchesApi.compact(organizationId, projectId, branchId)
+            toast.success('Storage compaction started')
+            return status
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
+    async function compactionStatus(organizationId: string, projectId: string, branchId: string): Promise<CompactionStatus> {
+        return branchesApi.compactionStatus(organizationId, projectId, branchId)
+    }
+
+    return {branches, loading, detaching, reset, fetch, create, importBranch, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, detachAncestor, changePassword, compact, compactionStatus}
 })

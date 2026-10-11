@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import {ref, computed, watch, onMounted} from 'vue'
+import {ref, computed, watch, onMounted, onUnmounted} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Check, CircleHelp, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Square, Trash2,
+  BookDown, Check, CircleHelp, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Shrink, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
@@ -201,6 +201,19 @@ function openResetToParent(branch: Branch) {
 const detachOpen = ref(false)
 const detachBranch = ref<Branch | null>(null)
 
+const compactOpen = ref(false)
+const compactBranch = ref<Branch | null>(null)
+const compactStarting = ref(false)
+const compactingBranchIds = ref<string[]>([])
+const compactSizeBefore = ref<number | undefined>(undefined)
+const COMPACTION_POLL_INTERVAL_MS = 15000
+let compactionPollTimer: ReturnType<typeof setInterval> | null = null
+
+function openCompact(branch: Branch) {
+  compactBranch.value = branch
+  compactOpen.value = true
+}
+
 function openDetach(branch: Branch) {
   detachBranch.value = branch
   detachOpen.value = true
@@ -282,6 +295,78 @@ async function confirmDetach() {
   }
 }
 
+function stopCompactionPolling() {
+  if (compactionPollTimer) {
+    clearInterval(compactionPollTimer)
+    compactionPollTimer = null
+  }
+}
+
+async function pollCompactions() {
+  const orgId = organizationStore.selectedOrganizationId
+  if (!orgId || !projectId.value) return
+  const pending = [...compactingBranchIds.value]
+  const stillRunning: string[] = []
+  for (const branchId of pending) {
+    try {
+      const status = await branchStore.compactionStatus(orgId, projectId.value, branchId)
+      if (status.running) stillRunning.push(branchId)
+    } catch {
+      stillRunning.push(branchId)
+    }
+  }
+  compactingBranchIds.value = stillRunning
+  if (stillRunning.length === pending.length) return
+
+  await projectStore.fetch(orgId, true)
+  const after = project.value?.physical_size
+  if (compactSizeBefore.value !== undefined && after !== undefined) {
+    toast.success(`Storage compaction finished: ${formatBytes(compactSizeBefore.value)} → ${formatBytes(after)}`)
+  } else {
+    toast.success('Storage compaction finished')
+  }
+  compactSizeBefore.value = undefined
+  if (stillRunning.length === 0) stopCompactionPolling()
+}
+
+function startCompactionPolling() {
+  if (!compactionPollTimer) compactionPollTimer = setInterval(pollCompactions, COMPACTION_POLL_INTERVAL_MS)
+}
+
+async function refreshCompactionStatus() {
+  const orgId = organizationStore.selectedOrganizationId
+  if (!orgId || !projectId.value) return
+  const roots = branchStore.branches.filter((branch) => !branch.parent_branch_id && branch.project_id === projectId.value)
+  const running: string[] = []
+  for (const branch of roots) {
+    try {
+      const status = await branchStore.compactionStatus(orgId, projectId.value, branch.id)
+      if (status.running) running.push(branch.id)
+    } catch {
+    }
+  }
+  compactingBranchIds.value = running
+  if (running.length > 0) startCompactionPolling()
+  else stopCompactionPolling()
+}
+
+async function confirmCompact() {
+  if (!organizationStore.selectedOrganizationId || !projectId.value || !compactBranch.value) return
+  compactStarting.value = true
+  try {
+    compactSizeBefore.value = project.value?.physical_size
+    const status = await branchStore.compact(organizationStore.selectedOrganizationId, projectId.value, compactBranch.value.id)
+    if (status.running && !compactingBranchIds.value.includes(compactBranch.value.id)) {
+      compactingBranchIds.value = [...compactingBranchIds.value, compactBranch.value.id]
+    }
+    startCompactionPolling()
+    compactOpen.value = false
+  } catch {
+  } finally {
+    compactStarting.value = false
+  }
+}
+
 async function confirmDelete() {
   if (!organizationStore.selectedOrganizationId || !projectId.value || !deleteId.value) return
   deleting.value = true
@@ -297,15 +382,25 @@ watch(() => organizationStore.selectedOrganizationId, (orgId) => {
   if (orgId) projectStore.fetch(orgId)
 }, {immediate: true})
 
-onMounted(() => {
+onMounted(async () => {
   const orgId = organizationStore.selectedOrganizationId
-  if (orgId && projectId.value) branchStore.fetch(orgId, projectId.value, true)
+  if (orgId && projectId.value) {
+    await branchStore.fetch(orgId, projectId.value, true)
+    await refreshCompactionStatus()
+  }
 })
 
-watch(projectId, (id) => {
+watch(projectId, async (id) => {
   const orgId = organizationStore.selectedOrganizationId
-  if (orgId && id) branchStore.fetch(orgId, id, true)
+  stopCompactionPolling()
+  compactingBranchIds.value = []
+  if (orgId && id) {
+    await branchStore.fetch(orgId, id, true)
+    await refreshCompactionStatus()
+  }
 })
+
+onUnmounted(stopCompactionPolling)
 
 const connectOpen = ref(false)
 const connectBranch = ref<Branch | null>(null)
@@ -378,6 +473,13 @@ async function copyProjectId() {
               </TooltipContent>
             </Tooltip>
           </span>
+          <template v-if="compactingBranchIds.length > 0">
+            <span>·</span>
+            <span class="inline-flex items-center gap-1">
+              <Loader2 class="size-3.5 animate-spin"/>
+              Compacting storage…
+            </span>
+          </template>
         </template>
         <button
           type="button"
@@ -598,6 +700,14 @@ async function copyProjectId() {
                       Detach from ancestor
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      v-if="!branch.parent_branch_id"
+                      :disabled="compactingBranchIds.includes(branch.id)"
+                      @click="openCompact(branch)"
+                    >
+                      <Shrink class="size-4"/>
+                      {{ compactingBranchIds.includes(branch.id) ? 'Compacting storage…' : 'Compact storage' }}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       class="text-destructive focus:text-destructive"
                       @click="openDelete(branch.id)"
                     >
@@ -633,6 +743,31 @@ async function copyProjectId() {
           >
             <Loader2 v-if="branchStore.detaching" class="mr-1.5 size-3.5 animate-spin"/>
             {{ branchStore.detaching ? 'Detaching…' : 'Detach' }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog
+      :open="compactOpen"
+      @update:open="(value: boolean) => { if (!compactStarting) compactOpen = value }"
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Compact storage?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Rewrites the stored history of <b>{{ compactBranch?.name }}</b>, dropping page versions that neither point-in-time recovery nor child branches need. It runs in the background and can take from minutes to hours on large projects. While it runs, reads and writes may be slower and the pageserver needs extra free disk space for the rewritten layers.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="compactStarting">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            class="cursor-pointer"
+            :disabled="compactStarting"
+            @click="confirmCompact"
+          >
+            <Loader2 v-if="compactStarting" class="mr-1.5 size-3.5 animate-spin"/>
+            {{ compactStarting ? 'Starting…' : 'Compact storage' }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
