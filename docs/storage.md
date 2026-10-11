@@ -64,6 +64,39 @@ If the host disk is lost, point a new neond at the same bucket and the same
 You will lose the WAL written after the last checkpoint that didn't make it
 to S3. Everything else comes back.
 
+## Compaction and disk usage
+
+Layer files are never edited in place. Old page versions are dropped by two
+background processes in the pageserver:
+
+- **Garbage collection** removes whole layer files that are older than the
+  PITR window. It cannot remove anything a child branch might still read, so
+  any layer that starts before a child's branch point is kept. A branch that
+  lives for a long time — or a `dev` branch that is regularly **reset to its
+  parent** — pins the parent's history this way.
+- **gc-compaction** rewrites the history of the root branch and keeps only
+  the page versions that PITR and child branches actually need. This is what
+  reclaims the space pinned by branches. It starts automatically once enough
+  new layers have accumulated.
+
+If a project's physical size is much larger than its logical size, run
+**Compact storage** from the branch menu of the root branch. It schedules
+the same gc-compaction in the background without yielding to other
+compaction work, so it always runs to completion. The project page shows
+"Compacting storage…" until it finishes and then the new physical size.
+Expect:
+
+- minutes for small projects, up to hours for tens of gigabytes of layers;
+- slower reads and writes while it runs (L0 compaction of that project waits
+  until it finishes), so prefer a quiet period;
+- extra free disk space for the rewritten layers. In S3 mode, layers that
+  are not on the local disk are downloaded first.
+
+neond ships a patch for the pageserver (`patches/neon/`) that fixes automatic
+gc-compaction silently skipping parts of the history: upstream it abandons
+work preempted by L0 compaction while still marking the history as compacted,
+which makes disk usage grow over time on busy projects with branches.
+
 ## Warnings
 
 - Never delete or modify files inside the data directory while neond is
