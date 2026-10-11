@@ -1,6 +1,7 @@
 use crate::mgmt::compute::ComputeEndpointStatus;
 use crate::mgmt::dto::branch_response::BranchResponse;
 use crate::mgmt::dto::checkpoint_status::CheckpointStatus;
+use crate::mgmt::dto::compaction_status_response::CompactionStatusResponse;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::create_branch_request::CreateBranchRequest;
 use crate::mgmt::dto::error::{AppError, Result};
@@ -27,6 +28,15 @@ use std::time::Duration;
 use uuid::Uuid;
 use humantime;
 use reqwest;
+
+/// The compaction trigger is not proxied by the storage controller (it only passes GET requests and
+/// drops request bodies), so compaction is requested from the pageserver directly. Every neond tenant
+/// is unsharded and lives on this single pageserver.
+const PAGESERVER_HTTP_URL: &str = "http://127.0.0.1:9898";
+
+/// End of the data keyspace (`Key::metadata_key_range().start`). Auto gc-compaction is limited to this
+/// range as well, see https://github.com/neondatabase/neon/issues/11318.
+const GC_COMPACTION_KEY_RANGE_END: &str = "600000000000000000000000000000000000";
 
 pub struct BranchService {
     branch_repo: Arc<BranchRepository>,
@@ -515,6 +525,181 @@ impl BranchService {
         }
 
         Ok(())
+    }
+
+    pub async fn compact(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+    ) -> Result<CompactionStatusResponse> {
+        let (tenant_shard_id, timeline_id) = self
+            .resolve_compaction_target(user_id, organization_id, project_id, branch_id)
+            .await?;
+
+        let status = self
+            .fetch_compaction_status(tenant_shard_id, timeline_id)
+            .await?;
+        if status.running {
+            return Err(AppError::CompactionAlreadyRunning);
+        }
+
+        let token = self
+            .config
+            .component_auth
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
+
+        // Same shape as the pageserver's automatic gc-compaction: scheduled in the background,
+        // split into sub-compaction jobs, limited to the data keyspace. Unlike the automatic job
+        // it does not yield to L0 compaction, so it always runs to completion.
+        let response = reqwest::Client::new()
+            .put(format!(
+                "{PAGESERVER_HTTP_URL}/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}/compact"
+            ))
+            .query(&[("enhanced_gc_bottom_most_compaction", "true")])
+            .json(&serde_json::json!({
+                "scheduled": true,
+                "sub_compaction": true,
+                "compact_key_range": {
+                    "start": "000000000000000000000000000000000000",
+                    "end": GC_COMPACTION_KEY_RANGE_END,
+                },
+            }))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|error| AppError::PageserverApiFailed {
+                operation: "compact".to_string(),
+                reason: error.to_string(),
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(AppError::PageserverApiFailed {
+                operation: "compact".to_string(),
+                reason: format!("Pageserver returned {status}: {body}"),
+            });
+        }
+
+        tracing::info!(
+            "Scheduled storage compaction for tenant {} timeline {}",
+            tenant_shard_id,
+            timeline_id
+        );
+
+        self.fetch_compaction_status(tenant_shard_id, timeline_id)
+            .await
+    }
+
+    pub async fn compaction_status(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+    ) -> Result<CompactionStatusResponse> {
+        let (tenant_shard_id, timeline_id) = self
+            .resolve_compaction_target(user_id, organization_id, project_id, branch_id)
+            .await?;
+        self.fetch_compaction_status(tenant_shard_id, timeline_id)
+            .await
+    }
+
+    async fn resolve_compaction_target(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+    ) -> Result<(TenantShardId, TimelineId)> {
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        // gc-compaction reclaims the history that child branches pin on their parent, so it only
+        // makes sense on the root timeline (the pageserver auto-triggers it only there as well).
+        if branch.parent_branch_id.is_some() {
+            return Err(AppError::CompactionRequiresRootBranch);
+        }
+
+        let tenant_id = TenantId::from_str(project_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TenantIdInvalid {
+                value: project_id.to_string(),
+            })?;
+
+        let timeline_id = TimelineId::from_str(branch.timeline_id.as_simple().to_string().as_str())
+            .map_err(|_| AppError::TimelineIdInvalid {
+                value: branch.timeline_id.to_string(),
+            })?;
+
+        Ok((TenantShardId::unsharded(tenant_id), timeline_id))
+    }
+
+    async fn fetch_compaction_status(
+        &self,
+        tenant_shard_id: TenantShardId,
+        timeline_id: TimelineId,
+    ) -> Result<CompactionStatusResponse> {
+        let token = self
+            .config
+            .component_auth
+            .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
+
+        let response = reqwest::Client::new()
+            .get(format!(
+                "{PAGESERVER_HTTP_URL}/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}/compact"
+            ))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|error| AppError::PageserverApiFailed {
+                operation: "compaction_status".to_string(),
+                reason: error.to_string(),
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(AppError::PageserverApiFailed {
+                operation: "compaction_status".to_string(),
+                reason: format!("Pageserver returned {status}: {body}"),
+            });
+        }
+
+        let jobs = response
+            .json::<Vec<serde_json::Value>>()
+            .await
+            .map_err(|error| AppError::PageserverApiFailed {
+                operation: "compaction_status".to_string(),
+                reason: format!("Invalid pageserver response: {error}"),
+            })?;
+
+        Ok(CompactionStatusResponse {
+            running: !jobs.is_empty(),
+            queued_jobs: jobs.len(),
+        })
     }
 
     pub async fn lsn(

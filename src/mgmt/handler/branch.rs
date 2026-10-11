@@ -136,3 +136,29 @@ pub async fn lsn(
         .await?;
     Ok((StatusCode::OK, Json(response)))
 }
+
+pub async fn compact(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let status = state
+        .services
+        .branch()
+        .compact(user_id, organization_id, project_id, branch_id)
+        .await?;
+    Ok((StatusCode::ACCEPTED, Json(status)))
+}
+
+pub async fn compaction_status(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let status = state
+        .services
+        .branch()
+        .compaction_status(user_id, organization_id, project_id, branch_id)
+        .await?;
+    Ok((StatusCode::OK, Json(status)))
+}

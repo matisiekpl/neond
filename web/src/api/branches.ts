@@ -1,6 +1,7 @@
 import api from '@/api/base'
 import type { Branch } from '@/types/models/branch'
 import type { LsnResponse } from '@/types/dto/lsn'
+import type { CompactionStatus } from '@/types/dto/compaction'
 
 export const branchesApi = {
   async list(organizationId: string, projectId: string): Promise<Branch[]> {
@@ -78,6 +79,20 @@ export const branchesApi = {
   async detach(organizationId: string, projectId: string, branchId: string): Promise<Branch> {
     const response = await api.post<Branch>(
       `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/detach`,
+    )
+    return response.data
+  },
+
+  async compact(organizationId: string, projectId: string, branchId: string): Promise<CompactionStatus> {
+    const response = await api.post<CompactionStatus>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/compact`,
+    )
+    return response.data
+  },
+
+  async compactionStatus(organizationId: string, projectId: string, branchId: string): Promise<CompactionStatus> {
+    const response = await api.get<CompactionStatus>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/compact`,
     )
     return response.data
   },

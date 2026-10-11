@@ -222,3 +222,73 @@ async fn pitr_restores_point_in_time() {
         "out of range lsn should be rejected, got {status}: {body}"
     );
 }
+
+#[tokio::test]
+async fn compaction_keeps_parent_and_child_data() {
+    let _guard = exclusive().await;
+    let api = api().await;
+
+    let organization_id = api.create_organization("Compaction Org").await;
+    let project_id = api.create_project(&organization_id, "Compaction Project").await;
+
+    let parent = api
+        .create_branch(&organization_id, &project_id, "production", None)
+        .await;
+    let parent_id = parent["id"].as_str().unwrap().to_string();
+    let parent_endpoint = api.start_endpoint(&organization_id, &project_id, &parent_id).await;
+    let parent_client = connect(&parent_endpoint).await;
+
+    seed(&parent_client, SEED_MEGABYTES).await;
+    wait_for_ingest(&api, &organization_id, &project_id, &parent_id, &parent_client).await;
+
+    let child = api
+        .create_branch(&organization_id, &project_id, "child", Some(&parent_id))
+        .await;
+    let child_id = child["id"].as_str().unwrap().to_string();
+    let child_endpoint = api.start_endpoint(&organization_id, &project_id, &child_id).await;
+    let child_client = connect(&child_endpoint).await;
+    let child_checksum = checksum(&child_client).await;
+
+    parent_client
+        .batch_execute("UPDATE payload SET body = md5(body) WHERE id % 2 = 0")
+        .await
+        .expect("failed to rewrite parent rows");
+    append(&parent_client, 50_000).await;
+    wait_for_ingest(&api, &organization_id, &project_id, &parent_id, &parent_client).await;
+    let parent_checksum = checksum(&parent_client).await;
+
+    let (status, body) = api.compact(&organization_id, &project_id, &child_id).await;
+    assert_eq!(status.as_u16(), 400, "compaction of a child branch should be rejected: {body}");
+
+    let (status, body) = api.compact(&organization_id, &project_id, &parent_id).await;
+    assert_eq!(status.as_u16(), 202, "compaction should be accepted: {body}");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(600);
+    loop {
+        let status = api.compaction_status(&organization_id, &project_id, &parent_id).await;
+        if status["running"] == false {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "compaction did not finish in time: {status}"
+        );
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+
+    api.stop_endpoint(&organization_id, &project_id, &parent_id).await;
+    api.stop_endpoint(&organization_id, &project_id, &child_id).await;
+    let parent_client = connect(&api.start_endpoint(&organization_id, &project_id, &parent_id).await).await;
+    let child_client = connect(&api.start_endpoint(&organization_id, &project_id, &child_id).await).await;
+
+    assert_eq!(
+        checksum(&parent_client).await,
+        parent_checksum,
+        "compaction must not change parent data"
+    );
+    assert_eq!(
+        checksum(&child_client).await,
+        child_checksum,
+        "compaction must not change data visible to the child branch"
+    );
+}

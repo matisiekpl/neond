@@ -61,6 +61,8 @@ pub enum AppError {
     PitrConcurrentEndpointOperation,
     DetachAncestorFailed { reason: String },
     BranchAlreadyDetached,
+    CompactionRequiresRootBranch,
+    CompactionAlreadyRunning,
     LsnResolutionFailed { reason: String },
     DurabilityCheckFailed { reason: String },
     TenantIdInvalid { value: String },
@@ -241,6 +243,12 @@ impl fmt::Display for AppError {
             AppError::BranchAlreadyDetached => {
                 write!(f, "Branch has no ancestor to detach from")
             }
+            AppError::CompactionRequiresRootBranch => {
+                write!(f, "Storage compaction can only be run on the root branch of a project")
+            }
+            AppError::CompactionAlreadyRunning => {
+                write!(f, "Storage compaction is already running for this branch")
+            }
             AppError::LsnResolutionFailed { reason } => {
                 write!(f, "LSN resolution failed: {}", reason)
             }
@@ -358,7 +366,8 @@ impl IntoResponse for AppError {
             | AppError::PitrConcurrentEndpointOperation
             | AppError::BranchNameAlreadyExists { .. }
             | AppError::LeaseAlreadyHeldLocally { .. }
-            | AppError::LeaseAlreadyHeldRemotely { .. } => StatusCode::CONFLICT,
+            | AppError::LeaseAlreadyHeldRemotely { .. }
+            | AppError::CompactionAlreadyRunning => StatusCode::CONFLICT,
             AppError::TenantIdInvalid { .. }
             | AppError::TimelineIdInvalid { .. }
             | AppError::ComputeSocketAddressInvalid { .. }
@@ -367,7 +376,8 @@ impl IntoResponse for AppError {
             | AppError::PitrLsnInvalid { .. }
             | AppError::PitrLsnOutOfRange { .. }
             | AppError::InvalidConnectionString { .. }
-            | AppError::BranchAlreadyDetached => StatusCode::BAD_REQUEST,
+            | AppError::BranchAlreadyDetached
+            | AppError::CompactionRequiresRootBranch => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(json!({ "message": self.to_string() }))).into_response()

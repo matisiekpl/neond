@@ -22,6 +22,8 @@ RUN export PROTOC_VERSION=22.2 && curl -fsSL "https://github.com/protocolbuffers
         && rm -rf protoc.zip protoc
 WORKDIR /neond
 COPY neon /neond/neon
+COPY patches /neond/patches
+RUN ./patches/apply-neon-patches.sh neon
 COPY postgres /neond/postgres
 COPY rust-toolchain.toml .
 RUN rustup target add aarch64-unknown-linux-gnu
@@ -57,6 +59,8 @@ ARG JOBS
 ARG BUILD_TYPE
 RUN rm -rf src target/${BUILD_TYPE}/deps/neond-* target/${BUILD_TYPE}/neond*
 COPY --from=web /web/dist /neond/web/dist
+# Note: this restores the unpatched neon sources (patches/neon/*.patch only touch the pageserver,
+# which is already built in the neon stage; neond itself only depends on neon client crates).
 COPY . .
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
         CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE cargo build --jobs $JOBS --release; \

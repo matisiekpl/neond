@@ -87,6 +87,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             post(branch::detach),
         )
         .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/compact",
+            post(branch::compact).get(branch::compaction_status),
+        )
+        .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/password",
             put(branch::change_password),
         )

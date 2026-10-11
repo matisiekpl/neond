@@ -113,6 +113,7 @@ postgis: $(POSTGIS_ARCHIVE)
 
 build:
 	cd web && yarn && yarn build
+	$(MAKE) neon-patch
 	$(MAKE) vanillapg
 	$(MAKE) -C neon -j $(JOBS) -s CARGO_BUILD_JOBS=$(JOBS) BUILD_TYPE=$(BUILD_TYPE)
 	$(MAKE) neon-contrib
@@ -120,6 +121,10 @@ build:
 	$(MAKE) vector
 	$(MAKE) postgis
 	CARGO_BUILD_JOBS=$(JOBS) cargo build --jobs $(JOBS) $(if $(filter release,$(BUILD_TYPE)),--release,)
+
+.PHONY: neon-patch
+neon-patch:
+	./patches/apply-neon-patches.sh neon
 
 kill:
 	-kill $(shell lsof -ti:50051) 2>/dev/null || true
