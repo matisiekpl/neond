@@ -252,6 +252,20 @@ impl Api {
         )))
         .await
     }
+
+    pub async fn compact(&self, organization_id: &str, project_id: &str, branch_id: &str) -> (StatusCode, Value) {
+        self.send(self.client.post(format!(
+            "{BASE_URL}/organizations/{organization_id}/projects/{project_id}/branches/{branch_id}/compact"
+        )))
+        .await
+    }
+
+    pub async fn compaction_status(&self, organization_id: &str, project_id: &str, branch_id: &str) -> Value {
+        self.expect_ok(self.client.get(format!(
+            "{BASE_URL}/organizations/{organization_id}/projects/{project_id}/branches/{branch_id}/compact"
+        )))
+        .await
+    }
 }
 
 pub async fn connect(branch: &Value) -> tokio_postgres::Client {
