@@ -7,3 +7,5 @@ mod branch_recovery;
 mod mgmt_api;
 #[path = "e2e/postgis.rs"]
 mod postgis;
+#[path = "e2e/wal_retention.rs"]
+mod wal_retention;
