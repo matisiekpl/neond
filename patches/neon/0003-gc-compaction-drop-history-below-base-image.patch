@@ -1,0 +1,388 @@
+diff --git a/pageserver/src/tenant.rs b/pageserver/src/tenant.rs
+index 91b717a..93f5cbe 100644
+--- a/pageserver/src/tenant.rs
++++ b/pageserver/src/tenant.rs
+@@ -10773,6 +10773,134 @@ fn get_key(id: u32) -> Key {
+         Ok(())
+     }
+ 
++    #[cfg(feature = "testing")]
++    #[tokio::test]
++    async fn test_simple_bottom_most_compaction_drops_history_below_base_image()
++    -> anyhow::Result<()> {
++        let harness = TenantHarness::create(
++            "test_simple_bottom_most_compaction_drops_history_below_base_image",
++        )
++        .await?;
++        let (tenant, ctx) = harness.load().await;
++
++        fn get_key(id: u32) -> Key {
++            // using aux key here b/c they are guaranteed to be inside `collect_keyspace`.
++            let mut key = Key::from_hex("620000000033333333444444445500000000").unwrap();
++            key.field6 = id;
++            key
++        }
++
++        let img_layer = (0..10)
++            .map(|id| (get_key(id), Bytes::from(format!("value {id}@0x10"))))
++            .collect_vec();
++        // key 1 gets a new base image at 0x18, below the lowest retain LSN: its older history is not
++        // needed by anyone and gc-compaction must not keep it in memory.
++        let rebased_img_layer = vec![(get_key(1), Bytes::from_static(b"rebased 1@0x18"))];
++
++        let delta1 = vec![(
++            get_key(1),
++            Lsn(0x12),
++            Value::WalRecord(NeonWalRecord::wal_append("@0x12")),
++        )];
++        let delta2 = vec![
++            (
++                get_key(1),
++                Lsn(0x20),
++                Value::WalRecord(NeonWalRecord::wal_append("@0x20")),
++            ),
++            (
++                get_key(1),
++                Lsn(0x28),
++                Value::WalRecord(NeonWalRecord::wal_append("@0x28")),
++            ),
++            (
++                get_key(1),
++                Lsn(0x38),
++                Value::WalRecord(NeonWalRecord::wal_append("@0x38")),
++            ),
++        ];
++
++        let tline = tenant
++            .create_test_timeline_with_layers(
++                TIMELINE_ID,
++                Lsn(0x10),
++                DEFAULT_PG_VERSION,
++                &ctx,
++                Vec::new(), // in-memory layers
++                vec![
++                    DeltaLayerTestDesc::new_with_inferred_key_range(Lsn(0x10)..Lsn(0x18), delta1),
++                    DeltaLayerTestDesc::new_with_inferred_key_range(Lsn(0x18)..Lsn(0x50), delta2),
++                ], // delta layers
++                vec![(Lsn(0x10), img_layer), (Lsn(0x18), rebased_img_layer)], // image layers
++                Lsn(0x50),
++            )
++            .await?;
++        {
++            tline
++                .applied_gc_cutoff_lsn
++                .lock_for_write()
++                .store_and_unlock(Lsn(0x30))
++                .wait()
++                .await;
++            let mut guard = tline.gc_info.write().unwrap();
++            *guard = GcInfo {
++                retain_lsns: vec![(Lsn(0x20), tline.timeline_id, MaybeOffloaded::No)],
++                cutoffs: GcCutoffs {
++                    time: Some(Lsn(0x30)),
++                    space: Lsn(0x30),
++                },
++                leases: Default::default(),
++                within_ancestor_pitr: false,
++            };
++        }
++
++        let verify_result = || async {
++            for (lsn, expected) in [
++                (Lsn(0x50), "rebased 1@0x18@0x20@0x28@0x38"),
++                (Lsn(0x30), "rebased 1@0x18@0x20@0x28"),
++                (Lsn(0x20), "rebased 1@0x18@0x20"),
++            ] {
++                assert_eq!(
++                    tline.get(get_key(1), lsn, &ctx).await.unwrap(),
++                    Bytes::from(expected),
++                    "key 1 at {lsn}"
++                );
++            }
++            for idx in [0, 2, 9] {
++                assert_eq!(
++                    tline.get(get_key(idx), Lsn(0x50), &ctx).await.unwrap(),
++                    Bytes::from(format!("value {idx}@0x10")),
++                );
++            }
++        };
++
++        verify_result().await;
++
++        let cancel = CancellationToken::new();
++        tline
++            .compact_with_gc(
++                &cancel,
++                CompactOptions::default_for_gc_compaction_unit_tests(),
++                &ctx,
++            )
++            .await
++            .unwrap();
++        verify_result().await;
++
++        // compact again
++        tline
++            .compact_with_gc(
++                &cancel,
++                CompactOptions::default_for_gc_compaction_unit_tests(),
++                &ctx,
++            )
++            .await
++            .unwrap();
++        verify_result().await;
++
++        Ok(())
++    }
++
+     #[cfg(feature = "testing")]
+     #[tokio::test]
+     async fn test_simple_bottom_most_compaction_on_branch() -> anyhow::Result<()> {
+diff --git a/pageserver/src/tenant/timeline/compaction.rs b/pageserver/src/tenant/timeline/compaction.rs
+index 96e7ce6..8a5478b 100644
+--- a/pageserver/src/tenant/timeline/compaction.rs
++++ b/pageserver/src/tenant/timeline/compaction.rs
+@@ -83,6 +83,60 @@
+ /// by L0 compaction before it is abandoned for the current meta job.
+ const MAX_GC_COMPACTION_SUB_JOB_ATTEMPTS: usize = 3;
+ 
++/// The history of a single key that gc-compaction keeps in memory must stay below this size.
++const GC_COMPACTION_MAX_KEY_HISTORY_BYTES: usize = 1024 * 1024 * 512;
++
++/// The history of a single key collected by the gc-compaction main loop, sorted by LSN.
++///
++/// `generate_key_retention` only needs the history from the latest base (an image or a WAL record that
++/// does not need a base image) at or below `truncate_below`, the lowest LSN it reconstructs the key at
++/// (the lowest retain LSN, or the GC horizon). Everything older is garbage that would be dropped anyway,
++/// so it is not kept in memory. Otherwise a frequently updated page (e.g. a visibility map page) with
++/// months of history exceeds the memory limit and the whole compaction job fails.
++struct KeyHistoryAccumulator {
++    values: Vec<(Key, Lsn, Value)>,
++    estimated_size: usize,
++    truncate_below: Lsn,
++    limit: usize,
++}
++
++impl KeyHistoryAccumulator {
++    fn new(truncate_below: Lsn, limit: usize) -> Self {
++        Self {
++            values: Vec::new(),
++            estimated_size: 0,
++            truncate_below,
++            limit,
++        }
++    }
++
++    fn values(&self) -> &[(Key, Lsn, Value)] {
++        &self.values
++    }
++
++    fn clear(&mut self) {
++        self.values.clear();
++        self.estimated_size = 0;
++    }
++
++    fn push(&mut self, key: Key, lsn: Lsn, val: Value) -> Result<(), CompactionError> {
++        if val.will_init() && lsn <= self.truncate_below {
++            self.clear();
++        }
++        self.estimated_size += val.estimated_size();
++        self.values.push((key, lsn, val));
++        if self.estimated_size >= self.limit {
++            return Err(CompactionError::Other(anyhow!(
++                "too many values for a single key: {} for key {}, {} items",
++                self.estimated_size,
++                key,
++                self.values.len()
++            )));
++        }
++        Ok(())
++    }
++}
++
+ #[derive(Default, Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize)]
+ pub struct GcCompactionJobId(pub usize);
+ 
+@@ -3692,8 +3746,14 @@ async fn compact_with_gc_inner(
+         let mut timer = Instant::now();
+ 
+         // Step 2: Produce images+deltas.
+-        let mut accumulated_values = Vec::new();
+-        let mut accumulated_values_estimated_size = 0;
++        let truncate_history_below = job_desc
++            .retain_lsns_below_horizon
++            .first()
++            .copied()
++            .unwrap_or(job_desc.gc_cutoff)
++            .min(job_desc.gc_cutoff);
++        let mut accumulated_values =
++            KeyHistoryAccumulator::new(truncate_history_below, GC_COMPACTION_MAX_KEY_HISTORY_BYTES);
+         let mut last_key: Option<Key> = None;
+ 
+         // Only create image layers when there is no ancestor branches. TODO: create covering image layer
+@@ -3861,25 +3921,14 @@ async fn get_ancestor_image(
+                 if last_key.is_none() {
+                     last_key = Some(key);
+                 }
+-                accumulated_values_estimated_size += val.estimated_size();
+-                accumulated_values.push((key, lsn, val));
+-
+-                // Accumulated values should never exceed 512MB.
+-                if accumulated_values_estimated_size >= 1024 * 1024 * 512 {
+-                    return Err(CompactionError::Other(anyhow!(
+-                        "too many values for a single key: {} for key {}, {} items",
+-                        accumulated_values_estimated_size,
+-                        key,
+-                        accumulated_values.len()
+-                    )));
+-                }
++                accumulated_values.push(key, lsn, val)?;
+             } else {
+                 let last_key: &mut Key = last_key.as_mut().unwrap();
+                 stat.on_unique_key_visited(); // TODO: adjust statistics for partial compaction
+                 let retention = self
+                     .generate_key_retention(
+                         *last_key,
+-                        &accumulated_values,
++                        accumulated_values.values(),
+                         job_desc.gc_cutoff,
+                         &job_desc.retain_lsns_below_horizon,
+                         COMPACTION_DELTA_THRESHOLD,
+@@ -3905,8 +3954,7 @@ async fn get_ancestor_image(
+                     .map_err(CompactionError::Other)?;
+                 accumulated_values.clear();
+                 *last_key = key;
+-                accumulated_values_estimated_size = val.estimated_size();
+-                accumulated_values.push((key, lsn, val));
++                accumulated_values.push(key, lsn, val)?;
+             }
+         }
+ 
+@@ -3921,7 +3969,7 @@ async fn get_ancestor_image(
+         let retention = self
+             .generate_key_retention(
+                 last_key,
+-                &accumulated_values,
++                accumulated_values.values(),
+                 job_desc.gc_cutoff,
+                 &job_desc.retain_lsns_below_horizon,
+                 COMPACTION_DELTA_THRESHOLD,
+@@ -4664,3 +4712,119 @@ fn is_delta(&self) -> bool {
+     }
+ }
+ impl CompactionImageLayer<TimelineAdaptor> for ResidentImageLayer {}
++
++#[cfg(all(test, feature = "testing"))]
++mod key_history_tests {
++    use bytes::Bytes;
++
++    use super::*;
++
++    fn key() -> Key {
++        Key::from_hex("000000067F00000005003AA3DB0200000000").unwrap()
++    }
++
++    fn image(lsn: u64) -> (Lsn, Value) {
++        (Lsn(lsn), Value::Image(Bytes::from(vec![0u8; 100])))
++    }
++
++    fn delta(lsn: u64) -> (Lsn, Value) {
++        (
++            Lsn(lsn),
++            Value::WalRecord(NeonWalRecord::wal_append("x".repeat(100))),
++        )
++    }
++
++    fn lsns(acc: &KeyHistoryAccumulator) -> Vec<u64> {
++        acc.values().iter().map(|(_, lsn, _)| lsn.0).collect()
++    }
++
++    fn push_all(
++        acc: &mut KeyHistoryAccumulator,
++        values: Vec<(Lsn, Value)>,
++    ) -> Result<(), CompactionError> {
++        for (lsn, val) in values {
++            acc.push(key(), lsn, val)?;
++        }
++        Ok(())
++    }
++
++    #[test]
++    fn image_below_horizon_drops_older_history() {
++        let mut acc = KeyHistoryAccumulator::new(Lsn(0x40), usize::MAX);
++        push_all(
++            &mut acc,
++            vec![
++                image(0x10),
++                delta(0x18),
++                delta(0x20),
++                image(0x30),
++                delta(0x38),
++                delta(0x48),
++            ],
++        )
++        .unwrap();
++        assert_eq!(lsns(&acc), vec![0x30, 0x38, 0x48]);
++    }
++
++    #[test]
++    fn will_init_record_is_a_base() {
++        let mut acc = KeyHistoryAccumulator::new(Lsn(0x40), usize::MAX);
++        let will_init = (Lsn(0x30), Value::WalRecord(NeonWalRecord::wal_init("init")));
++        assert!(will_init.1.will_init());
++        push_all(
++            &mut acc,
++            vec![image(0x10), delta(0x20), will_init, delta(0x38)],
++        )
++        .unwrap();
++        assert_eq!(lsns(&acc), vec![0x30, 0x38]);
++    }
++
++    #[test]
++    fn history_above_truncation_point_is_kept() {
++        // 0x20 is the lowest retain LSN: the image at 0x30 must not drop the history needed at 0x20,
++        // and nothing above the horizon is ever dropped.
++        let mut acc = KeyHistoryAccumulator::new(Lsn(0x20), usize::MAX);
++        push_all(
++            &mut acc,
++            vec![
++                image(0x10),
++                delta(0x18),
++                image(0x30),
++                delta(0x38),
++                image(0x50),
++                delta(0x58),
++            ],
++        )
++        .unwrap();
++        assert_eq!(lsns(&acc), vec![0x10, 0x18, 0x30, 0x38, 0x50, 0x58]);
++    }
++
++    #[test]
++    fn periodic_images_keep_long_history_below_the_limit() {
++        // ~100k values of ~100 bytes would exceed a 1 MB limit, but an image every 100 values keeps
++        // only the tail in memory.
++        let mut acc = KeyHistoryAccumulator::new(Lsn(u64::MAX), 1024 * 1024);
++        for i in 0..100_000u64 {
++            let (lsn, val) = if i % 100 == 0 {
++                image(0x10 + i)
++            } else {
++                delta(0x10 + i)
++            };
++            acc.push(key(), lsn, val).unwrap();
++        }
++        assert!(acc.values().len() <= 100);
++    }
++
++    #[test]
++    fn history_without_a_base_still_hits_the_limit() {
++        let mut acc = KeyHistoryAccumulator::new(Lsn(u64::MAX), 1024 * 1024);
++        acc.push(key(), Lsn(0x10), image(0x10).1).unwrap();
++        let err = (1..100_000u64)
++            .find_map(|i| acc.push(key(), Lsn(0x10 + i), delta(0x10 + i).1).err())
++            .expect("limit must be hit");
++        assert!(
++            err.to_string().contains("too many values for a single key"),
++            "{err}"
++        );
++    }
++}
