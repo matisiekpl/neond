@@ -1,0 +1,146 @@
+diff --git a/safekeeper/src/pull_timeline.rs b/safekeeper/src/pull_timeline.rs
+index 4febc76..df4da0e 100644
+--- a/safekeeper/src/pull_timeline.rs
++++ b/safekeeper/src/pull_timeline.rs
+@@ -312,6 +312,7 @@ async fn start_snapshot<W: AsyncWrite + Unpin + Send>(
+     ) -> Result<SnapshotContext> {
+         let mut shared_state = self.write_shared_state().await;
+         let wal_seg_size = shared_state.get_wal_seg_size();
++        let wal_backup_configured = storage.is_some();
+ 
+         let mut control_store = TimelinePersistentState::clone(shared_state.sk.state());
+         // Modify the partial segment of the in-memory copy for the control file to
+@@ -350,14 +351,19 @@ async fn start_snapshot<W: AsyncWrite + Unpin + Send>(
+         // still needs. This duplicates calc_horizon_lsn logic.
+         //
+         // We know that WAL wasn't removed up to this point because it cannot be
+-        // removed further than `backup_lsn`. Since we're holding shared_state
+-        // lock and setting `wal_removal_on_hold` later, it guarantees that WAL
+-        // won't be removed until we're done.
++        // removed further than `backup_lsn` (or `remote_consistent_lsn` when WAL
++        // backup is not configured and `backup_lsn` never advances). Since we're
++        // holding shared_state lock and setting `wal_removal_on_hold` later, it
++        // guarantees that WAL won't be removed until we're done.
+         let timeline_state = shared_state.sk.state();
+-        let from_lsn = min(
+-            timeline_state.remote_consistent_lsn,
+-            timeline_state.backup_lsn,
+-        );
++        let from_lsn = if wal_backup_configured {
++            min(
++                timeline_state.remote_consistent_lsn,
++                timeline_state.backup_lsn,
++            )
++        } else {
++            timeline_state.remote_consistent_lsn
++        };
+         let flush_lsn = shared_state.sk.flush_lsn();
+         let (send_segments, msg) = if from_lsn == Lsn::INVALID {
+             (false, "snapshot is called on uninitialized timeline")
+diff --git a/safekeeper/src/remove_wal.rs b/safekeeper/src/remove_wal.rs
+index df3ba9e..ce5692f 100644
+--- a/safekeeper/src/remove_wal.rs
++++ b/safekeeper/src/remove_wal.rs
+@@ -6,7 +6,9 @@
+ ///
+ /// We hold WAL till it is consumed by
+ /// 1) pageserver (remote_consistent_lsn)
+-/// 2) s3 offloading.
++/// 2) s3 offloading, if WAL backup is configured (`wal_backup_configured`).
++///    Without remote storage (or with --disable-wal-backup) WAL is never
++///    offloaded and backup_lsn never advances, so it must not hold WAL back.
+ /// 3) Additionally we must store WAL since last local commit_lsn because
+ ///    that's where we start looking for last WAL record on start.
+ ///
+@@ -14,12 +16,18 @@
+ /// storage. While it is safe to use inmem values for determining horizon, we
+ /// use persistent to make possible normal states less surprising. All segments
+ /// covering LSNs before horizon_lsn can be removed.
+-pub(crate) fn calc_horizon_lsn(state: &StateSnapshot, extra_horizon_lsn: Option<Lsn>) -> Lsn {
++pub(crate) fn calc_horizon_lsn(
++    state: &StateSnapshot,
++    extra_horizon_lsn: Option<Lsn>,
++    wal_backup_configured: bool,
++) -> Lsn {
+     use std::cmp::min;
+ 
+     let mut horizon_lsn = state.cfile_remote_consistent_lsn;
+     // we don't want to remove WAL that is not yet offloaded to s3
+-    horizon_lsn = min(horizon_lsn, state.cfile_backup_lsn);
++    if wal_backup_configured {
++        horizon_lsn = min(horizon_lsn, state.cfile_backup_lsn);
++    }
+     // Min by local commit_lsn to be able to begin reading WAL from somewhere on
+     // sk start. Technically we don't allow local commit_lsn to be higher than
+     // flush_lsn, but let's be double safe by including it as well.
+@@ -31,3 +39,53 @@ pub(crate) fn calc_horizon_lsn(state: &StateSnapshot, extra_horizon_lsn: Option<
+ 
+     horizon_lsn
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    /// A timeline whose WAL was never offloaded: backup_lsn is stuck at the timeline start while
++    /// the pageserver has already made everything up to 0/5000000 durable.
++    fn state() -> StateSnapshot {
++        StateSnapshot {
++            commit_lsn: Lsn(0x6000000),
++            backup_lsn: Lsn(0x1000000),
++            remote_consistent_lsn: Lsn(0x5000000),
++            cfile_commit_lsn: Lsn(0x6000000),
++            cfile_remote_consistent_lsn: Lsn(0x5000000),
++            cfile_backup_lsn: Lsn(0x1000000),
++            flush_lsn: Lsn(0x6000000),
++            last_log_term: 1,
++            cfile_last_persist_at: std::time::Instant::now(),
++            inmem_flush_pending: false,
++            wal_removal_on_hold: false,
++            peers: vec![],
++        }
++    }
++
++    #[test]
++    fn backup_lsn_holds_wal_when_wal_backup_is_configured() {
++        assert_eq!(calc_horizon_lsn(&state(), None, true), Lsn(0x1000000));
++    }
++
++    #[test]
++    fn backup_lsn_is_ignored_without_wal_backup() {
++        assert_eq!(calc_horizon_lsn(&state(), None, false), Lsn(0x5000000));
++    }
++
++    #[test]
++    fn other_horizons_still_apply_without_wal_backup() {
++        let mut state = state();
++        state.cfile_commit_lsn = Lsn(0x4000000);
++        assert_eq!(calc_horizon_lsn(&state, None, false), Lsn(0x4000000));
++
++        let mut state = self::state();
++        state.flush_lsn = Lsn(0x3000000);
++        assert_eq!(calc_horizon_lsn(&state, None, false), Lsn(0x3000000));
++
++        assert_eq!(
++            calc_horizon_lsn(&self::state(), Some(Lsn(0x2000000)), false),
++            Lsn(0x2000000)
++        );
++    }
++}
+diff --git a/safekeeper/src/timeline_manager.rs b/safekeeper/src/timeline_manager.rs
+index a68752b..1a547ce 100644
+--- a/safekeeper/src/timeline_manager.rs
++++ b/safekeeper/src/timeline_manager.rs
+@@ -569,7 +569,11 @@ async fn update_wal_removal(&mut self, state: &StateSnapshot) {
+             None
+         };
+ 
+-        let removal_horizon_lsn = calc_horizon_lsn(state, replication_horizon_lsn);
++        let removal_horizon_lsn = calc_horizon_lsn(
++            state,
++            replication_horizon_lsn,
++            self.wal_backup.get_storage().is_some(),
++        );
+         let removal_horizon_segno = removal_horizon_lsn
+             .segment_number(self.wal_seg_size)
+             .saturating_sub(1);
