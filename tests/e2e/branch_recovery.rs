@@ -1,7 +1,9 @@
 use chrono::Utc;
 use std::time::Duration;
 
-use crate::common::{api, append, checksum, connect, exclusive, seed, wait_for_ingest};
+use crate::common::{
+    api, append, checksum, connect, exclusive, seed, wait_for_compaction, wait_for_ingest,
+};
 
 const SEED_MEGABYTES: i64 = 500;
 
@@ -263,18 +265,12 @@ async fn compaction_keeps_parent_and_child_data() {
     let (status, body) = api.compact(&organization_id, &project_id, &parent_id).await;
     assert_eq!(status.as_u16(), 202, "compaction should be accepted: {body}");
 
-    let deadline = std::time::Instant::now() + Duration::from_secs(600);
-    loop {
-        let status = api.compaction_status(&organization_id, &project_id, &parent_id).await;
-        if status["running"] == false {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "compaction did not finish in time: {status}"
-        );
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
+    let status = wait_for_compaction(&api, &organization_id, &project_id, &parent_id).await;
+    assert!(status["error"].is_null(), "compaction failed: {status}");
+    assert!(
+        status["size_after"].as_u64().unwrap() <= status["size_before"].as_u64().unwrap(),
+        "compaction must not grow the branch: {status}"
+    );
 
     api.stop_endpoint(&organization_id, &project_id, &parent_id).await;
     api.stop_endpoint(&organization_id, &project_id, &child_id).await;
@@ -291,4 +287,93 @@ async fn compaction_keeps_parent_and_child_data() {
         child_checksum,
         "compaction must not change data visible to the child branch"
     );
+}
+
+#[tokio::test]
+async fn compaction_reclaims_hot_row_history() {
+    let _guard = exclusive().await;
+    let api = api().await;
+
+    let organization_id = api.create_organization("Hot Rows Org").await;
+    let project_id = api.create_project(&organization_id, "Hot Rows Project").await;
+    let project_created = std::time::Instant::now();
+    // Keep almost no history so that everything the load below writes falls under the GC cutoff
+    // quickly, and flush it into layers right away.
+    api.update_project(
+        &organization_id,
+        &project_id,
+        serde_json::json!({
+            "pitr_interval": "1m",
+            "gc_horizon": 1048576,
+            "gc_period": "10s",
+            "checkpoint_timeout": "10s",
+        }),
+    )
+    .await;
+
+    let branch = api
+        .create_branch(&organization_id, &project_id, "production", None)
+        .await;
+    let branch_id = branch["id"].as_str().unwrap().to_string();
+    let endpoint = api.start_endpoint(&organization_id, &project_id, &branch_id).await;
+    let client = connect(&endpoint).await;
+
+    // A small table whose rows (and visibility map page) are rewritten over and over, like a hot
+    // counters table in production.
+    client
+        .batch_execute(
+            "CREATE TABLE hot (id int primary key, counter bigint not null, pad text not null); \
+             INSERT INTO hot SELECT i, 0, repeat('x', 200) FROM generate_series(1, 2000) i;",
+        )
+        .await
+        .expect("failed to create hot table");
+    for _ in 0..20 {
+        // Separate queries: a multi-statement query runs in one implicit transaction, where neither
+        // COMMIT inside DO nor VACUUM is allowed.
+        client
+            .batch_execute(
+                "DO $$ BEGIN FOR i IN 1..50 LOOP UPDATE hot SET counter = counter + 1; COMMIT; END LOOP; END $$",
+            )
+            .await
+            .expect("failed to update hot rows");
+        client.batch_execute("VACUUM hot").await.expect("failed to vacuum hot rows");
+    }
+    wait_for_ingest(&api, &organization_id, &project_id, &branch_id, &client).await;
+    let total: i64 = client
+        .query_one("SELECT sum(counter)::bigint FROM hot", &[])
+        .await
+        .expect("failed to read hot rows")
+        .get(0);
+    assert_eq!(total, 2000 * 20 * 50);
+
+    // Let the load fall out of the PITR window. The pageserver also refuses to GC a tenant during
+    // the LSN lease period after attaching it (10 minutes), and compaction needs a GC cutoff.
+    tokio::time::sleep(Duration::from_secs(90)).await;
+    let gc_allowed = project_created + Duration::from_secs(10 * 60 + 30);
+    tokio::time::sleep(gc_allowed.saturating_duration_since(std::time::Instant::now())).await;
+
+    let (status, body) = api.compact(&organization_id, &project_id, &branch_id).await;
+    assert_eq!(status.as_u16(), 202, "compaction should be accepted: {body}");
+    let (status, body) = api.compact(&organization_id, &project_id, &branch_id).await;
+    assert_eq!(status.as_u16(), 409, "a second compaction must be rejected while one runs: {body}");
+
+    let status = wait_for_compaction(&api, &organization_id, &project_id, &branch_id).await;
+    println!("[compaction] {status}");
+    assert!(status["error"].is_null(), "compaction failed: {status}");
+    let size_before = status["size_before"].as_u64().unwrap();
+    let size_after = status["size_after"].as_u64().unwrap();
+    assert!(
+        size_after < size_before,
+        "compaction should reclaim the hot rows' history: {size_before} -> {size_after}"
+    );
+
+    drop(client);
+    api.stop_endpoint(&organization_id, &project_id, &branch_id).await;
+    let client = connect(&api.start_endpoint(&organization_id, &project_id, &branch_id).await).await;
+    let total_after: i64 = client
+        .query_one("SELECT sum(counter)::bigint FROM hot", &[])
+        .await
+        .expect("failed to read hot rows")
+        .get(0);
+    assert_eq!(total_after, total, "compaction must not change data");
 }

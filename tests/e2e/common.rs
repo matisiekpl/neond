@@ -171,6 +171,15 @@ impl Api {
         }
     }
 
+    pub async fn update_project(&self, organization_id: &str, project_id: &str, body: Value) -> Value {
+        self.expect_ok(
+            self.client
+                .put(format!("{BASE_URL}/organizations/{organization_id}/projects/{project_id}"))
+                .json(&body),
+        )
+        .await
+    }
+
     pub async fn create_branch(
         &self,
         organization_id: &str,
@@ -284,6 +293,22 @@ impl Api {
             "{BASE_URL}/organizations/{organization_id}/projects/{project_id}/branches/{branch_id}/compact"
         )))
         .await
+    }
+}
+
+/// Waits for the storage compaction of a branch to finish and returns its final status.
+pub async fn wait_for_compaction(api: &Api, organization_id: &str, project_id: &str, branch_id: &str) -> Value {
+    let deadline = std::time::Instant::now() + Duration::from_secs(1200);
+    loop {
+        let status = api.compaction_status(organization_id, project_id, branch_id).await;
+        if status["running"] == false {
+            return status;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "compaction did not finish in time: {status}"
+        );
+        tokio::time::sleep(Duration::from_secs(2)).await;
     }
 }
 
