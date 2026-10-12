@@ -10,6 +10,7 @@ import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
 import {useBranchStore} from '@/stores/branch.store'
 import type {Branch} from '@/types/models/branch'
+import type {CompactionStatus} from '@/types/dto/compaction'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
 import RestorePitrDialog from '@/elements/RestorePitrDialog.vue'
@@ -205,7 +206,6 @@ const compactOpen = ref(false)
 const compactBranch = ref<Branch | null>(null)
 const compactStarting = ref(false)
 const compactingBranchIds = ref<string[]>([])
-const compactSizeBefore = ref<number | undefined>(undefined)
 const COMPACTION_POLL_INTERVAL_MS = 15000
 let compactionPollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -307,25 +307,29 @@ async function pollCompactions() {
   if (!orgId || !projectId.value) return
   const pending = [...compactingBranchIds.value]
   const stillRunning: string[] = []
+  const finished: CompactionStatus[] = []
   for (const branchId of pending) {
     try {
       const status = await branchStore.compactionStatus(orgId, projectId.value, branchId)
       if (status.running) stillRunning.push(branchId)
+      else finished.push(status)
     } catch {
       stillRunning.push(branchId)
     }
   }
   compactingBranchIds.value = stillRunning
-  if (stillRunning.length === pending.length) return
+  if (finished.length === 0) return
 
   await projectStore.fetch(orgId, true)
-  const after = project.value?.physical_size
-  if (compactSizeBefore.value !== undefined && after !== undefined) {
-    toast.success(`Storage compaction finished: ${formatBytes(compactSizeBefore.value)} → ${formatBytes(after)}`)
-  } else {
-    toast.success('Storage compaction finished')
+  for (const status of finished) {
+    if (status.error) {
+      toast.error(`Storage compaction failed: ${status.error}`)
+    } else if (status.size_before !== null && status.size_after !== null) {
+      toast.success(`Storage compaction finished: ${formatBytes(status.size_before)} → ${formatBytes(status.size_after)}`)
+    } else {
+      toast.success('Storage compaction finished')
+    }
   }
-  compactSizeBefore.value = undefined
   if (stillRunning.length === 0) stopCompactionPolling()
 }
 
@@ -354,7 +358,6 @@ async function confirmCompact() {
   if (!organizationStore.selectedOrganizationId || !projectId.value || !compactBranch.value) return
   compactStarting.value = true
   try {
-    compactSizeBefore.value = project.value?.physical_size
     const status = await branchStore.compact(organizationStore.selectedOrganizationId, projectId.value, compactBranch.value.id)
     if (status.running && !compactingBranchIds.value.includes(compactBranch.value.id)) {
       compactingBranchIds.value = [...compactingBranchIds.value, compactBranch.value.id]
