@@ -1,10 +1,11 @@
 # Neon patches
 
 Patches applied on top of the `neon` submodule before it is built
-(`Dockerfile` neon stage, `make neon-patch`). They are applied by
-`patches/apply-neon-patches.sh`, which skips patches that are already applied
-and fails the build if a patch no longer applies, e.g. after bumping the
-submodule.
+(`Dockerfile` neon stage, `make neon-patch`). They are applied in file name
+order by `patches/apply-neon-patches.sh`, which skips a stack that is already
+applied (recorded in `neon/.neond-patches-applied`) and fails the build if a
+patch no longer applies, e.g. after bumping the submodule. Later patches may
+build on earlier ones touching the same file.
 
 ## 0001-gc-compaction-retry-preempted-subcompaction-jobs.patch
 
@@ -84,3 +85,33 @@ Refreshing after a submodule bump: apply the patch in `neon/` (resolve
 conflicts), then regenerate it with
 `git -C neon diff -- safekeeper/ > patches/neon/0002-safekeeper-remove-wal-without-wal-backup.patch`
 and check that `./patches/apply-neon-patches.sh neon` reports it as applied.
+
+## 0003-gc-compaction-drop-history-below-base-image.patch
+
+`pageserver/src/tenant/timeline/compaction.rs` (`compact_with_gc_inner`, new
+`KeyHistoryAccumulator`). Applies on top of 0001.
+
+The gc-compaction main loop collects the full history of each key in memory
+before deciding what to keep, and gives up the whole job once one key's history
+reaches 512 MB ("too many values for a single key"). Only the history from the
+latest image (or `will_init` WAL record) at or below the lowest LSN the key is
+reconstructed at — the lowest retain LSN, or the GC horizon — is needed;
+everything older is dropped by `generate_key_retention` anyway. A frequently
+updated page such as a visibility map page accumulates months of history, so on
+a production timeline 4 of 9 sub-compaction jobs failed this way on every run
+and most of the history (~20 GB of ~25 GB of layers) was never compacted.
+
+The patch:
+
+- moves the per-key history into `KeyHistoryAccumulator`, which drops the
+  collected history when an image or `will_init` record at or below that LSN
+  arrives, so the 512 MB limit only applies to history that is actually needed;
+- leaves everything above that LSN (and the retention logic) unchanged;
+- adds unit tests for the accumulator and a gc-compaction test with a key that
+  is rebased below the lowest retain LSN.
+
+Refreshing after a submodule bump: apply 0001 and commit it locally in `neon/`,
+apply this patch (resolve conflicts), regenerate it with
+`git -C neon diff -- pageserver/ > patches/neon/0003-gc-compaction-drop-history-below-base-image.patch`,
+then reset `neon/` and check that `./patches/apply-neon-patches.sh neon` applies
+the whole stack.

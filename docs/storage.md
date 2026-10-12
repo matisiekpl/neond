@@ -81,10 +81,18 @@ background processes in the pageserver:
   new layers have accumulated.
 
 If a project's physical size is much larger than its logical size, run
-**Compact storage** from the branch menu of the root branch. It schedules
-the same gc-compaction in the background without yielding to other
-compaction work, so it always runs to completion. The project page shows
-"Compacting storage…" until it finishes and then the new physical size.
+**Compact storage** from the branch menu of the root branch. It runs
+gc-compaction over the whole branch as a single job, without yielding to
+other compaction work, so it always runs to completion. The project page
+shows "Compacting storage…" until it finishes and then either the size
+before and after, or the pageserver's error if compaction failed.
+
+It runs garbage collection first, so that compaction works with an
+up-to-date PITR cutoff without waiting for the pageserver's own GC loop. The
+pageserver does not garbage-collect anything during the first 10 minutes
+after neond starts (LSN lease period), so compaction right after a restart
+finishes without reclaiming anything; run it again later.
+
 Expect:
 
 - minutes for small projects, up to hours for tens of gigabytes of layers;
@@ -93,10 +101,11 @@ Expect:
 - extra free disk space for the rewritten layers. In S3 mode, layers that
   are not on the local disk are downloaded first.
 
-neond ships a patch for the pageserver (`patches/neon/`) that fixes automatic
+neond ships patches for the pageserver (`patches/neon/`) that fix
 gc-compaction silently skipping parts of the history: upstream it abandons
 work preempted by L0 compaction while still marking the history as compacted,
-which makes disk usage grow over time on busy projects with branches.
+and it gives up on keys with a long history (frequently updated pages), which
+makes disk usage grow over time on busy projects.
 
 ## WAL retention
 

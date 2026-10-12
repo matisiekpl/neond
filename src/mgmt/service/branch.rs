@@ -21,9 +21,9 @@ use neon_utils::lsn::Lsn;
 use neon_utils::shard::TenantShardId;
 use chrono::{DateTime, SecondsFormat, Utc};
 use futures_util::future::join_all;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 use humantime;
@@ -46,6 +46,9 @@ pub struct BranchService {
     safekeeper_client: Arc<neon_safekeeper_client::mgmt_api::Client>,
     endpoint_service: Arc<EndpointService>,
     config: Config,
+    /// Manual storage compaction runs, by timeline. Kept in memory only: a run does not survive a
+    /// neond restart, and neither does the pageserver request it waits on.
+    compactions: Arc<Mutex<HashMap<TimelineId, CompactionStatusResponse>>>,
 }
 
 impl BranchService {
@@ -66,6 +69,7 @@ impl BranchService {
             safekeeper_client,
             endpoint_service,
             config,
+            compactions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -538,59 +542,113 @@ impl BranchService {
             .resolve_compaction_target(user_id, organization_id, project_id, branch_id)
             .await?;
 
-        let status = self
-            .fetch_compaction_status(tenant_shard_id, timeline_id)
-            .await?;
-        if status.running {
-            return Err(AppError::CompactionAlreadyRunning);
-        }
-
         let token = self
             .config
             .component_auth
             .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
+        let size_before = fetch_timeline_physical_size(&token, tenant_shard_id, timeline_id).await;
 
-        // Same shape as the pageserver's automatic gc-compaction: scheduled in the background,
-        // split into sub-compaction jobs, limited to the data keyspace. Unlike the automatic job
-        // it does not yield to L0 compaction, so it always runs to completion.
-        let response = reqwest::Client::new()
-            .put(format!(
-                "{PAGESERVER_HTTP_URL}/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}/compact"
-            ))
-            .query(&[("enhanced_gc_bottom_most_compaction", "true")])
-            .json(&serde_json::json!({
-                "scheduled": true,
-                "sub_compaction": true,
-                "compact_key_range": {
-                    "start": "000000000000000000000000000000000000",
-                    "end": GC_COMPACTION_KEY_RANGE_END,
-                },
-            }))
-            .bearer_auth(token)
-            .send()
-            .await
-            .map_err(|error| AppError::PageserverApiFailed {
-                operation: "compact".to_string(),
-                reason: error.to_string(),
-            })?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(AppError::PageserverApiFailed {
-                operation: "compact".to_string(),
-                reason: format!("Pageserver returned {status}: {body}"),
-            });
-        }
+        let status = {
+            let mut compactions = self.compactions.lock().unwrap();
+            if compactions.get(&timeline_id).is_some_and(|run| run.running) {
+                return Err(AppError::CompactionAlreadyRunning);
+            }
+            let status = CompactionStatusResponse {
+                running: true,
+                started_at: Some(Utc::now()),
+                size_before,
+                ..Default::default()
+            };
+            compactions.insert(timeline_id, status.clone());
+            status
+        };
 
         tracing::info!(
-            "Scheduled storage compaction for tenant {} timeline {}",
+            "Starting storage compaction for tenant {} timeline {}",
             tenant_shard_id,
             timeline_id
         );
 
-        self.fetch_compaction_status(tenant_shard_id, timeline_id)
-            .await
+        // Same key range as the pageserver's automatic gc-compaction, but as a single job that
+        // does not yield to L0 compaction: split into sub-jobs, the narrow key ranges cut through
+        // most delta layers and the pageserver refuses to rewrite that many layers. The request
+        // returns when compaction has finished, with the pageserver's error if it failed.
+        let compactions = Arc::clone(&self.compactions);
+        tokio::spawn(async move {
+            let client = reqwest::Client::new();
+
+            // gc-compaction only rewrites history below the GC cutoff, which the pageserver computes
+            // in its GC loop. Right after a restart that loop has not run yet (it starts after a random
+            // delay of up to the GC period) and compaction would do nothing, so run GC first with the
+            // tenant's own horizon and PITR settings.
+            let gc = client
+                .put(format!(
+                    "{PAGESERVER_HTTP_URL}/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}/do_gc"
+                ))
+                .json(&serde_json::json!({ "gc_horizon": null }))
+                .bearer_auth(&token)
+                .send()
+                .await;
+            if let Err(error) = gc.and_then(|response| response.error_for_status()) {
+                tracing::warn!(
+                    "GC before storage compaction of tenant {} timeline {} failed: {}",
+                    tenant_shard_id,
+                    timeline_id,
+                    error
+                );
+            }
+
+            let response = client
+                .put(format!(
+                    "{PAGESERVER_HTTP_URL}/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}/compact"
+                ))
+                .query(&[("enhanced_gc_bottom_most_compaction", "true")])
+                .json(&serde_json::json!({
+                    "compact_key_range": {
+                        "start": "000000000000000000000000000000000000",
+                        "end": GC_COMPACTION_KEY_RANGE_END,
+                    },
+                }))
+                .bearer_auth(&token)
+                .send()
+                .await;
+
+            let error = match response {
+                Ok(response) if response.status().is_success() => None,
+                Ok(response) => {
+                    let status = response.status();
+                    let body = response.text().await.unwrap_or_default();
+                    Some(format!("Pageserver returned {status}: {body}"))
+                }
+                Err(error) => Some(error.to_string()),
+            };
+            let size_after = fetch_timeline_physical_size(&token, tenant_shard_id, timeline_id).await;
+
+            match &error {
+                None => tracing::info!(
+                    "Storage compaction for tenant {} timeline {} finished: {:?} -> {:?} bytes",
+                    tenant_shard_id,
+                    timeline_id,
+                    size_before,
+                    size_after
+                ),
+                Some(error) => tracing::warn!(
+                    "Storage compaction for tenant {} timeline {} failed: {}",
+                    tenant_shard_id,
+                    timeline_id,
+                    error
+                ),
+            }
+
+            if let Some(run) = compactions.lock().unwrap().get_mut(&timeline_id) {
+                run.running = false;
+                run.finished_at = Some(Utc::now());
+                run.error = error;
+                run.size_after = size_after;
+            }
+        });
+
+        Ok(status)
     }
 
     pub async fn compaction_status(
@@ -600,11 +658,16 @@ impl BranchService {
         project_id: Uuid,
         branch_id: Uuid,
     ) -> Result<CompactionStatusResponse> {
-        let (tenant_shard_id, timeline_id) = self
+        let (_, timeline_id) = self
             .resolve_compaction_target(user_id, organization_id, project_id, branch_id)
             .await?;
-        self.fetch_compaction_status(tenant_shard_id, timeline_id)
-            .await
+        Ok(self
+            .compactions
+            .lock()
+            .unwrap()
+            .get(&timeline_id)
+            .cloned()
+            .unwrap_or_default())
     }
 
     async fn resolve_compaction_target(
@@ -655,51 +718,6 @@ impl BranchService {
             })?;
 
         Ok((TenantShardId::unsharded(tenant_id), timeline_id))
-    }
-
-    async fn fetch_compaction_status(
-        &self,
-        tenant_shard_id: TenantShardId,
-        timeline_id: TimelineId,
-    ) -> Result<CompactionStatusResponse> {
-        let token = self
-            .config
-            .component_auth
-            .generate_token(neon_utils::auth::Scope::PageServerApi, None)?;
-
-        let response = reqwest::Client::new()
-            .get(format!(
-                "{PAGESERVER_HTTP_URL}/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}/compact"
-            ))
-            .bearer_auth(token)
-            .send()
-            .await
-            .map_err(|error| AppError::PageserverApiFailed {
-                operation: "compaction_status".to_string(),
-                reason: error.to_string(),
-            })?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(AppError::PageserverApiFailed {
-                operation: "compaction_status".to_string(),
-                reason: format!("Pageserver returned {status}: {body}"),
-            });
-        }
-
-        let jobs = response
-            .json::<Vec<serde_json::Value>>()
-            .await
-            .map_err(|error| AppError::PageserverApiFailed {
-                operation: "compaction_status".to_string(),
-                reason: format!("Invalid pageserver response: {error}"),
-            })?;
-
-        Ok(CompactionStatusResponse {
-            running: !jobs.is_empty(),
-            queued_jobs: jobs.len(),
-        })
     }
 
     pub async fn lsn(
@@ -1608,4 +1626,22 @@ impl BranchService {
 
         Ok(())
     }
+}
+
+/// Physical size (sum of layer file sizes) of one timeline, straight from the pageserver.
+async fn fetch_timeline_physical_size(
+    token: &str,
+    tenant_shard_id: TenantShardId,
+    timeline_id: TimelineId,
+) -> Option<u64> {
+    let response = reqwest::Client::new()
+        .get(format!(
+            "{PAGESERVER_HTTP_URL}/v1/tenant/{tenant_shard_id}/timeline/{timeline_id}"
+        ))
+        .bearer_auth(token)
+        .send()
+        .await
+        .ok()?;
+    let value: serde_json::Value = response.json().await.ok()?;
+    value.get("current_physical_size").and_then(|v| v.as_u64())
 }
