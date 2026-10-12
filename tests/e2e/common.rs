@@ -54,6 +54,25 @@ async fn start_daemon() {
     println!("[e2e] teardown: docker compose -f {COMPOSE_FILE} down -v");
 }
 
+/// Number of WAL segment files the safekeeper keeps on disk for a timeline.
+pub fn safekeeper_wal_segments(project_id: &str, timeline_id: &str) -> usize {
+    let directory = format!(
+        "/neond/neon_daemon_data/safekeeper/{}/{}",
+        project_id.replace('-', ""),
+        timeline_id.replace('-', "")
+    );
+    let output = compose(&["exec", "-T", "neond", "ls", &directory]);
+    assert!(
+        output.status.success(),
+        "failed to list {directory}:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|name| name.len() >= 24 && name[..24].chars().all(|c| c.is_ascii_hexdigit()))
+        .count()
+}
+
 pub async fn api() -> Api {
     DAEMON.get_or_init(start_daemon).await;
     Api::authenticated().await

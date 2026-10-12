@@ -16,7 +16,8 @@ knowing about:
 
 - **Layer files** — the immutable building blocks of every branch. These
   grow over time and are the largest thing on disk.
-- **Write-ahead log** — recent WAL not yet folded into layer files.
+- **Write-ahead log** — kept by the safekeeper until the pageserver has made
+  it durable as layer files, then deleted. It is never uploaded to S3.
 - **Embedded internal databases** — two small Postgres instances neond uses
   to track its own state and coordinate storage. Treat them as internal; you
   never connect to them directly.
@@ -96,6 +97,25 @@ neond ships a patch for the pageserver (`patches/neon/`) that fixes automatic
 gc-compaction silently skipping parts of the history: upstream it abandons
 work preempted by L0 compaction while still marking the history as compacted,
 which makes disk usage grow over time on busy projects with branches.
+
+## WAL retention
+
+Every write goes to the safekeeper as WAL first. The safekeeper deletes WAL
+segments once the pageserver has turned them into layer files and made those
+durable (uploaded to S3 in S3 mode, or written to the local remote-storage
+directory otherwise). On a healthy install the safekeeper therefore holds
+only the WAL since the pageserver's last checkpoint per branch — a few
+minutes, or up to a few hundred megabytes on busy branches.
+
+The safekeeper never uploads WAL to S3 itself. Upstream neon only deletes WAL
+after uploading it, so without a patch WAL would never be deleted at all;
+neond ships a safekeeper patch (`patches/neon/`) that deletes it once the
+pageserver no longer needs it.
+
+One consequence: older WAL is gone for good. Point-in-time restore,
+branching and reset are unaffected because they read layer files, but a
+logical replication subscriber that falls further behind than the
+pageserver's last upload loses its slot and has to be re-synced.
 
 ## Warnings
 

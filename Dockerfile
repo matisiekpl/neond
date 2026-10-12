@@ -59,8 +59,9 @@ ARG JOBS
 ARG BUILD_TYPE
 RUN rm -rf src target/${BUILD_TYPE}/deps/neond-* target/${BUILD_TYPE}/neond*
 COPY --from=web /web/dist /neond/web/dist
-# Note: this restores the unpatched neon sources (patches/neon/*.patch only touch the pageserver,
-# which is already built in the neon stage; neond itself only depends on neon client crates).
+# Note: this restores the unpatched neon sources (patches/neon/*.patch only touch the pageserver
+# and safekeeper, which are already built in the neon stage; neond itself only depends on neon
+# client crates).
 COPY . .
 RUN if [ "$BUILD_TYPE" = "release" ]; then \
         CARGO_BUILD_JOBS=$JOBS BUILD_TYPE=$BUILD_TYPE cargo build --jobs $JOBS --release; \
