@@ -4,3 +4,4 @@
 *.html -linguist-detectable
 Makefile -linguist-detectable
 Dockerfile -linguist-detectable
+*.sh -linguist-detectable
