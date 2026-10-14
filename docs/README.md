@@ -20,8 +20,6 @@ parts.
   recovery.
 - [Importing PostgreSQL](./import.md) — bring an existing database into a new
   branch.
-- [Exporting a branch](./export.md) — download a branch as a `.sql` or `.dump`
-  file made with `pg_dump`.
 - [PgBouncer](./pgbouncer.md) — what the pooler in front of every endpoint
   changes for your app.
 - [TLS SNI routing](./tls-sni.md) — wildcard hostnames per endpoint.
