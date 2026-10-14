@@ -4,18 +4,20 @@ import {useRoute, useRouter} from 'vue-router'
 import {useTitle} from '@vueuse/core'
 import {toast} from 'vue-sonner'
 import {
-  BookDown, Check, CircleHelp, Cloud, Copy, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Shrink, Square, Trash2,
+  BookDown, Check, CircleHelp, Cloud, Copy, Download, GitBranchPlus, History, KeyRound, Loader2, MoreVertical, Pencil, Play, Plug, RotateCcw, Scissors, Shrink, Square, Trash2,
 } from 'lucide-vue-next'
 import {useProjectStore} from '@/stores/project.store'
 import {useOrganizationStore} from '@/stores/organization.store'
 import {useBranchStore} from '@/stores/branch.store'
 import type {Branch} from '@/types/models/branch'
 import type {CompactionStatus} from '@/types/dto/compaction'
+import {isExportActive, type ExportStatus} from '@/types/dto/export'
 import EndpointStatusBadge from '@/elements/EndpointStatusBadge.vue'
 import DurabilityStatusBadge from '@/elements/DurabilityStatusBadge.vue'
 import RestorePitrDialog from '@/elements/RestorePitrDialog.vue'
 import ConnectDialog from '@/elements/ConnectDialog.vue'
 import ImportBranchDialog from '@/elements/ImportBranchDialog.vue'
+import ExportBranchDialog from '@/elements/ExportBranchDialog.vue'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -209,6 +211,25 @@ const compactingBranchIds = ref<string[]>([])
 const COMPACTION_POLL_INTERVAL_MS = 15000
 let compactionPollTimer: ReturnType<typeof setInterval> | null = null
 
+const exportOpen = ref(false)
+const exportBranchId = ref<string | null>(null)
+const exportBranch = computed(() => branchStore.branches.find((branch) => branch.id === exportBranchId.value) ?? null)
+const exportStatuses = ref<Record<string, ExportStatus>>({})
+const EXPORT_POLL_INTERVAL_MS = 5000
+let exportPollTimer: ReturnType<typeof setInterval> | null = null
+
+function openExport(branch: Branch) {
+  exportBranchId.value = branch.id
+  exportOpen.value = true
+}
+
+function exportMenuLabel(branchId: string): string {
+  const status = exportStatuses.value[branchId]
+  if (status && isExportActive(status.state)) return `Exporting… ${Math.round(status.progress * 100)}%`
+  if (status?.state === 'completed') return 'Download export'
+  return 'Export (pg_dump)'
+}
+
 function openCompact(branch: Branch) {
   compactBranch.value = branch
   compactOpen.value = true
@@ -354,6 +375,83 @@ async function refreshCompactionStatus() {
   else stopCompactionPolling()
 }
 
+function stopExportPolling() {
+  if (exportPollTimer) {
+    clearInterval(exportPollTimer)
+    exportPollTimer = null
+  }
+}
+
+function startExportPolling() {
+  if (!exportPollTimer) exportPollTimer = setInterval(pollExports, EXPORT_POLL_INTERVAL_MS)
+}
+
+function notifyExportFinished(branchId: string, status: ExportStatus) {
+  const orgId = organizationStore.selectedOrganizationId
+  const branchName = branchStore.branches.find((branch) => branch.id === branchId)?.name ?? 'branch'
+  if (status.state === 'completed' && orgId) {
+    const project = projectId.value
+    toast.success(`Export of ${branchName} is ready (${formatBytes(status.bytes_written)})`, {
+      action: {
+        label: 'Download',
+        onClick: () => branchStore.downloadExport(orgId, project, branchId).catch(() => {}),
+      },
+    })
+  } else if (status.state === 'failed') {
+    toast.error(`Export of ${branchName} failed: ${status.error ?? 'unknown error'}`)
+  }
+}
+
+function onExportStatus(branchId: string, status: ExportStatus, notify: boolean) {
+  const previous = exportStatuses.value[branchId]
+  exportStatuses.value = {...exportStatuses.value, [branchId]: status}
+  if (notify && previous && isExportActive(previous.state) && !isExportActive(status.state)) {
+    notifyExportFinished(branchId, status)
+  }
+  if (isExportActive(status.state)) startExportPolling()
+}
+
+function onDialogExportStatus(status: ExportStatus) {
+  if (exportBranchId.value) onExportStatus(exportBranchId.value, status, false)
+}
+
+async function pollExports() {
+  const orgId = organizationStore.selectedOrganizationId
+  if (!orgId || !projectId.value) return
+  const pending = Object.entries(exportStatuses.value)
+    .filter(([, status]) => isExportActive(status.state))
+    .map(([branchId]) => branchId)
+  if (pending.length === 0) {
+    stopExportPolling()
+    return
+  }
+  await Promise.all(pending.map(async (branchId) => {
+    if (exportOpen.value && exportBranchId.value === branchId) return
+    try {
+      onExportStatus(branchId, await branchStore.exportStatus(orgId, projectId.value, branchId), true)
+    } catch {
+    }
+  }))
+}
+
+async function refreshExportStatuses() {
+  const orgId = organizationStore.selectedOrganizationId
+  if (!orgId || !projectId.value) return
+  const project = projectId.value
+  const statuses: Record<string, ExportStatus> = {}
+  await Promise.all(branchStore.branches
+    .filter((branch) => branch.project_id === project)
+    .map(async (branch) => {
+      try {
+        statuses[branch.id] = await branchStore.exportStatus(orgId, project, branch.id)
+      } catch {
+      }
+    }))
+  exportStatuses.value = statuses
+  if (Object.values(statuses).some((status) => isExportActive(status.state))) startExportPolling()
+  else stopExportPolling()
+}
+
 async function confirmCompact() {
   if (!organizationStore.selectedOrganizationId || !projectId.value || !compactBranch.value) return
   compactStarting.value = true
@@ -389,21 +487,27 @@ onMounted(async () => {
   const orgId = organizationStore.selectedOrganizationId
   if (orgId && projectId.value) {
     await branchStore.fetch(orgId, projectId.value, true)
-    await refreshCompactionStatus()
+    await Promise.all([refreshCompactionStatus(), refreshExportStatuses()])
   }
 })
 
 watch(projectId, async (id) => {
   const orgId = organizationStore.selectedOrganizationId
   stopCompactionPolling()
+  stopExportPolling()
   compactingBranchIds.value = []
+  exportStatuses.value = {}
+  exportOpen.value = false
   if (orgId && id) {
     await branchStore.fetch(orgId, id, true)
-    await refreshCompactionStatus()
+    await Promise.all([refreshCompactionStatus(), refreshExportStatuses()])
   }
 })
 
-onUnmounted(stopCompactionPolling)
+onUnmounted(() => {
+  stopCompactionPolling()
+  stopExportPolling()
+})
 
 const connectOpen = ref(false)
 const connectBranch = ref<Branch | null>(null)
@@ -577,6 +681,15 @@ async function copyProjectId() {
                   >
                     Import failed
                   </RouterLink>
+                  <button
+                    v-if="isExportActive(exportStatuses[branch.id]?.state)"
+                    type="button"
+                    class="inline-flex cursor-pointer items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950/60"
+                    @click.stop="openExport(branch)"
+                  >
+                    <Loader2 class="size-3 animate-spin"/>
+                    Exporting {{ Math.round((exportStatuses[branch.id]?.progress ?? 0) * 100) }}%
+                  </button>
                 </span>
               </TableCell>
               <TableCell class="w-28">
@@ -683,6 +796,14 @@ async function copyProjectId() {
                     <DropdownMenuItem @click="openBranchFrom(branch)">
                       <GitBranchPlus class="size-4"/>
                       Branch from here
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      :disabled="branch.import_status === 'importing'"
+                      @click="openExport(branch)"
+                    >
+                      <Loader2 v-if="isExportActive(exportStatuses[branch.id]?.state)" class="size-4 animate-spin"/>
+                      <Download v-else class="size-4"/>
+                      {{ exportMenuLabel(branch.id) }}
                     </DropdownMenuItem>
                     <DropdownMenuItem @click="openRestore(branch)">
                       <History class="size-4"/>
@@ -930,6 +1051,16 @@ async function copyProjectId() {
       :organization-id="organizationStore.selectedOrganizationId"
       :project-id="projectId"
       :branch-id="restoreBranch.id"
+    />
+
+    <ExportBranchDialog
+      v-if="organizationStore.selectedOrganizationId && exportBranch"
+      v-model:open="exportOpen"
+      :organization-id="organizationStore.selectedOrganizationId"
+      :project-id="projectId"
+      :branch="exportBranch"
+      :pg-version="project?.pg_version ?? null"
+      @status="onDialogExportStatus"
     />
 
     <ConnectDialog

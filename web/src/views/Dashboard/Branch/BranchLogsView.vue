@@ -22,6 +22,8 @@ function start() {
     logsStore.startPgbouncerLogs(organizationId.value, projectId.value, branchId.value)
   } else if (component.value === 'import') {
     logsStore.startImportLogs(organizationId.value, projectId.value, branchId.value)
+  } else if (component.value === 'export') {
+    logsStore.startExportLogs(organizationId.value, projectId.value, branchId.value)
   } else {
     logsStore.startEndpointLogs(organizationId.value, projectId.value, branchId.value)
   }

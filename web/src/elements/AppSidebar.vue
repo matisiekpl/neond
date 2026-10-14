@@ -65,6 +65,7 @@ const displayOrg = computed(() => organizationStore.organizations.find((o) => o.
 const logComponents = computed(() => {
   const base = ['compute', 'pgbouncer']
   if (currentBranch.value?.import_status) base.push('import')
+  if (route.params.component === 'export') base.push('export')
   return base
 })
 </script>

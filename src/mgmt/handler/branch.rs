@@ -66,6 +66,7 @@ pub async fn delete(
     Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
     state.services.branch().delete(user_id, organization_id, project_id, branch_id).await?;
+    state.services.export().discard_for_branch(branch_id).await;
     Ok((StatusCode::NO_CONTENT, ()))
 }
 

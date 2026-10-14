@@ -2,6 +2,8 @@ import api from '@/api/base'
 import type { Branch } from '@/types/models/branch'
 import type { LsnResponse } from '@/types/dto/lsn'
 import type { CompactionStatus } from '@/types/dto/compaction'
+import type { ExportDownloadToken, ExportRequest, ExportStatus } from '@/types/dto/export'
+import { Config } from '@/config'
 
 export const branchesApi = {
   async list(organizationId: string, projectId: string): Promise<Branch[]> {
@@ -95,5 +97,38 @@ export const branchesApi = {
       `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/compact`,
     )
     return response.data
+  },
+
+  async startExport(organizationId: string, projectId: string, branchId: string, request: ExportRequest): Promise<ExportStatus> {
+    const response = await api.post<ExportStatus>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/export`,
+      request,
+    )
+    return response.data
+  },
+
+  async exportStatus(organizationId: string, projectId: string, branchId: string): Promise<ExportStatus> {
+    const response = await api.get<ExportStatus>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/export`,
+    )
+    return response.data
+  },
+
+  async cancelExport(organizationId: string, projectId: string, branchId: string): Promise<ExportStatus> {
+    const response = await api.delete<ExportStatus>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/export`,
+    )
+    return response.data
+  },
+
+  async exportDownloadToken(organizationId: string, projectId: string, branchId: string): Promise<ExportDownloadToken> {
+    const response = await api.post<ExportDownloadToken>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/export/download-token`,
+    )
+    return response.data
+  },
+
+  exportDownloadUrl(organizationId: string, projectId: string, branchId: string, token: string): string {
+    return `${Config.serverUrl}/api/organizations/${organizationId}/projects/${projectId}/branches/${branchId}/export/download?token=${encodeURIComponent(token)}`
   },
 }

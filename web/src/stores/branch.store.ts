@@ -5,6 +5,7 @@ import {branchesApi} from '@/api/branches'
 import {getAppError} from '@/api/utils'
 import type {Branch} from '@/types/models/branch'
 import type {CompactionStatus} from '@/types/dto/compaction'
+import type {ExportRequest, ExportStatus} from '@/types/dto/export'
 
 export const useBranchStore = defineStore('branch', () => {
     const branches = ref<Branch[]>([])
@@ -177,5 +178,45 @@ export const useBranchStore = defineStore('branch', () => {
         return branchesApi.compactionStatus(organizationId, projectId, branchId)
     }
 
-    return {branches, loading, detaching, reset, fetch, create, importBranch, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, detachAncestor, changePassword, compact, compactionStatus}
+    async function startExport(organizationId: string, projectId: string, branchId: string, request: ExportRequest): Promise<ExportStatus> {
+        try {
+            const status = await branchesApi.startExport(organizationId, projectId, branchId, request)
+            toast.success('Export started')
+            return status
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
+    async function exportStatus(organizationId: string, projectId: string, branchId: string): Promise<ExportStatus> {
+        return branchesApi.exportStatus(organizationId, projectId, branchId)
+    }
+
+    async function cancelExport(organizationId: string, projectId: string, branchId: string): Promise<ExportStatus> {
+        try {
+            return await branchesApi.cancelExport(organizationId, projectId, branchId)
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
+    async function downloadExport(organizationId: string, projectId: string, branchId: string): Promise<void> {
+        try {
+            const {token} = await branchesApi.exportDownloadToken(organizationId, projectId, branchId)
+            const anchor = document.createElement('a')
+            anchor.href = branchesApi.exportDownloadUrl(organizationId, projectId, branchId, token)
+            anchor.rel = 'noopener'
+            anchor.download = ''
+            document.body.appendChild(anchor)
+            anchor.click()
+            anchor.remove()
+        } catch (e) {
+            toast.error(getAppError(e))
+            throw e
+        }
+    }
+
+    return {branches, loading, detaching, reset, fetch, create, importBranch, update, launchEndpoint, shutdownEndpoint, remove, restore, resetToParent, detachAncestor, changePassword, compact, compactionStatus, startExport, exportStatus, cancelExport, downloadExport}
 })

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::auth::DaemonAuth;
 use crate::mgmt::dto::error::{AppError, Result};
+use crate::mgmt::model::project::PgVersion;
 
 #[derive(Clone)]
 pub struct RemoteStorageConfig {
@@ -195,5 +196,10 @@ impl Config {
             component_auth: Arc::new(DaemonAuth::generate()?),
             backup_interval,
         })
+    }
+
+    pub fn pg_tool(&self, pg_version: &PgVersion, tool: &str) -> (PathBuf, PathBuf) {
+        let version_directory = self.pg_install_directory.join(pg_version.to_string());
+        (version_directory.join("bin").join(tool), version_directory.join("lib"))
     }
 }

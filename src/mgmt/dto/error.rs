@@ -63,6 +63,13 @@ pub enum AppError {
     BranchAlreadyDetached,
     CompactionRequiresRootBranch,
     CompactionAlreadyRunning,
+    ExportAlreadyRunning,
+    ExportCapacityExceeded,
+    ExportNotReady,
+    ExportBranchImporting,
+    ExportDatabaseInvalid { reason: String },
+    ExportToolMissing { path: String },
+    ExportFailed { reason: String },
     LsnResolutionFailed { reason: String },
     DurabilityCheckFailed { reason: String },
     TenantIdInvalid { value: String },
@@ -249,6 +256,27 @@ impl fmt::Display for AppError {
             AppError::CompactionAlreadyRunning => {
                 write!(f, "Storage compaction is already running for this branch")
             }
+            AppError::ExportAlreadyRunning => {
+                write!(f, "An export of this branch is already running")
+            }
+            AppError::ExportCapacityExceeded => {
+                write!(f, "Too many exports are running, try again once one of them has finished")
+            }
+            AppError::ExportNotReady => {
+                write!(f, "No finished export is available for this branch")
+            }
+            AppError::ExportBranchImporting => {
+                write!(f, "The branch cannot be exported while it is being imported")
+            }
+            AppError::ExportDatabaseInvalid { reason } => {
+                write!(f, "Invalid database: {}", reason)
+            }
+            AppError::ExportToolMissing { path } => {
+                write!(f, "pg_dump is not installed for this Postgres version (expected at {})", path)
+            }
+            AppError::ExportFailed { reason } => {
+                write!(f, "Export failed: {}", reason)
+            }
             AppError::LsnResolutionFailed { reason } => {
                 write!(f, "LSN resolution failed: {}", reason)
             }
@@ -367,7 +395,11 @@ impl IntoResponse for AppError {
             | AppError::BranchNameAlreadyExists { .. }
             | AppError::LeaseAlreadyHeldLocally { .. }
             | AppError::LeaseAlreadyHeldRemotely { .. }
-            | AppError::CompactionAlreadyRunning => StatusCode::CONFLICT,
+            | AppError::CompactionAlreadyRunning
+            | AppError::ExportAlreadyRunning
+            | AppError::ExportNotReady
+            | AppError::ExportBranchImporting => StatusCode::CONFLICT,
+            AppError::ExportCapacityExceeded => StatusCode::SERVICE_UNAVAILABLE,
             AppError::TenantIdInvalid { .. }
             | AppError::TimelineIdInvalid { .. }
             | AppError::ComputeSocketAddressInvalid { .. }
@@ -377,7 +409,8 @@ impl IntoResponse for AppError {
             | AppError::PitrLsnOutOfRange { .. }
             | AppError::InvalidConnectionString { .. }
             | AppError::BranchAlreadyDetached
-            | AppError::CompactionRequiresRootBranch => StatusCode::BAD_REQUEST,
+            | AppError::CompactionRequiresRootBranch
+            | AppError::ExportDatabaseInvalid { .. } => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(json!({ "message": self.to_string() }))).into_response()

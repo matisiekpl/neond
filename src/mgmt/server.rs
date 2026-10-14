@@ -7,7 +7,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
 use crate::mgmt::handler::AppState;
-use crate::mgmt::handler::{branch, daemon, endpoint, logs, metric, organization, project, prometheus, sql, user};
+use crate::mgmt::handler::{branch, daemon, endpoint, export, logs, metric, organization, project, prometheus, sql, user};
 
 pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
     let shutdown_token = state.services.daemon().shutdown_token();
@@ -91,6 +91,18 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             post(branch::compact).get(branch::compaction_status),
         )
         .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/export",
+            post(export::start).get(export::status).delete(export::cancel),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/export/download-token",
+            post(export::download_token),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/export/download",
+            get(export::download),
+        )
+        .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/password",
             put(branch::change_password),
         )
@@ -115,6 +127,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/logs/import",
             get(logs::stream_import),
+        )
+        .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint/logs/export",
+            get(logs::stream_export),
         )
         .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/sql",
