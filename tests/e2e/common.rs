@@ -446,7 +446,7 @@ impl Api {
         branch_id: &str,
     ) -> (StatusCode, Value) {
         self.send(self.client.post(format!(
-            "{BASE_URL}/organizations/{organization_id}/projects/{project_id}/branches/{branch_id}/export/download-token"
+            "{BASE_URL}/organizations/{organization_id}/projects/{project_id}/branches/{branch_id}/export/download/token"
         )))
         .await
     }

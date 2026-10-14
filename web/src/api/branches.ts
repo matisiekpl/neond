@@ -123,7 +123,7 @@ export const branchesApi = {
 
   async exportDownloadToken(organizationId: string, projectId: string, branchId: string): Promise<ExportDownloadToken> {
     const response = await api.post<ExportDownloadToken>(
-      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/export/download-token`,
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/export/download/token`,
     )
     return response.data
   },

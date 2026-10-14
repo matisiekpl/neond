@@ -95,7 +95,7 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             post(export::start).get(export::status).delete(export::cancel),
         )
         .route(
-            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/export/download-token",
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/export/download/token",
             post(export::download_token),
         )
         .route(
