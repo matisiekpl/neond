@@ -30,6 +30,7 @@ neon_safekeeper_client = { path = "neon/safekeeper/client", package = "safekeepe
 neon_pageserver_api = { path = "neon/libs/pageserver_api", package = "pageserver_api" }
 neon_utils = { path = "neon/libs/utils", package = "utils" }
 neon_control_plane = { path = "neon/control_plane", package = "control_plane" }
+neon_postgres_versioninfo = { path = "neon/libs/postgres_versioninfo", package = "postgres_versioninfo" }
 pprof_util = "=0.7.0"
 jemalloc_pprof = "=0.7.0"
 mappings = "=0.7.0"
@@ -56,7 +57,7 @@ openssl = "0.10"
 tower-http = { version = "0.6.8", features = ["cors"] }
 rust-embed = "8"
 mime_guess = "2"
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio-util = { version = "0.7", features = ["rt", "io"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 humantime = "2.2"
 aws-config = { version = "1.5", default-features = false, features = ["rustls", "sso"] }

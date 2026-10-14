@@ -3,6 +3,7 @@ use crate::mgmt::repository::Repositories;
 use crate::mgmt::service::branch::BranchService;
 use crate::mgmt::service::daemon::DaemonService;
 use crate::mgmt::service::endpoint::EndpointService;
+use crate::mgmt::service::export::ExportService;
 use crate::mgmt::service::import::ImportService;
 use crate::mgmt::service::logs::LogsService;
 use crate::mgmt::service::membership::MembershipService;
@@ -23,6 +24,7 @@ pub struct Services {
     branch: Arc<BranchService>,
     endpoint: Arc<EndpointService>,
     import: Arc<ImportService>,
+    export: Arc<ExportService>,
     sql: SqlService,
     daemon: Arc<DaemonService>,
     metric: Arc<MetricService>,
@@ -64,6 +66,15 @@ impl Services {
             Arc::clone(&pageserver_client),
             Arc::clone(&endpoint),
             Arc::clone(&branch),
+            Arc::clone(&logs),
+            config.clone(),
+            shutdown_token.clone(),
+        ));
+        let export = Arc::new(ExportService::new(
+            Arc::new(repositories.branch().clone()),
+            Arc::new(repositories.project().clone()),
+            Arc::new(membership.clone()),
+            Arc::clone(&endpoint),
             Arc::clone(&logs),
             config.clone(),
             shutdown_token.clone(),
@@ -120,6 +131,7 @@ impl Services {
             branch,
             endpoint,
             import,
+            export,
             sql,
             membership,
             daemon,
@@ -155,6 +167,10 @@ impl Services {
 
     pub fn import(&self) -> &Arc<ImportService> {
         &self.import
+    }
+
+    pub fn export(&self) -> &Arc<ExportService> {
+        &self.export
     }
 
     pub fn sql(&self) -> &SqlService {

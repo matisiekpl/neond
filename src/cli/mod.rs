@@ -146,6 +146,7 @@ async fn run_with_lease(config: Config) -> Result<()> {
     })?;
 
     services.import().reconcile_interrupted().await;
+    services.export().reconcile_on_start().await;
 
     services.endpoint().recover_running().await;
 
@@ -165,6 +166,7 @@ async fn run_with_lease(config: Config) -> Result<()> {
         Arc::clone(&metric_service).run_collection_loop(shutdown_token.clone()),
     );
     tokio::spawn(metric_service.run_cleanup_loop(shutdown_token.clone()));
+    tokio::spawn(Arc::clone(services.export()).run_cleanup_loop(shutdown_token.clone()));
 
     serve(config.port, state)
         .await
@@ -173,6 +175,7 @@ async fn run_with_lease(config: Config) -> Result<()> {
         })?;
 
     services.import().shutdown().await;
+    services.export().shutdown().await;
     services.endpoint().shutdown_all().await;
     backup_service.stop_periodic().await;
     backup_service.final_sync(&daemon.backed_up_databases()).await;

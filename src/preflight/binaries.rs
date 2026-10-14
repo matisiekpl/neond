@@ -13,6 +13,7 @@ const NEON_COMPONENT_BINARIES: &[&str] = &[
 const PG_INSTALL_REQUIRED_PATHS: &[&str] = &[
     "v17/bin/postgres",
     "v17/bin/initdb",
+    "v17/bin/pg_dump",
     "v17/lib",
     "vanilla_v17/bin/postgres",
     "vanilla_v17/bin/initdb",

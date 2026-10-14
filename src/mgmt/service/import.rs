@@ -122,7 +122,7 @@ impl ImportService {
                     new_timeline_id,
                     mode: TimelineCreateRequestMode::Bootstrap {
                         existing_initdb_timeline_id: None,
-                        pg_version: None,
+                        pg_version: Some(project.pg_version.major()),
                     },
                 },
             )

@@ -3988,6 +3988,7 @@ dependencies = [
  "pem",
  "pg-sni-muxer",
  "postgres-protocol 0.6.10",
+ "postgres_versioninfo",
  "posthog-rs",
  "pprof_util",
  "prometheus-client",

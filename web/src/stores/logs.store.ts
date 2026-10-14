@@ -71,6 +71,10 @@ export const useLogsStore = defineStore('logs', () => {
     open(logsApi.streamImportLogs(organizationId, projectId, branchId))
   }
 
+  function startExportLogs(organizationId: string, projectId: string, branchId: string) {
+    open(logsApi.streamExportLogs(organizationId, projectId, branchId))
+  }
+
   function stop() {
     source?.close()
     source = null
@@ -79,5 +83,5 @@ export const useLogsStore = defineStore('logs', () => {
     loading.value = false
   }
 
-  return { lines, connected, loading, startDaemonLogs, startEndpointLogs, startPgbouncerLogs, startImportLogs, stop }
+  return { lines, connected, loading, startDaemonLogs, startEndpointLogs, startPgbouncerLogs, startImportLogs, startExportLogs, stop }
 })
