@@ -227,7 +227,7 @@ function exportMenuLabel(branchId: string): string {
   const status = exportStatuses.value[branchId]
   if (status && isExportActive(status.state)) return `Exporting… ${Math.round(status.progress * 100)}%`
   if (status?.state === 'completed') return 'Download export'
-  return 'Export (pg_dump)'
+  return 'Export'
 }
 
 function openCompact(branch: Branch) {

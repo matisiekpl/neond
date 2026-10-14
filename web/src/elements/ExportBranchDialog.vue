@@ -157,7 +157,7 @@ async function loadDatabases() {
 }
 
 watch(
-  () => [props.open, props.branch.id] as const,
+  [() => props.open, () => props.branch.id],
   ([open]) => {
     stopPolling()
     if (!open) return
