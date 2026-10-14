@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use neon_postgres_versioninfo::PgMajorVersion;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use uuid::Uuid;
@@ -26,6 +27,17 @@ impl fmt::Display for PgVersion {
             PgVersion::V17 => "v17",
         };
         write!(f, "{}", s)
+    }
+}
+
+impl PgVersion {
+    pub fn major(&self) -> PgMajorVersion {
+        match self {
+            PgVersion::V14 => PgMajorVersion::PG14,
+            PgVersion::V15 => PgMajorVersion::PG15,
+            PgVersion::V16 => PgMajorVersion::PG16,
+            PgVersion::V17 => PgMajorVersion::PG17,
+        }
     }
 }
 

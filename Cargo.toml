@@ -30,6 +30,7 @@ neon_safekeeper_client = { path = "neon/safekeeper/client", package = "safekeepe
 neon_pageserver_api = { path = "neon/libs/pageserver_api", package = "pageserver_api" }
 neon_utils = { path = "neon/libs/utils", package = "utils" }
 neon_control_plane = { path = "neon/control_plane", package = "control_plane" }
+neon_postgres_versioninfo = { path = "neon/libs/postgres_versioninfo", package = "postgres_versioninfo" }
 pprof_util = "=0.7.0"
 jemalloc_pprof = "=0.7.0"
 mappings = "=0.7.0"
