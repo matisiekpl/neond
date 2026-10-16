@@ -72,7 +72,7 @@ const restartConfirmOpen = ref(false)
 const settings = ref<ComputeSettings | null>(null)
 
 const sharedBuffersMb = ref(128)
-const overrides = ref<Record<OverrideKey, string>>({
+const overrides = ref<Record<OverrideKey, string | number>>({
   effective_cache_size_mb: '',
   maintenance_work_mem_mb: '',
   work_mem_mb: '',
@@ -127,7 +127,7 @@ const isDirty = computed(() => {
   if (s.shared_buffers_mb !== sharedBuffersMb.value) return true
   return OVERRIDE_FIELDS.some((f) => {
     const saved = s.overrides[f.key]
-    return (saved === null ? '' : String(saved)) !== overrides.value[f.key].trim()
+    return (saved === null ? '' : String(saved)) !== String(overrides.value[f.key]).trim()
   })
 })
 
@@ -144,8 +144,8 @@ function applyRecommended() {
   if (memory.value) sharedBuffersMb.value = memory.value.recommended_shared_buffers_mb
 }
 
-function parseOverride(value: string): number | null {
-  const trimmed = value.trim()
+function parseOverride(value: string | number): number | null {
+  const trimmed = String(value).trim()
   return trimmed ? Number(trimmed) : null
 }
 
@@ -194,7 +194,7 @@ async function save() {
           The shared_buffers of all running computes should together stay within about 25% of the host's RAM.
         </p>
       </div>
-      <div v-if="memory" class="space-y-4 max-w-xl">
+      <div v-if="memory" class="space-y-4">
         <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
           <div>
             <dt class="text-xs text-muted-foreground">Host RAM</dt>
@@ -263,7 +263,7 @@ async function save() {
           Type a value to override a parameter. Saving restarts a running compute.
         </p>
       </div>
-      <form class="space-y-6 max-w-xl" @submit.prevent="onSubmit">
+      <form class="space-y-6" @submit.prevent="onSubmit">
         <div class="grid gap-3">
           <div class="flex items-baseline justify-between">
             <Label>shared_buffers</Label>
@@ -280,7 +280,7 @@ async function save() {
           <div v-for="field in OVERRIDE_FIELDS" :key="field.key" class="grid gap-2">
             <div class="flex items-center gap-2">
               <Label :for="`override-${field.key}`" class="font-mono text-xs">{{ field.label }}</Label>
-              <Badge v-if="!overrides[field.key].trim()" variant="secondary">auto</Badge>
+              <Badge v-if="!String(overrides[field.key]).trim()" variant="secondary">auto</Badge>
               <button
                 v-else
                 type="button"
