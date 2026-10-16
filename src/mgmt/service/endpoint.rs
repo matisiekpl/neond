@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use crate::mgmt::compute::settings::ComputeSettings;
 use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointInfo, ComputeEndpointStatus};
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::endpoint_response::EndpointResponse;
@@ -318,6 +319,24 @@ impl EndpointService {
                 }
             }
         }
+    }
+
+    /// Count and shared_buffers sum of live computes, skipping `exclude_branch_id`.
+    pub async fn running_shared_buffers_mb(&self, exclude_branch_id: Uuid) -> (usize, i64) {
+        let endpoints = self.endpoints.lock().await;
+        endpoints
+            .iter()
+            .filter(|(branch_id, _)| **branch_id != exclude_branch_id)
+            .filter(|(_, endpoint)| {
+                matches!(
+                    endpoint.get_status(),
+                    ComputeEndpointStatus::Starting | ComputeEndpointStatus::Running
+                )
+            })
+            .fold((0, 0), |(count, sum), (_, endpoint)| {
+                let settings = ComputeSettings::resolve(endpoint.get_branch());
+                (count + 1, sum + settings.shared_buffers_mb as i64)
+            })
     }
 
     pub async fn get_endpoint_info(

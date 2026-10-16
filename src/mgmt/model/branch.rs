@@ -39,6 +39,11 @@ pub struct Branch {
     pub updated_at: NaiveDateTime,
     pub import_status: Option<String>,
     pub import_error: Option<String>,
+    pub shared_buffers_mb: i32,
+    pub effective_cache_size_mb: Option<i32>,
+    pub maintenance_work_mem_mb: Option<i32>,
+    pub work_mem_mb: Option<i32>,
+    pub max_connections: Option<i32>,
 }
 
 impl Branch {

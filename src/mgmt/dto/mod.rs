@@ -38,3 +38,5 @@ pub mod metric_snapshot;
 pub mod export_branch_request;
 pub mod export_status_response;
 pub mod export_download_token_response;
+pub mod update_compute_settings_request;
+pub mod compute_settings_response;

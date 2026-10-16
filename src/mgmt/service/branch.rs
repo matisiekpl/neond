@@ -1,4 +1,11 @@
+use crate::mgmt::compute::settings::{
+    host_memory, recommend_shared_buffers_mb, shared_buffers_budget_mb, ComputeSettings,
+    ComputeSettingsOverrides,
+};
 use crate::mgmt::compute::ComputeEndpointStatus;
+use crate::mgmt::dto::compute_settings_response::{ComputeMemoryOverview, ComputeSettingsResponse};
+use crate::mgmt::dto::update_compute_settings_request::UpdateComputeSettingsRequest;
+use crate::mgmt::model::branch::Branch;
 use crate::mgmt::dto::branch_response::BranchResponse;
 use crate::mgmt::dto::checkpoint_status::CheckpointStatus;
 use crate::mgmt::dto::compaction_status_response::CompactionStatusResponse;
@@ -1625,6 +1632,140 @@ impl BranchService {
         }
 
         Ok(())
+    }
+
+    pub async fn get_compute_settings(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+    ) -> Result<ComputeSettingsResponse> {
+        let branch = self
+            .find_member_branch(user_id, organization_id, project_id, branch_id)
+            .await?;
+        Ok(self.compute_settings_response(&branch).await)
+    }
+
+    pub async fn update_compute_settings(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+        req: UpdateComputeSettingsRequest,
+    ) -> Result<ComputeSettingsResponse> {
+        let overrides = ComputeSettingsOverrides {
+            effective_cache_size_mb: req.effective_cache_size_mb,
+            maintenance_work_mem_mb: req.maintenance_work_mem_mb,
+            work_mem_mb: req.work_mem_mb,
+            max_connections: req.max_connections,
+        };
+        ComputeSettings::derive(req.shared_buffers_mb, overrides)
+            .validate(self.config.max_shared_buffers_mb)?;
+
+        let branch = self
+            .find_member_branch(user_id, organization_id, project_id, branch_id)
+            .await?;
+
+        let endpoint_info = self.endpoint_service.get_endpoint_info(branch.id).await;
+
+        if let Some(ref info) = endpoint_info {
+            match info.status {
+                ComputeEndpointStatus::Starting | ComputeEndpointStatus::Stopping => {
+                    return Err(AppError::PitrConcurrentEndpointOperation);
+                }
+                _ => {}
+            }
+        }
+
+        let was_running = endpoint_info
+            .as_ref()
+            .map(|info| info.status == ComputeEndpointStatus::Running)
+            .unwrap_or(false);
+
+        let updated = self
+            .branch_repo
+            .update_compute_settings(
+                branch_id,
+                req.shared_buffers_mb,
+                req.effective_cache_size_mb,
+                req.maintenance_work_mem_mb,
+                req.work_mem_mb,
+                req.max_connections,
+            )
+            .await?;
+
+        if was_running {
+            self.endpoint_service
+                .stop(user_id, organization_id, project_id, branch_id)
+                .await?;
+            self.endpoint_service
+                .start(user_id, organization_id, project_id, branch_id)
+                .await?;
+        }
+
+        Ok(self.compute_settings_response(&updated).await)
+    }
+
+    async fn find_member_branch(
+        &self,
+        user_id: Uuid,
+        organization_id: Uuid,
+        project_id: Uuid,
+        branch_id: Uuid,
+    ) -> Result<Branch> {
+        self.membership_service
+            .verify_membership(user_id, organization_id)
+            .await?;
+
+        let project = self
+            .project_repo
+            .find_by_id(project_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if project.organization_id != organization_id {
+            return Err(AppError::NotFound);
+        }
+
+        let branch = self
+            .branch_repo
+            .find_by_id(branch_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        if branch.project_id != project_id {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(branch)
+    }
+
+    async fn compute_settings_response(&self, branch: &Branch) -> ComputeSettingsResponse {
+        let host = host_memory();
+        let (other_running_computes, other_running_shared_buffers_mb) = self
+            .endpoint_service
+            .running_shared_buffers_mb(branch.id)
+            .await;
+        ComputeSettingsResponse {
+            shared_buffers_mb: branch.shared_buffers_mb,
+            overrides: ComputeSettingsOverrides::from_branch(branch),
+            effective: ComputeSettings::resolve(branch),
+            max_shared_buffers_mb: self.config.max_shared_buffers_mb,
+            memory: ComputeMemoryOverview {
+                host_total_mb: host.total_mb,
+                host_available_mb: host.available_mb,
+                shared_buffers_budget_mb: shared_buffers_budget_mb(host.total_mb),
+                other_running_computes,
+                other_running_shared_buffers_mb,
+                recommended_shared_buffers_mb: recommend_shared_buffers_mb(
+                    host.total_mb,
+                    other_running_shared_buffers_mb,
+                    self.config.max_shared_buffers_mb,
+                ),
+            },
+        }
     }
 }
 

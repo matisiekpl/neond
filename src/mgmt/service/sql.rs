@@ -9,6 +9,7 @@ use neon_utils::shard::TenantShardId;
 use tokio_postgres::SimpleQueryMessage;
 
 use crate::mgmt::compute::{ComputeEndpoint, ComputeEndpointStatus};
+use crate::mgmt::compute::settings::DEFAULT_SHARED_BUFFERS_MB;
 use crate::mgmt::dto::config::Config;
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::dto::execute_sql_request::ExecuteSqlRequest;
@@ -192,6 +193,11 @@ impl SqlService {
             updated_at: chrono::Utc::now().naive_utc(),
             import_status: None,
             import_error: None,
+            shared_buffers_mb: DEFAULT_SHARED_BUFFERS_MB,
+            effective_cache_size_mb: None,
+            maintenance_work_mem_mb: None,
+            work_mem_mb: None,
+            max_connections: None,
         };
 
         let mut endpoint =

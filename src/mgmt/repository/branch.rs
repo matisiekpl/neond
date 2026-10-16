@@ -198,6 +198,30 @@ impl BranchRepository {
             .map_err(Into::into)
     }
 
+    pub async fn update_compute_settings(
+        &self,
+        id: Uuid,
+        shared_buffers_mb: i32,
+        effective_cache_size_mb: Option<i32>,
+        maintenance_work_mem_mb: Option<i32>,
+        work_mem_mb: Option<i32>,
+        max_connections: Option<i32>,
+    ) -> Result<Branch> {
+        let conn = &mut self.pool.get().await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        diesel::update(branches::table.filter(branches::id.eq(id)))
+            .set((
+                branches::shared_buffers_mb.eq(shared_buffers_mb),
+                branches::effective_cache_size_mb.eq(effective_cache_size_mb),
+                branches::maintenance_work_mem_mb.eq(maintenance_work_mem_mb),
+                branches::work_mem_mb.eq(work_mem_mb),
+                branches::max_connections.eq(max_connections),
+            ))
+            .get_result(conn)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn update_recent_status(&self, id: Uuid, status: ComputeEndpointStatus) -> Result<Branch> {
         let conn = &mut self.pool.get().await
             .map_err(|e| AppError::Internal(e.to_string()))?;

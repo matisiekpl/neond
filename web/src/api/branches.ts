@@ -3,6 +3,7 @@ import type { Branch } from '@/types/models/branch'
 import type { LsnResponse } from '@/types/dto/lsn'
 import type { CompactionStatus } from '@/types/dto/compaction'
 import type { ExportDownloadToken, ExportRequest, ExportStatus } from '@/types/dto/export'
+import type { ComputeSettings, UpdateComputeSettingsRequest } from '@/types/dto/computeSettings'
 import { Config } from '@/config'
 
 export const branchesApi = {
@@ -59,6 +60,21 @@ export const branchesApi = {
     const response = await api.put<Branch>(
       `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/password`,
       { password },
+    )
+    return response.data
+  },
+
+  async computeSettings(organizationId: string, projectId: string, branchId: string): Promise<ComputeSettings> {
+    const response = await api.get<ComputeSettings>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/compute-settings`,
+    )
+    return response.data
+  },
+
+  async updateComputeSettings(organizationId: string, projectId: string, branchId: string, request: UpdateComputeSettingsRequest): Promise<ComputeSettings> {
+    const response = await api.put<ComputeSettings>(
+      `organizations/${organizationId}/projects/${projectId}/branches/${branchId}/compute-settings`,
+      request,
     )
     return response.data
   },
