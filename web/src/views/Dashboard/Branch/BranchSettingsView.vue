@@ -242,7 +242,7 @@ async function save() {
           <AlertDescription>
             <p>This is the largest step that fits in the budget remaining after the other running computes.</p>
             <Button
-              v-if="!recommendedIsApplied"
+              :disabled="recommendedIsApplied"
               size="sm"
               variant="outline"
               class="mt-2 cursor-pointer"
@@ -278,7 +278,7 @@ async function save() {
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div v-for="field in OVERRIDE_FIELDS" :key="field.key" class="grid gap-2">
-            <div class="flex items-center gap-2">
+            <div class="flex h-6 items-center gap-2">
               <Label :for="`override-${field.key}`" class="font-mono text-xs">{{ field.label }}</Label>
               <Badge v-if="!String(overrides[field.key]).trim()" variant="secondary">auto</Badge>
               <button
