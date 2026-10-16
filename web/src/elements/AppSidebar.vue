@@ -353,6 +353,18 @@ const logComponents = computed(() => {
               </SidebarMenuSubItem>
             </SidebarMenuSub>
           </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="route.name === 'projects.branches.settings'"
+              tooltip="Settings"
+            >
+              <RouterLink :to="{ name: 'projects.branches.settings', params: { organizationId, projectId, branchId } }">
+                <Settings />
+                <span>Settings</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>
     </SidebarContent>

@@ -283,6 +283,23 @@ impl Api {
         .await
     }
 
+    pub async fn update_compute_settings(
+        &self,
+        organization_id: &str,
+        project_id: &str,
+        branch_id: &str,
+        body: Value,
+    ) -> (StatusCode, Value) {
+        self.send(
+            self.client
+                .put(format!(
+                    "{BASE_URL}/organizations/{organization_id}/projects/{project_id}/branches/{branch_id}/compute-settings"
+                ))
+                .json(&body),
+        )
+        .await
+    }
+
     pub async fn stop_running_endpoints(&self, organization_id: &str, project_id: &str) {
         let branches = self
             .expect_ok(self.client.get(format!(
