@@ -14,6 +14,7 @@ use crate::mgmt::dto::import_branch_request::ImportBranchRequest;
 use crate::mgmt::dto::lsn_request::LsnRequest;
 use crate::mgmt::dto::restore_branch_request::RestoreBranchRequest;
 use crate::mgmt::dto::update_branch_request::UpdateBranchRequest;
+use crate::mgmt::dto::update_compute_settings_request::UpdateComputeSettingsRequest;
 use crate::mgmt::handler::auth::UserId;
 use crate::mgmt::handler::AppState;
 
@@ -122,6 +123,33 @@ pub async fn change_password(
         .change_password(user_id, organization_id, project_id, branch_id, req.password)
         .await?;
     Ok((StatusCode::OK, Json(branch)))
+}
+
+pub async fn get_compute_settings(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let settings = state
+        .services
+        .branch()
+        .get_compute_settings(user_id, organization_id, project_id, branch_id)
+        .await?;
+    Ok((StatusCode::OK, Json(settings)))
+}
+
+pub async fn update_compute_settings(
+    State(state): State<Arc<AppState>>,
+    UserId(user_id): UserId,
+    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(req): Json<UpdateComputeSettingsRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let settings = state
+        .services
+        .branch()
+        .update_compute_settings(user_id, organization_id, project_id, branch_id, req)
+        .await?;
+    Ok((StatusCode::OK, Json(settings)))
 }
 
 pub async fn lsn(

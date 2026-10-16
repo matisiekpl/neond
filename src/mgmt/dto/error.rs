@@ -49,6 +49,7 @@ pub enum AppError {
     BranchDeletionFailed { reason: String },
     BranchListingFailed { reason: String },
     BranchUpdateFailed { reason: String },
+    ComputeSettingsInvalid { reason: String },
     BranchRestoreFailed { reason: String },
     BranchImportFailed { reason: String },
     BranchImportAborted,
@@ -210,6 +211,9 @@ impl fmt::Display for AppError {
             }
             AppError::BranchUpdateFailed { reason } => {
                 write!(f, "Branch update failed: {}", reason)
+            }
+            AppError::ComputeSettingsInvalid { reason } => {
+                write!(f, "Compute settings are invalid: {}", reason)
             }
             AppError::BranchRestoreFailed { reason } => {
                 write!(f, "Branch restore failed: {}", reason)
@@ -410,7 +414,8 @@ impl IntoResponse for AppError {
             | AppError::InvalidConnectionString { .. }
             | AppError::BranchAlreadyDetached
             | AppError::CompactionRequiresRootBranch
-            | AppError::ExportDatabaseInvalid { .. } => StatusCode::BAD_REQUEST,
+            | AppError::ExportDatabaseInvalid { .. }
+            | AppError::ComputeSettingsInvalid { .. } => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(json!({ "message": self.to_string() }))).into_response()

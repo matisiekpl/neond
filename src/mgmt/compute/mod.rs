@@ -1,3 +1,5 @@
+pub mod settings;
+
 use base64::prelude::*;
 use hmac::Hmac;
 use hmac::Mac;
@@ -28,6 +30,7 @@ use crate::utils::death;
 use crate::utils::stdout::wait_for_output_timeout;
 
 use crate::mgmt::model::branch::Branch;
+use settings::ComputeSettings;
 use crate::mgmt::model::project::PgVersion;
 use neon_control_plane::postgresql_conf::PostgresConf;
 use postgres_protocol::authentication::sasl::{ChannelBinding, ScramSha256};
@@ -730,11 +733,12 @@ impl ComputeEndpoint {
         conf.append("max_replication_slots", "10");
         conf.append("hot_standby", "on");
 
-        conf.append("shared_buffers", "128MB");
-        conf.append("effective_cache_size", "512MB");
-        conf.append("work_mem", "8MB");
-        conf.append("maintenance_work_mem", "128MB");
-        conf.append("max_connections", "100");
+        let settings = ComputeSettings::resolve(&self.branch);
+        conf.append("shared_buffers", &format!("{}MB", settings.shared_buffers_mb));
+        conf.append("effective_cache_size", &format!("{}MB", settings.effective_cache_size_mb));
+        conf.append("work_mem", &format!("{}MB", settings.work_mem_mb));
+        conf.append("maintenance_work_mem", &format!("{}MB", settings.maintenance_work_mem_mb));
+        conf.append("max_connections", &settings.max_connections.to_string());
 
         conf.append("effective_io_concurrency", "100");
         conf.append("random_page_cost", "1.1");

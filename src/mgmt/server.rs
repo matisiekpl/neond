@@ -107,6 +107,10 @@ pub async fn serve(port: u16, state: AppState) -> Result<(), anyhow::Error> {
             put(branch::change_password),
         )
         .route(
+            "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/compute-settings",
+            get(branch::get_compute_settings).put(branch::update_compute_settings),
+        )
+        .route(
             "/organizations/{org_id}/projects/{project_id}/branches/{branch_id}/endpoint",
             post(endpoint::start)
                 .delete(endpoint::stop)

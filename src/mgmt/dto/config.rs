@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::auth::DaemonAuth;
+use crate::mgmt::compute::settings::{host_memory, MIN_SHARED_BUFFERS_MB};
 use crate::mgmt::dto::error::{AppError, Result};
 use crate::mgmt::model::project::PgVersion;
 
@@ -30,6 +31,7 @@ pub struct Config {
     pub(crate) pg_proxy_port: u16,
     pub(crate) component_auth: Arc<DaemonAuth>,
     pub(crate) backup_interval: Duration,
+    pub(crate) max_shared_buffers_mb: i32,
 }
 
 fn discover_pgbouncer() -> Option<PathBuf> {
@@ -52,6 +54,10 @@ fn discover_pgbouncer() -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn default_max_shared_buffers_mb() -> i32 {
+    ((host_memory().total_mb / 4) as i32).max(MIN_SHARED_BUFFERS_MB)
 }
 
 impl Config {
@@ -175,6 +181,16 @@ impl Config {
             Err(_) => Duration::from_secs(30 * 60),
         };
 
+        let max_shared_buffers_mb = match std::env::var("MAX_SHARED_BUFFERS_MB") {
+            Ok(value) => value.parse().map_err(|error: std::num::ParseIntError| {
+                AppError::ApplicationStartupFailed {
+                    reason: format!("MAX_SHARED_BUFFERS_MB is invalid: {}", error),
+                }
+            })?,
+            Err(_) => default_max_shared_buffers_mb(),
+        };
+        tracing::info!("Maximum shared_buffers per branch: {}MB", max_shared_buffers_mb);
+
         let hostname = std::env::var("PG_HOSTNAME").ok();
         if let Some(hostname) = hostname.clone() {
             tracing::info!("Using hostname *.{}:{}", hostname, pg_proxy_port);
@@ -195,6 +211,7 @@ impl Config {
             pg_proxy_port,
             component_auth: Arc::new(DaemonAuth::generate()?),
             backup_interval,
+            max_shared_buffers_mb,
         })
     }
 

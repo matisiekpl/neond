@@ -63,6 +63,11 @@ diesel::table! {
         updated_at -> Timestamp,
         import_status -> Nullable<Text>,
         import_error -> Nullable<Text>,
+        shared_buffers_mb -> Int4,
+        effective_cache_size_mb -> Nullable<Int4>,
+        maintenance_work_mem_mb -> Nullable<Int4>,
+        work_mem_mb -> Nullable<Int4>,
+        max_connections -> Nullable<Int4>,
     }
 }
 diesel::table! {
