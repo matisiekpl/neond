@@ -12,6 +12,24 @@ use crate::mgmt::model::project::PgVersion;
 pub struct RemoteStorageConfig {
     pub(crate) bucket: String,
     pub(crate) region: String,
+    /// Base URL for S3-compatible services (R2, MinIO, OCI, ...). `None` means AWS.
+    pub(crate) endpoint: Option<String>,
+    pub(crate) force_path_style: bool,
+}
+
+impl RemoteStorageConfig {
+    pub(crate) async fn s3_client(&self) -> aws_sdk_s3::Client {
+        let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .region(aws_sdk_s3::config::Region::new(self.region.clone()))
+            .load()
+            .await;
+        let mut builder = aws_sdk_s3::config::Builder::from(&aws_config)
+            .force_path_style(self.force_path_style);
+        if let Some(endpoint) = &self.endpoint {
+            builder = builder.endpoint_url(endpoint);
+        }
+        aws_sdk_s3::Client::from_conf(builder.build())
+    }
 }
 
 #[derive(Clone)]
@@ -121,12 +139,24 @@ impl Config {
                     reason: format!("AWS_REGION: {}", error),
                 }
             })?;
+            let endpoint = std::env::var("AWS_ENDPOINT_URL")
+                .ok()
+                .filter(|value| !value.is_empty());
+            let force_path_style = std::env::var("AWS_S3_FORCE_PATH_STYLE")
+                .map(|value| matches!(value.as_str(), "1" | "true"))
+                .unwrap_or(false);
             tracing::info!(
-                "Using remote storage - bucket: {}, region: {}",
+                "Using remote storage - bucket: {}, region: {}, endpoint: {}",
                 bucket,
-                region
+                region,
+                endpoint.as_deref().unwrap_or("aws")
             );
-            Some(RemoteStorageConfig { bucket, region })
+            Some(RemoteStorageConfig {
+                bucket,
+                region,
+                endpoint,
+                force_path_style,
+            })
         } else {
             tracing::info!("Using local storage");
             None

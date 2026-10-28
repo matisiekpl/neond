@@ -23,13 +23,7 @@ pub struct BackupService {
 impl BackupService {
     pub async fn new(config: Config, shutdown_token: CancellationToken) -> Result<Self> {
         let s3_client = match &config.remote_storage_config {
-            Some(remote) => {
-                let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-                    .region(aws_sdk_s3::config::Region::new(remote.region.clone()))
-                    .load()
-                    .await;
-                Some(aws_sdk_s3::Client::new(&aws_config))
-            }
+            Some(remote) => Some(remote.s3_client().await),
             None => None,
         };
         Ok(Self {
