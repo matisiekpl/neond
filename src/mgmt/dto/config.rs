@@ -26,7 +26,16 @@ impl RemoteStorageConfig {
         let mut builder = aws_sdk_s3::config::Builder::from(&aws_config)
             .force_path_style(self.force_path_style);
         if let Some(endpoint) = &self.endpoint {
-            builder = builder.endpoint_url(endpoint);
+            // S3-compatible stores such as OCI reject the SDK's default aws-chunked
+            // upload checksums, so only send checksums when an operation requires them.
+            builder = builder
+                .endpoint_url(endpoint)
+                .request_checksum_calculation(
+                    aws_sdk_s3::config::RequestChecksumCalculation::WhenRequired,
+                )
+                .response_checksum_validation(
+                    aws_sdk_s3::config::ResponseChecksumValidation::WhenRequired,
+                );
         }
         aws_sdk_s3::Client::from_conf(builder.build())
     }

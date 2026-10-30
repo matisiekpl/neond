@@ -258,7 +258,7 @@ impl BackupService {
             .await
             .map_err(|error| AppError::BackupUploadFailed {
                 database_name: database_name.to_string(),
-                reason: error.to_string(),
+                reason: aws_sdk_s3::error::DisplayErrorContext(&error).to_string(),
             })?;
         tracing::info!(
             "Uploaded {} backup to s3://{}/{}",
