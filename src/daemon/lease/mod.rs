@@ -124,13 +124,7 @@ fn acquire_local_lock(path: &Path) -> Result<File, LeaseError> {
 async fn acquire_s3_lock(
     remote_storage_config: &RemoteStorageConfig,
 ) -> Result<S3Component, LeaseError> {
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_sdk_s3::config::Region::new(
-            remote_storage_config.region.clone(),
-        ))
-        .load()
-        .await;
-    let client = aws_sdk_s3::Client::new(&aws_config);
+    let client = remote_storage_config.s3_client().await;
 
     let put_result = client
         .put_object()

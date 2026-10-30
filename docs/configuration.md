@@ -33,6 +33,8 @@ local-only mode.
 | `AWS_REGION` | Bucket region, e.g. `eu-central-1`. |
 | `AWS_ACCESS_KEY_ID` | IAM access key. Needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on the bucket, and `s3:ListBucket`. |
 | `AWS_SECRET_ACCESS_KEY` | Corresponding secret key. |
+| `AWS_ENDPOINT_URL` | Optional. Base URL of an S3-compatible service (Cloudflare R2, MinIO, OCI, ...). Unset means AWS S3. |
+| `AWS_S3_FORCE_PATH_STYLE` | Optional. `true` to address the bucket as `endpoint/bucket` instead of `bucket.endpoint`. Needed by MinIO. |
 
 ## Backups
 

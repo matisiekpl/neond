@@ -5,12 +5,7 @@ use crate::mgmt::dto::config::RemoteStorageConfig;
 use super::PreflightError;
 
 pub async fn check_s3_write_access(config: &RemoteStorageConfig) -> Result<(), PreflightError> {
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_sdk_s3::config::Region::new(config.region.clone()))
-        .load()
-        .await;
-
-    let client = aws_sdk_s3::Client::new(&aws_config);
+    let client = config.s3_client().await;
     let key = ".neond-preflight-check";
 
     client

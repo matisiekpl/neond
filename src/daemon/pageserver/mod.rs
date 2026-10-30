@@ -39,6 +39,8 @@ enum PageserverRemoteStorage {
         bucket_name: String,
         bucket_region: String,
         prefix_in_bucket: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        endpoint: Option<String>,
     },
 }
 
@@ -78,6 +80,7 @@ pub fn write_pageserver_init_files(
                 bucket_name: amazon_bucket_config.bucket.clone(),
                 bucket_region: amazon_bucket_config.region.clone(),
                 prefix_in_bucket: "layers".to_string(),
+                endpoint: amazon_bucket_config.endpoint.clone(),
             },
         },
         control_plane_api: "http://127.0.0.1:1234/upcall/v1/".to_string(),
